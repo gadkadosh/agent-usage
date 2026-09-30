@@ -12,7 +12,7 @@ The app requests usage directly and refreshes about once a minute; use **Refresh
 
 ## Dashboard
 
-Click the menu-bar label to open a native dashboard with session and weekly usage meters, remaining percentages, and reset countdowns. Meters show **allowance used** and turn orange at 90%; the menu-bar label continues to show **remaining** percentages. Countdown text updates while the panel is open; "Reset due" means a fresh reading is needed, not that the allowance has already replenished.
+Click the menu-bar label to open a native dashboard with session and weekly usage meters, remaining percentages, and reset countdowns. Both meters and percentages show **allowance remaining**, matching the menu-bar label. Session is always blue and weekly is always orange; meters use stronger color intensity when 10% or less remains. Countdown text updates while the panel is open; "Reset due" means a fresh reading is needed, not that the allowance has already replenished.
 
 Loading and authentication errors appear in the panel. If a refresh fails after a successful reading, the last reading stays visible with a stale-data warning and its update time. Use **Refresh** (⌘R) to retry or **Quit** (⌘Q) to stop the app.
 

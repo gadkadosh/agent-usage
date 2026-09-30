@@ -25,12 +25,12 @@ struct UsagePanel: View {
                             .tracking(1)
 
                         limitRow(
-                            title: "Session", subtitle: "5 hours",
+                            title: "Session", subtitle: "5 hours", color: .blue,
                             window: snapshot.limits.rateLimit.primaryWindow,
                             snapshot: snapshot, now: context.date
                         )
                         limitRow(
-                            title: "Weekly", subtitle: "7 days",
+                            title: "Weekly", subtitle: "7 days", color: .orange,
                             window: snapshot.limits.rateLimit.secondaryWindow,
                             snapshot: snapshot, now: context.date
                         )
@@ -74,7 +74,7 @@ struct UsagePanel: View {
     }
 
     private func limitRow(
-        title: String, subtitle: String, window: UsageLimits.Window,
+        title: String, subtitle: String, color: Color, window: UsageLimits.Window,
         snapshot: UsageSnapshot, now: Date
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -84,29 +84,24 @@ struct UsagePanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(window.used) used")
+                Text("\(window.remaining) remaining")
                     .monospacedDigit()
-                    .foregroundStyle(window.isNearLimit ? Color.orange : Color.primary)
             }
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.08))
                     Capsule()
-                        .fill(window.isNearLimit ? Color.orange : Color.accentColor)
-                        .frame(width: geometry.size.width * window.usedFraction)
+                        .fill(color.opacity(window.isLowRemaining ? 1 : 0.65))
+                        .frame(width: geometry.size.width * window.remainingFraction)
                 }
             }
             .frame(height: 6)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(title) allowance used")
-            .accessibilityValue(window.used)
+            .accessibilityLabel("\(title) allowance remaining")
+            .accessibilityValue("\(window.remaining) remaining\(window.isLowRemaining ? ", low allowance" : "")")
 
-            HStack {
-                Text("\(window.remaining) remaining")
-                Spacer()
-                Text(snapshot.resetDescription(for: window, at: now))
-            }
+            Text(snapshot.resetDescription(for: window, at: now))
             .font(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()

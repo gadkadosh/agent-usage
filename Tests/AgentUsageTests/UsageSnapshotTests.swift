@@ -29,25 +29,34 @@ final class UsageSnapshotTests: XCTestCase {
 
     func testMeterValuesAndWarningThreshold() {
         let window = UsageLimits.Window(usedPercent: 12.5, resetAfterSeconds: 60)
-        XCTAssertEqual(window.usedFraction, 0.125)
-        XCTAssertEqual(window.used, "12.5%")
+        XCTAssertEqual(window.remainingFraction, 0.875)
         XCTAssertEqual(window.remaining, "87.5%")
-        XCTAssertFalse(window.isNearLimit)
-        XCTAssertFalse(UsageLimits.Window(usedPercent: 89.9, resetAfterSeconds: 0).isNearLimit)
-        XCTAssertTrue(UsageLimits.Window(usedPercent: 90, resetAfterSeconds: 0).isNearLimit)
+        XCTAssertFalse(window.isLowRemaining)
+        XCTAssertFalse(UsageLimits.Window(usedPercent: 89.9, resetAfterSeconds: 0).isLowRemaining)
+        let low = UsageLimits.Window(usedPercent: 90, resetAfterSeconds: 0)
+        XCTAssertEqual(low.remainingFraction, 0.1)
+        XCTAssertEqual(low.remaining, "10%")
+        XCTAssertTrue(low.isLowRemaining)
     }
 
     func testOutOfRangeMeterValuesAreClamped() {
         let negative = UsageLimits.Window(usedPercent: -5, resetAfterSeconds: 0)
-        XCTAssertEqual(negative.usedFraction, 0)
-        XCTAssertEqual(negative.used, "0%")
+        XCTAssertEqual(negative.remainingFraction, 1)
         XCTAssertEqual(negative.remaining, "100%")
+        XCTAssertFalse(negative.isLowRemaining)
 
         let overLimit = UsageLimits.Window(usedPercent: 105, resetAfterSeconds: 0)
-        XCTAssertEqual(overLimit.usedFraction, 1)
-        XCTAssertEqual(overLimit.used, "100%")
+        XCTAssertEqual(overLimit.remainingFraction, 0)
         XCTAssertEqual(overLimit.remaining, "0%")
-        XCTAssertTrue(overLimit.isNearLimit)
+        XCTAssertTrue(overLimit.isLowRemaining)
+
+        let empty = UsageLimits.Window(usedPercent: 100, resetAfterSeconds: 0)
+        XCTAssertEqual(empty.remainingFraction, 0)
+        XCTAssertTrue(empty.isLowRemaining)
+
+        let full = UsageLimits.Window(usedPercent: 0, resetAfterSeconds: 0)
+        XCTAssertEqual(full.remainingFraction, 1)
+        XCTAssertFalse(full.isLowRemaining)
     }
 
     private func snapshot(window: UsageLimits.Window) -> UsageSnapshot {

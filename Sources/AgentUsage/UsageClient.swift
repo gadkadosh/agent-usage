@@ -12,18 +12,14 @@ struct UsageLimits: Decodable, Sendable {
         let usedPercent: Double
         let resetAfterSeconds: Int
 
-        var usedFraction: Double {
-            min(1, max(0, usedPercent / 100))
+        var remainingFraction: Double {
+            min(1, max(0, (100 - usedPercent) / 100))
         }
 
-        var isNearLimit: Bool { usedFraction >= 0.9 }
-
-        var used: String {
-            String(format: "%g", usedFraction * 100) + "%"
-        }
+        var isLowRemaining: Bool { remainingFraction <= 0.1 }
 
         var remaining: String {
-            String(format: "%g", 100 - usedFraction * 100) + "%"
+            String(format: "%g", remainingFraction * 100) + "%"
         }
 
         var resetIn: String {
