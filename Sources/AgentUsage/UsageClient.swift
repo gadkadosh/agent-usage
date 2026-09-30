@@ -69,7 +69,7 @@ private enum UsageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingToken:
-            "Set OPENAI_ACCESS_TOKEN before starting Usage."
+            "Set OPENAI_ACCESS_TOKEN before starting Agent Usage."
         case .invalidResponse:
             "The usage server returned an invalid response."
         case .httpStatus(401):

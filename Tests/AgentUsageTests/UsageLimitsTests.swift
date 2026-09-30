@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import Usage
+@testable import AgentUsage
 
 final class UsageLimitsTests: XCTestCase {
     func testDecodesAndDisplaysBothWindows() throws {

@@ -1,4 +1,4 @@
-# Usage
+# Agent Usage
 
 A minimal macOS menu-bar app showing the 5-hour and 7-day Codex usage limits associated with your ChatGPT subscription.
 
@@ -20,7 +20,7 @@ swift run
 
 Avoid pasting the token into a shell command that will be saved in your history. The access token expires; if you get an HTTP 401 error, start the app again with a current token. This version does not manage sign-in or token refresh. Apps launched from Finder will not automatically inherit your terminal's environment variables.
 
-The menu-bar label shows the remaining percentages; click it for reset times. Choose **Quit Usage** to stop the app.
+The menu-bar label shows the remaining percentages; click it for reset times. Choose **Quit Agent Usage** to stop the app.
 
 Run decoding tests with `swift test` when full Xcode is installed and selected. The Apple Command Line Tools installation on its own does not provide XCTest in this environment.
 
