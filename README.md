@@ -25,3 +25,7 @@ The menu-bar label shows the remaining percentages; click it for reset times. Ch
 Run decoding tests with `swift test` when full Xcode is installed and selected. The Apple Command Line Tools installation on its own does not provide XCTest in this environment.
 
 `swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
+
+## License
+
+[MIT](LICENSE) © 2026 Gad Kadosh.
