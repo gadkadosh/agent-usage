@@ -125,19 +125,19 @@ struct UsagePanel: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Button(action: onRefresh) {
-                Label {
-                    Text("Refresh")
-                } icon: {
+                HStack(alignment: .center, spacing: 6) {
+                    // Keep both icons in the layout so refreshing cannot shift the text.
                     ZStack {
                         Image(systemName: "arrow.clockwise")
                             .opacity(isRefreshing ? 0 : 1)
-                        if isRefreshing {
-                            ProgressView()
-                                .controlSize(.mini)
-                        }
+                        ProgressView()
+                            .controlSize(.mini)
+                            .opacity(isRefreshing ? 1 : 0)
                     }
                     .frame(width: 16, height: 16)
                     .accessibilityHidden(true)
+
+                    Text("Refresh")
                 }
             }
             .fixedSize()
@@ -158,11 +158,13 @@ struct UsagePanel: View {
                     .keyboardShortcut("q", modifiers: .command)
             } label: {
                 Image(systemName: "ellipsis")
-                    .frame(width: 20, height: 20)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .fixedSize()
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle())
             .accessibilityLabel("More options")
             .help("More options")
         }
