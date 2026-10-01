@@ -18,7 +18,7 @@ Loading and authentication errors appear in the panel. If a refresh fails after 
 
 <img src="docs/dashboard.png" alt="Codex dashboard with session and weekly usage meters" width="360">
 
-*Native panel rendered with sample data.*
+*Rendered with sample data. Native button appearance may differ in the menu-bar panel.*
 
 ## Run
 

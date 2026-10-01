@@ -125,13 +125,26 @@ struct UsagePanel: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Button(action: onRefresh) {
-                Label(isRefreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
+                Label {
+                    Text("Refresh")
+                } icon: {
+                    ZStack {
+                        Image(systemName: "arrow.clockwise")
+                            .opacity(isRefreshing ? 0 : 1)
+                        if isRefreshing {
+                            ProgressView()
+                                .controlSize(.mini)
+                        }
+                    }
+                    .frame(width: 16, height: 16)
+                    .accessibilityHidden(true)
+                }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
             .fixedSize()
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
+            .accessibilityLabel(isRefreshing ? "Refreshing usage" : "Refresh")
+            .help(isRefreshing ? "Refreshing usage…" : "Refresh usage")
 
             if let snapshot {
                 Text("\(error == nil ? "Updated" : "Last updated") \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))")
