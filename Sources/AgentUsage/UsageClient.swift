@@ -1,19 +1,25 @@
 import Foundation
 
-struct UsageLimits: Decodable {
+struct UsageLimits: Decodable, Sendable {
     let rateLimit: RateLimit
 
-    struct RateLimit: Decodable {
+    struct RateLimit: Decodable, Sendable {
         let primaryWindow: Window
         let secondaryWindow: Window
     }
 
-    struct Window: Decodable {
+    struct Window: Decodable, Sendable {
         let usedPercent: Double
         let resetAfterSeconds: Int
 
+        var remainingFraction: Double {
+            min(1, max(0, (100 - usedPercent) / 100))
+        }
+
+        var meterOpacity: Double { 0.65 + 0.35 * remainingFraction }
+
         var remaining: String {
-            String(format: "%g", 100 - usedPercent) + "%"
+            String(format: "%g", remainingFraction * 100) + "%"
         }
 
         var resetIn: String {
