@@ -7,6 +7,8 @@ struct UsagePanel: View {
     let onRefresh: () -> Void
     let onQuit: () -> Void
 
+    @State private var isMenuHovered = false
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(alignment: .leading, spacing: 18) {
@@ -164,7 +166,12 @@ struct UsagePanel: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .frame(width: 32, height: 32)
+            .background(
+                Color.primary.opacity(isMenuHovered ? 0.12 : 0.05),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
             .contentShape(Rectangle())
+            .onHover { isMenuHovered = $0 }
             .accessibilityLabel("More options")
             .help("More options")
         }
