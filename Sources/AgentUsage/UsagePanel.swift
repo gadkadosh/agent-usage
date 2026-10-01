@@ -129,26 +129,22 @@ struct UsagePanel: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Button(action: onRefresh) {
-                HStack(alignment: .center, spacing: 6) {
-                    // Keep both icons in the layout so refreshing cannot shift the text.
-                    ZStack {
-                        Image(systemName: "arrow.clockwise")
-                            .opacity(isRefreshing ? 0 : 1)
-                        ProgressView()
-                            .controlSize(.mini)
-                            .opacity(isRefreshing ? 1 : 0)
-                    }
-                    .frame(width: 16, height: 16)
-                    .accessibilityHidden(true)
-
-                    Text("Refresh")
-                }
+                Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
             .fixedSize()
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
             .accessibilityLabel(isRefreshing ? "Refreshing usage" : "Refresh")
             .help(isRefreshing ? "Refreshing usage…" : "Refresh usage")
+
+            ProgressView()
+                .controlSize(.mini)
+                .frame(width: 16, height: 16)
+                .opacity(isRefreshing ? 1 : 0)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
 
             if let snapshot {
                 Text("\(error == nil ? "Updated" : "Last updated") \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))")
