@@ -14,11 +14,11 @@ The app requests usage directly and refreshes about once a minute; use **Refresh
 
 Click the menu-bar label to open a native dashboard with session and weekly usage meters, remaining percentages, and reset countdowns. Both meters and percentages show **allowance remaining**, matching the menu-bar label. Session is always orange and weekly is always blue. Meter opacity increases smoothly from 65% to 100% as remaining allowance increases; percentage text stays at full contrast. There is no low-allowance warning. Countdown text updates while the panel is open; "Reset due" means a fresh reading is needed, not that the allowance has already replenished.
 
-Loading and authentication errors appear in the panel. If a refresh fails after a successful reading, the last reading stays visible with a stale-data warning and its update time. Use **Refresh** (⌘R) to retry or **Quit** (⌘Q) to stop the app.
+Loading and authentication errors appear in the panel. If a refresh fails after a successful reading, the last reading stays visible with a stale-data warning and its update time beside **Refresh** (⌘R). Use Refresh to retry, or open the **⋯** menu and choose **Quit Agent Usage** (⌘Q) to stop the app.
 
 <img src="docs/dashboard.png" alt="Codex dashboard with session and weekly usage meters" width="360">
 
-*Native panel rendered with sample data.*
+*Captured from the menu-bar panel with sample data. Native appearance varies with macOS.*
 
 ## Run
 
