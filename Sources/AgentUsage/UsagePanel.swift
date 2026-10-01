@@ -110,8 +110,11 @@ struct UsagePanel: View {
 
     private func errorCard(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(snapshot == nil ? "Usage unavailable" : "Couldn't refresh usage", systemImage: "exclamationmark.triangle")
-                .font(.subheadline.weight(.semibold))
+            Label(
+                snapshot == nil ? "Usage unavailable" : "Couldn't refresh usage",
+                systemImage: "exclamationmark.triangle"
+            )
+            .font(.subheadline.weight(.semibold))
             Text(message)
                 .font(.caption)
             if snapshot != nil {
@@ -132,7 +135,6 @@ struct UsagePanel: View {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
-            .controlSize(.regular)
             .fixedSize()
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
@@ -147,9 +149,11 @@ struct UsagePanel: View {
                 .allowsHitTesting(false)
 
             if let snapshot {
-                Text("\(error == nil ? "Updated" : "Last updated") \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "\(error == nil ? "Updated" : "Last updated") \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 0)
@@ -159,16 +163,15 @@ struct UsagePanel: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .frame(width: 32, height: 32)
+                    .background(
+                        Color.primary.opacity(isMenuHovered ? 0.12 : 0.05),
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
             .menuIndicator(.hidden)
-            .frame(width: 32, height: 32)
-            .background(
-                Color.primary.opacity(isMenuHovered ? 0.12 : 0.05),
-                in: RoundedRectangle(cornerRadius: 6)
-            )
-            .contentShape(Rectangle())
             .onHover { isMenuHovered = $0 }
             .accessibilityLabel("More options")
             .help("More options")
