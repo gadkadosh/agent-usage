@@ -25,12 +25,12 @@ struct UsagePanel: View {
                             .tracking(1)
 
                         limitRow(
-                            title: "Session", subtitle: "5 hours", color: .blue,
+                            title: "Session", subtitle: "5 hours", color: .orange,
                             window: snapshot.limits.rateLimit.primaryWindow,
                             snapshot: snapshot, now: context.date
                         )
                         limitRow(
-                            title: "Weekly", subtitle: "7 days", color: .orange,
+                            title: "Weekly", subtitle: "7 days", color: .blue,
                             window: snapshot.limits.rateLimit.secondaryWindow,
                             snapshot: snapshot, now: context.date
                         )
@@ -92,19 +92,19 @@ struct UsagePanel: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.08))
                     Capsule()
-                        .fill(color.opacity(window.isLowRemaining ? 1 : 0.65))
+                        .fill(color.opacity(window.meterOpacity))
                         .frame(width: geometry.size.width * window.remainingFraction)
                 }
             }
             .frame(height: 6)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(title) allowance remaining")
-            .accessibilityValue("\(window.remaining) remaining\(window.isLowRemaining ? ", low allowance" : "")")
+            .accessibilityValue("\(window.remaining) remaining")
 
             Text(snapshot.resetDescription(for: window, at: now))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
     }
 

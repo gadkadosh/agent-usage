@@ -16,7 +16,7 @@ struct UsageLimits: Decodable, Sendable {
             min(1, max(0, (100 - usedPercent) / 100))
         }
 
-        var isLowRemaining: Bool { remainingFraction <= 0.1 }
+        var meterOpacity: Double { 0.65 + 0.35 * remainingFraction }
 
         var remaining: String {
             String(format: "%g", remainingFraction * 100) + "%"
