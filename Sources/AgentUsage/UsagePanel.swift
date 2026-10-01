@@ -7,7 +7,9 @@ struct UsagePanel: View {
     let onRefresh: () -> Void
     let onQuit: () -> Void
 
-    @State private var isMenuHovered = false
+    // Select the property wrapper, not the newer State macro missing from some CLT installs.
+    private typealias HoverState = SwiftUI.State<Bool>
+    @HoverState private var isMenuHovered = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
