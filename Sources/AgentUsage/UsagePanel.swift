@@ -35,10 +35,6 @@ struct UsagePanel: View {
                             snapshot: snapshot, now: context.date
                         )
                     }
-
-                    Text("\(error == nil ? "Updated" : "Last updated") \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 } else if error == nil {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
@@ -127,17 +123,35 @@ struct UsagePanel: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 8) {
             Button(action: onRefresh) {
                 Label(isRefreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
 
-            Spacer()
-            Button("Quit", action: onQuit)
-                .keyboardShortcut("q", modifiers: .command)
-                .help("Quit Agent Usage")
+            if let snapshot {
+                Text("\(error == nil ? "Updated" : "Last updated") \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+            Menu {
+                Button("Quit Agent Usage", action: onQuit)
+                    .keyboardShortcut("q", modifiers: .command)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 20, height: 20)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("More options")
+            .help("More options")
         }
     }
 }
