@@ -19,10 +19,14 @@ struct PiCredentialSource: Sendable {
     ) -> URL {
         let directory: URL
         if let override = environment["PI_CODING_AGENT_DIR"], !override.isEmpty {
-            let path = override == "~" ? home.path
-                : override.hasPrefix("~/") ? home.appendingPathComponent(String(override.dropFirst(2))).path
-                : override
-            directory = URL(fileURLWithPath: path, isDirectory: true)
+            if override == "~" {
+                directory = home
+            } else if override.hasPrefix("~/") {
+                let relativePath = String(override.dropFirst(2))
+                directory = home.appendingPathComponent(relativePath, isDirectory: true)
+            } else {
+                directory = URL(fileURLWithPath: override, isDirectory: true)
+            }
         } else {
             directory = home.appendingPathComponent(".pi/agent", isDirectory: true)
         }
