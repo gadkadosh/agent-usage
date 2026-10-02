@@ -8,11 +8,11 @@ A minimal macOS menu-bar app showing the 5-hour and 7-day Codex usage limits ass
 - Swift 6 / Apple Command Line Tools (or Xcode)
 - [pi](https://pi.dev) signed into OpenAI with your ChatGPT subscription (`/login` in pi)
 
-The app requests usage directly and refreshes about once a minute; use **Refresh** in the panel for an immediate update. The ChatGPT endpoint is not a supported public API and may change without notice.
+The app requests usage directly and refreshes about once a minute; choose **Refresh** from the panel’s top-right **⋯** menu (or press **⌘R**) for an immediate update. The ChatGPT endpoint is not a supported public API and may change without notice.
 
 ## Dashboard
 
-Click the menu-bar label to see your remaining session and weekly allowance and reset countdowns.
+Click the menu-bar label to see your remaining session and weekly allowance and reset countdowns. The footer shows the last successful update time, with a small spinner while refreshing. Refresh and Quit live in the circular **⋯** menu at the top-right.
 
 <img src="docs/dashboard.png" alt="Codex dashboard with session and weekly usage meters" width="360">
 
@@ -28,7 +28,7 @@ swift run
 
 No access-token environment variable is required. Agent Usage reads only pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json` before each request, including its account ID when available. API keys and other agents' credentials are not used. The allowance is account-wide, not usage attributable only to pi.
 
-The app never modifies pi's credentials or refreshes tokens itself. If the token expires or is rejected, use OpenAI in pi so pi can refresh it, or sign in again with `/login`, then click **Refresh**. No app restart is needed. Pi's credential storage format and the usage endpoint are unofficial integration points and may change.
+The app never modifies pi's credentials or refreshes tokens itself. If the token expires or is rejected, use OpenAI in pi so pi can refresh it, or sign in again with `/login`, then choose **Refresh** from the **⋯** menu. No app restart is needed. Pi's credential storage format and the usage endpoint are unofficial integration points and may change.
 
 If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is honored (including `~/` paths). A Finder-launched app uses the default location unless the override is present in its own environment; it does not inherit terminal-only variables.
 

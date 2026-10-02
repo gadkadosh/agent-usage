@@ -48,8 +48,10 @@ struct UsagePanel: View {
                     .frame(maxWidth: .infinity, minHeight: 80)
                 }
 
-                Divider()
-                footer
+                if snapshot != nil || error != nil {
+                    Divider()
+                    footer
+                }
             }
             .padding(20)
             .frame(width: 360)
@@ -70,7 +72,37 @@ struct UsagePanel: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            optionsMenu
         }
+    }
+
+    private var optionsMenu: some View {
+        Menu {
+            Button(action: onRefresh) {
+                Label(isRefreshing ? "Refreshing usage…" : "Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(isRefreshing)
+            .keyboardShortcut("r", modifiers: .command)
+
+            Divider()
+
+            Button("Quit Agent Usage", action: onQuit)
+                .keyboardShortcut("q", modifiers: .command)
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 32, height: 32)
+                .background(
+                    Color.primary.opacity(isMenuHovered ? 0.12 : 0.05),
+                    in: Circle()
+                )
+                .contentShape(Circle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .onHover { isMenuHovered = $0 }
+        .accessibilityLabel("More options")
+        .help("More options")
     }
 
     private func limitRow(
@@ -130,54 +162,25 @@ struct UsagePanel: View {
     }
 
     private var footer: some View {
-        HStack(alignment: .top, spacing: 4) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Button(action: onRefresh) {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
-                    .fixedSize()
-                    .disabled(isRefreshing)
-                    .keyboardShortcut("r", modifiers: .command)
-                    .accessibilityLabel(isRefreshing ? "Refreshing usage" : "Refresh")
-                    .help(isRefreshing ? "Refreshing usage…" : "Refresh usage")
-
-                    ProgressView()
-                        .controlSize(.mini)
-                        .opacity(isRefreshing ? 1 : 0)
-                        .accessibilityHidden(true)
-                        .allowsHitTesting(false)
-                }
-
-                if let snapshot {
-                    Text(
-                        "\(error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
+        HStack(spacing: 6) {
+            if let snapshot {
+                Text(
+                    "\(error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
+                )
+            } else {
+                Text("Not updated yet")
             }
+
+            ProgressView()
+                .controlSize(.mini)
+                .opacity(isRefreshing ? 1 : 0)
+                .accessibilityLabel("Refreshing usage")
+                .accessibilityHidden(!isRefreshing)
+                .allowsHitTesting(false)
 
             Spacer(minLength: 0)
-            Menu {
-                Button("Quit Agent Usage", action: onQuit)
-                    .keyboardShortcut("q", modifiers: .command)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Color.primary.opacity(isMenuHovered ? 0.12 : 0.05),
-                        in: RoundedRectangle(cornerRadius: 6)
-                    )
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .onHover { isMenuHovered = $0 }
-            .accessibilityLabel("More options")
-            .help("More options")
         }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }
