@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+
 @testable import AgentUsage
 
 final class UsageSnapshotTests: XCTestCase {
@@ -10,21 +11,33 @@ final class UsageSnapshotTests: XCTestCase {
         let snapshot = snapshot(window: window)
 
         XCTAssertEqual(snapshot.resetDescription(for: window, at: fetchedAt), "Resets in 1h 2m")
-        XCTAssertEqual(snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(120)), "Resets in 1h 0m")
-        XCTAssertEqual(snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(3_700)), "Resets in <1m")
-        XCTAssertEqual(snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(3_720)), "Reset due")
-        XCTAssertEqual(snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(4_000)), "Reset due")
+        XCTAssertEqual(
+            snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(120)),
+            "Resets in 1h 0m")
+        XCTAssertEqual(
+            snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(3_700)),
+            "Resets in <1m")
+        XCTAssertEqual(
+            snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(3_720)),
+            "Reset due")
+        XCTAssertEqual(
+            snapshot.resetDescription(for: window, at: fetchedAt.addingTimeInterval(4_000)),
+            "Reset due")
     }
 
     func testWeeklyAndMinuteCountdowns() {
         let weekly = UsageLimits.Window(usedPercent: 12.5, resetAfterSeconds: 90_000)
-        XCTAssertEqual(snapshot(window: weekly).resetDescription(for: weekly, at: fetchedAt), "Resets in 1d 1h")
+        XCTAssertEqual(
+            snapshot(window: weekly).resetDescription(for: weekly, at: fetchedAt), "Resets in 1d 1h"
+        )
 
         let short = UsageLimits.Window(usedPercent: 0, resetAfterSeconds: 120)
-        XCTAssertEqual(snapshot(window: short).resetDescription(for: short, at: fetchedAt), "Resets in 2m")
+        XCTAssertEqual(
+            snapshot(window: short).resetDescription(for: short, at: fetchedAt), "Resets in 2m")
 
         let expired = UsageLimits.Window(usedPercent: 100, resetAfterSeconds: -10)
-        XCTAssertEqual(snapshot(window: expired).resetDescription(for: expired, at: fetchedAt), "Reset due")
+        XCTAssertEqual(
+            snapshot(window: expired).resetDescription(for: expired, at: fetchedAt), "Reset due")
     }
 
     func testMeterValuesRepresentRemainingAllowance() {
@@ -39,7 +52,7 @@ final class UsageSnapshotTests: XCTestCase {
     func testMeterOpacityIncreasesGraduallyWithRemaining() {
         let cases: [(Double, Double)] = [
             (0, 0.65), (10, 0.685), (25, 0.7375),
-            (50, 0.825), (75, 0.9125), (100, 1)
+            (50, 0.825), (75, 0.9125), (100, 1),
         ]
         for (remaining, opacity) in cases {
             let window = UsageLimits.Window(usedPercent: 100 - remaining, resetAfterSeconds: 0)

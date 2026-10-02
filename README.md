@@ -36,6 +36,15 @@ Run tests with `swift test` when full Xcode is installed and selected, or use `D
 
 `swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
 
+## Formatting
+
+```sh
+make format        # Format Swift files in place
+make format-check  # Check formatting without changing files
+```
+
+Use Xcode 26.3 to match CI's formatter; formatting can differ between toolchain versions.
+
 ## License
 
 [MIT](LICENSE) © 2026 Gad Kadosh.

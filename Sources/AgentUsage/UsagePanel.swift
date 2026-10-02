@@ -79,7 +79,8 @@ struct UsagePanel: View {
     private var optionsMenu: some View {
         Menu {
             Button(action: onRefresh) {
-                Label(isRefreshing ? "Refreshing usage…" : "Refresh", systemImage: "arrow.clockwise")
+                Label(
+                    isRefreshing ? "Refreshing usage…" : "Refresh", systemImage: "arrow.clockwise")
             }
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
