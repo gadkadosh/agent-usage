@@ -42,18 +42,22 @@ struct UsageLimits: Decodable, Sendable {
 
 enum UsageClient {
     static func fetch() async throws -> UsageLimits {
-        guard let token = ProcessInfo.processInfo.environment["OPENAI_ACCESS_TOKEN"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
-            throw UsageError.missingToken
-        }
+        try await fetch(credentials: PiCredentialSource(), session: .shared)
+    }
+
+    static func fetch(credentials: PiCredentialSource, session: URLSession) async throws -> UsageLimits {
+        let credentials = try credentials.load()
 
         var request = URLRequest(url: URL(string: "https://chatgpt.com/backend-api/wham/usage")!)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        if let accountID = credentials.accountID {
+            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let status = (response as? HTTPURLResponse)?.statusCode else {
             throw UsageError.invalidResponse
         }
@@ -68,18 +72,15 @@ enum UsageClient {
 }
 
 private enum UsageError: LocalizedError {
-    case missingToken
     case invalidResponse
     case httpStatus(Int)
 
     var errorDescription: String? {
         switch self {
-        case .missingToken:
-            "Set OPENAI_ACCESS_TOKEN before starting Agent Usage."
         case .invalidResponse:
             "The usage server returned an invalid response."
         case .httpStatus(401):
-            "Access token expired or invalid (HTTP 401)."
+            "Pi's ChatGPT login was rejected (HTTP 401). Use OpenAI in pi or sign in again with /login, then refresh."
         case .httpStatus(let status):
             "Usage request failed (HTTP \(status))."
         }
