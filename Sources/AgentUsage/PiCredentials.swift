@@ -53,8 +53,9 @@ struct PiCredentialSource: Sendable {
         guard let entry = auth.codex else { throw PiCredentialError.missingLogin }
         guard entry.type == "oauth" else { throw PiCredentialError.unsupportedLogin }
         guard let access = entry.access?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !access.isEmpty, !access.contains(where: { $0.isWhitespace || $0.isNewline }),
-              let expires = entry.expires, expires.isFinite else {
+            !access.isEmpty, !access.contains(where: { $0.isWhitespace || $0.isNewline }),
+            let expires = entry.expires, expires.isFinite
+        else {
             throw PiCredentialError.invalidFile
         }
         // Pi stores expiry as Unix milliseconds, not seconds.
@@ -65,7 +66,8 @@ struct PiCredentialSource: Sendable {
         if let accountID, accountID.contains(where: { $0.isWhitespace || $0.isNewline }) {
             throw PiCredentialError.invalidFile
         }
-        return PiCredentials(accessToken: access, accountID: accountID?.isEmpty == false ? accountID : nil)
+        return PiCredentials(
+            accessToken: access, accountID: accountID?.isEmpty == false ? accountID : nil)
     }
 
     private struct AuthFile: Decodable {

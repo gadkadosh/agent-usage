@@ -6,6 +6,6 @@ let package = Package(
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(name: "AgentUsage"),
-        .testTarget(name: "AgentUsageTests", dependencies: ["AgentUsage"])
+        .testTarget(name: "AgentUsageTests", dependencies: ["AgentUsage"]),
     ]
 )

@@ -45,7 +45,9 @@ enum UsageClient {
         try await fetch(credentials: PiCredentialSource(), session: .shared)
     }
 
-    static func fetch(credentials: PiCredentialSource, session: URLSession) async throws -> UsageLimits {
+    static func fetch(credentials: PiCredentialSource, session: URLSession) async throws
+        -> UsageLimits
+    {
         let credentials = try credentials.load()
 
         var request = URLRequest(url: URL(string: "https://chatgpt.com/backend-api/wham/usage")!)

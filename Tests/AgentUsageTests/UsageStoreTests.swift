@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+
 @testable import AgentUsage
 
 final class UsageStoreTests: XCTestCase {
@@ -68,10 +69,11 @@ final class UsageStoreTests: XCTestCase {
     }
 }
 
-private let sampleLimits = UsageLimits(rateLimit: .init(
-    primaryWindow: .init(usedPercent: 24, resetAfterSeconds: 3_720),
-    secondaryWindow: .init(usedPercent: 12.5, resetAfterSeconds: 90_000)
-))
+private let sampleLimits = UsageLimits(
+    rateLimit: .init(
+        primaryWindow: .init(usedPercent: 24, resetAfterSeconds: 3_720),
+        secondaryWindow: .init(usedPercent: 12.5, resetAfterSeconds: 90_000)
+    ))
 
 private enum FetchError: LocalizedError {
     case unavailable

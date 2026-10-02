@@ -36,6 +36,21 @@ Run tests with `swift test` when full Xcode is installed and selected, or use `D
 
 `swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
 
+## Formatting
+
+Use Apple's `swift-format`, bundled with Swift 6, with the committed `.swift-format` configuration (four-space indentation and a 100-column line-length target):
+
+```sh
+make format        # Format Package.swift, Sources/, and Tests/ in place
+make format-check  # Check without changing files; exits nonzero on style violations
+```
+
+Generated build files and mockups are excluded. CI uses Xcode 26.3; use that toolchain when formatting and checking, since formatter behavior can change between versions.
+
+## CI
+
+GitHub Actions runs `make format-check` and `swift test` on pull requests and pushes to `main`, using a standard macOS runner with Xcode 26.3 explicitly selected. `swift test` also builds the app. Tests use synthetic credentials and HTTP responses; no pi login or repository secrets are required.
+
 ## License
 
 [MIT](LICENSE) © 2026 Gad Kadosh.

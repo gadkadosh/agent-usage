@@ -1,12 +1,14 @@
 import Foundation
 import XCTest
+
 @testable import AgentUsage
 
 final class PiCredentialsTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
     func testDefaultPathDoesNotRequireEnvironment() {
-        let url = PiCredentialSource.defaultAuthURL(home: URL(fileURLWithPath: "/Users/test"), environment: [:])
+        let url = PiCredentialSource.defaultAuthURL(
+            home: URL(fileURLWithPath: "/Users/test"), environment: [:])
         XCTAssertEqual(url.path, "/Users/test/.pi/agent/auth.json")
     }
 
@@ -16,15 +18,17 @@ final class PiCredentialsTests: XCTestCase {
             ("/tmp/custom-pi", "/tmp/custom-pi/auth.json"),
             ("~/custom-pi", "/Users/test/custom-pi/auth.json"),
             ("~", "/Users/test/auth.json"),
-            ("", "/Users/test/.pi/agent/auth.json")
+            ("", "/Users/test/.pi/agent/auth.json"),
         ] {
-            let url = PiCredentialSource.defaultAuthURL(home: home, environment: ["PI_CODING_AGENT_DIR": override])
+            let url = PiCredentialSource.defaultAuthURL(
+                home: home, environment: ["PI_CODING_AGENT_DIR": override])
             XCTAssertEqual(url.path, expected)
         }
     }
 
     func testReadsOnlyChatGPTCredentialsAndLeavesFileUnchanged() throws {
-        let content = #"{"openai-codex":{"type":"oauth","access":"test-access","refresh":"test-refresh","expires":1700000001000,"accountId":"test-account"},"openai":{"type":"api_key","key":"not-a-subscription"},"other-provider":42}"#
+        let content =
+            #"{"openai-codex":{"type":"oauth","access":"test-access","refresh":"test-refresh","expires":1700000001000,"accountId":"test-account"},"openai":{"type":"api_key","key":"not-a-subscription"},"other-provider":42}"#
         let fixture = try AuthFixture(content)
         defer { fixture.remove() }
         let before = try Data(contentsOf: fixture.url)
@@ -37,7 +41,8 @@ final class PiCredentialsTests: XCTestCase {
     }
 
     func testLegacyEntryWithoutAccountIDOrRefreshToken() throws {
-        let fixture = try AuthFixture(#"{"openai-codex":{"type":"oauth","access":"test-access","expires":1700000001000}}"#)
+        let fixture = try AuthFixture(
+            #"{"openai-codex":{"type":"oauth","access":"test-access","expires":1700000001000}}"#)
         defer { fixture.remove() }
         XCTAssertNil(try fixture.source.load(now: now).accountID)
     }
@@ -54,12 +59,17 @@ final class PiCredentialsTests: XCTestCase {
     func testMissingLoginAndAPIKeyAreNotUsedAsFallbacks() throws {
         try assertError(.missingLogin, content: #"{"openai":{"type":"api_key","key":"test-key"}}"#)
         try assertError(.missingLogin, content: "{}")
-        try assertError(.unsupportedLogin, content: #"{"openai-codex":{"type":"api_key","key":"test-key"}}"#)
+        try assertError(
+            .unsupportedLogin, content: #"{"openai-codex":{"type":"api_key","key":"test-key"}}"#)
     }
 
     func testExpiredAndExactlyExpiringTokens() throws {
         for expiry in [1_699_999_999_000, 1_700_000_000_000] {
-            try assertError(.expiredLogin, content: "{\"openai-codex\":{\"type\":\"oauth\",\"access\":\"test-access\",\"expires\":\(expiry)}}")
+            try assertError(
+                .expiredLogin,
+                content:
+                    "{\"openai-codex\":{\"type\":\"oauth\",\"access\":\"test-access\",\"expires\":\(expiry)}}"
+            )
         }
     }
 
@@ -71,7 +81,7 @@ final class PiCredentialsTests: XCTestCase {
             #"{"openai-codex":{"type":"oauth","access":123,"expires":1700000001000}}"#,
             #"{"openai-codex":{"type":"oauth","access":"test-access","expires":"secret-value"}}"#,
             #"{"openai-codex":{"type":"oauth","access":"test\r\nsecret-value","expires":1700000001000}}"#,
-            #"{"openai-codex":{"type":"oauth","access":"test-access","expires":1700000001000,"accountId":"test\r\nsecret-value"}}"#
+            #"{"openai-codex":{"type":"oauth","access":"test-access","expires":1700000001000,"accountId":"test\r\nsecret-value"}}"#,
         ] {
             try assertError(.invalidFile, content: content)
         }
@@ -174,8 +184,11 @@ private final class PiUsageProtocol: URLProtocol, @unchecked Sendable {
         XCTAssertTrue(["Bearer first", "Bearer second", "Bearer rejected"].contains(authorization))
         let status = authorization == "Bearer rejected" ? 401 : 200
         let percent = authorization == "Bearer first" ? 10 : 20
-        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
-        let data = Data("{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"reset_after_seconds\":120}}}".utf8)
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+        let data = Data(
+            "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"reset_after_seconds\":120}}}"
+                .utf8)
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
