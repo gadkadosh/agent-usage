@@ -6,6 +6,12 @@ import Foundation
 // Its session v2/v3 usage contract is unchanged from pi v0.99.2.
 // No home-directory reads, session files, or SDK calls (loading via pi can migrate files).
 enum PiHistoryFixtures {
+    static let now = ISO8601DateFormatter().date(from: "2026-10-02T12:00:00Z")!
+    static var calendar: Calendar {
+        var value = Calendar(identifier: .gregorian)
+        value.timeZone = TimeZone(secondsFromGMT: 0)!
+        return value
+    }
     static let timestamp = "2026-10-02T10:00:00.000Z"
     static let milliseconds: Int64 = 1_790_935_200_000
     static let since = ISO8601DateFormatter().date(from: "2026-09-03T00:00:00Z")!
