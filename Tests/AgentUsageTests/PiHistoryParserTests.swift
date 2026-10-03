@@ -23,15 +23,22 @@ final class PiHistoryParserTests: XCTestCase {
         XCTAssertFalse(String(describing: parser).contains("private-secret"))
     }
 
-    func testAllCanonicalUsageSourcesAndAbandonedBranchesAreCounted() {
-        let parser = F.parser([
-            F.header(), F.message(), F.message(id: "abandoned", stop: "toolUse"),
+    func testAllCanonicalUsageSourcesAndAbandonedBranchesAreCountedInV2AndV3() {
+        let entries = [
+            F.message(), F.message(id: "abandoned", stop: "toolUse"),
+            F.message(id: "tool", role: "toolResult"),
             F.entry("usage", id: "cache-warm"), F.entry("compaction", id: "compact"),
             F.entry("branch_summary", id: "branch"),
             F.entry("context_edit", id: "omit-old-message", usage: nil),
-        ])
-        XCTAssertTrue(parser.issues.isEmpty)
-        XCTAssertEqual(parser.observations.reduce(0) { $0 + $1.tokens }, 950)
+        ]
+        let legacy = F.parser([F.header(version: 2)] + entries)
+        let current = F.parser([F.header(version: 3)] + entries)
+        for parser in [legacy, current] {
+            XCTAssertTrue(parser.isSupported)
+            XCTAssertEqual(parser.issues, [.toolAggregate])
+            XCTAssertEqual(parser.observations.reduce(0) { $0 + $1.tokens }, 1_140)
+        }
+        XCTAssertEqual(legacy.observations, current.observations)
     }
 
     func testToolAggregateDoesNotAddNestedUsageAgainAndWarnsAboutSavedChildren() {
@@ -72,6 +79,7 @@ final class PiHistoryParserTests: XCTestCase {
     }
 
     func testUnsupportedVersionsAndMissingHeadersNeverInventIDsOrMigrate() {
+        // Session version 1 is the legacy linear format, not pi release 1.0.0.
         for header in [
             F.header(version: 1), F.header(version: 4), #"{"type":"session","id":"legacy"}"#,
         ] {

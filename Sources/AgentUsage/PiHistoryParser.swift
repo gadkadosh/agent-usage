@@ -1,10 +1,12 @@
 import CryptoKit
 import Foundation
 
-/// Pure line adapter for pi v0.99.2's v2/v3 session JSONL (no IO or SDK loading).
-/// Verified tag commit: 005af57d88ee23b33778f343a9595b32e67ff788.
-/// Contract: https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/docs/session-format.md
-/// Subsets: https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/docs/message-types.md
+/// Pure line adapter validated against pi v1.0.0 (no IO or SDK loading).
+/// Verified tag commit: a13d35a742c6ef8462812a28fbe1d8c8b7431c32.
+/// pi 1.0.0 still writes session v3; the v2/v3 usage contract also matches pi v0.99.2.
+/// Release versions are not session-header versions. Legacy session v1 remains unsupported.
+/// Contract: https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/docs/session-format.md
+/// Subsets: https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/docs/message-types.md
 /// Canonical sources: message.usage, usage.usage, compaction.usage, branch_summary.usage.
 /// Never decode transcript fields. Tool nestedCalls/details are not additional usage.
 /// Returns candidates: the index must deduplicate IDs and exclude conflicting copies.

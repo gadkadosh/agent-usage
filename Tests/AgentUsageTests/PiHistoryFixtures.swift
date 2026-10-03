@@ -2,7 +2,8 @@ import Foundation
 
 @testable import AgentUsage
 
-// Entirely invented, string-only fixtures based on the official pi v0.99.2 contract.
+// Entirely invented, string-only fixtures revalidated against official pi v1.0.0.
+// Its session v2/v3 usage contract is unchanged from pi v0.99.2.
 // No home-directory reads, session files, or SDK calls (loading via pi can migrate files).
 enum PiHistoryFixtures {
     static let timestamp = "2026-10-02T10:00:00.000Z"
