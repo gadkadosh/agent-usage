@@ -32,9 +32,19 @@ The app never modifies pi's credentials or refreshes tokens itself. If the token
 
 If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is honored (including `~/` paths). A Finder-launched app uses the default location unless the override is present in its own environment; it does not inherit terminal-only variables.
 
-Run tests with `swift test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential and HTTP tests use synthetic data, never your real pi auth file.
-
 `swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
+
+## Local history (integration in progress)
+
+The app now scans supported local pi histories in the background, independently of allowance authentication. The panel is still allowance-only; period totals and charts will arrive in a separate presentation change.
+
+History is discovered in `~/.pi/agent/sessions`. `PI_CODING_AGENT_DIR` changes the agent root; `PI_CODING_AGENT_SESSION_DIR` overrides the session root directly (including `~/` paths). Only that root's flat `.jsonl` files or one project-directory level are scanned. Pi 1.0.0 session formats v2/v3 are supported; legacy v1, compressed histories, settings-only/CLI-only custom paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
+
+Scans are read-only and keep only normalized operation identity, timestamps and token counts in memory—not transcript text or credentials. There are no history uploads or writes. Initial/limited scans can be partial; failures preserve last-readable data rather than proving zero usage. An initial scan, minute polling and the existing Refresh action feed this index. See [scan bounds, cadence and synthetic benchmark results](docs/history-scanning.md).
+
+## Tests
+
+Run tests with `swift test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
 
 ## Formatting
 
