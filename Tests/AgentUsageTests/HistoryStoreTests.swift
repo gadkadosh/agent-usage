@@ -100,15 +100,24 @@ final class HistoryStoreTests: XCTestCase {
         })
         await store.refresh()
         await store.refresh()
-        let task = Task { await store.refresh() }
-        await gate.waitUntilPaused()
+        let finished = expectation(description: "Cancelled refresh finishes")
+        let task = Task {
+            await store.refresh()
+            finished.fulfill()
+        }
+        defer {
+            task.cancel()
+            Task { await gate.resume() }
+        }
+        guard await gate.waitUntilPaused() else { return }
         XCTAssertTrue(store.isRefreshing)
         await store.refresh()
         let count = await fetcher.count
         XCTAssertEqual(count, 3)
         task.cancel()
         await gate.resume()
-        await task.value
+        let completion = await XCTWaiter.fulfillment(of: [finished], timeout: 5)
+        XCTAssertEqual(completion, .completed)
         XCTAssertEqual(store.snapshot?.fetchedAt, historySnapshot().fetchedAt)
         XCTAssertEqual(store.summary, historySnapshot().summaries[.today])
         XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
@@ -124,8 +133,8 @@ final class HistoryStoreTests: XCTestCase {
     }
 
     func testPollingStartsOnceRefreshesAgainAndCanRestartAfterStop() async {
-        let fetchGate = HistoryGate()
-        let sleepGate = HistoryGate()
+        let fetchGate = HistoryGate("Fetch")
+        let sleepGate = HistoryGate("Sleep")
         let store = HistoryStore(
             fetch: {
                 await fetchGate.pause()
@@ -136,34 +145,121 @@ final class HistoryStoreTests: XCTestCase {
                 await sleepGate.pause()
                 try Task.checkCancellation()
             })
+        defer { stopAndRelease(store, fetchGate, sleepGate) }
         store.start(refreshInterval: .seconds(120))
-        await fetchGate.waitUntilPaused()
+        guard await fetchGate.waitUntilPaused() else { return }
         store.start(refreshInterval: .seconds(120))
         var count = await fetchGate.count
         XCTAssertEqual(count, 1)
         await fetchGate.resume()
-        await sleepGate.waitUntilPaused()
+        guard await sleepGate.waitUntilPaused() else { return }
         XCTAssertNotNil(store.snapshot)
         XCTAssertFalse(store.isRefreshing)
 
         await sleepGate.resume()
-        await fetchGate.waitUntilPaused()
+        guard await fetchGate.waitUntilPaused() else { return }
         count = await fetchGate.count
         XCTAssertEqual(count, 2)
         await fetchGate.resume()
-        await sleepGate.waitUntilPaused()
+        guard await sleepGate.waitUntilPaused() else { return }
         store.stop()
         store.stop()
         await sleepGate.resume()
 
         store.start(refreshInterval: .seconds(120))
-        await fetchGate.waitUntilPaused()
+        guard await fetchGate.waitUntilPaused() else { return }
         count = await fetchGate.count
         XCTAssertEqual(count, 3)
         await fetchGate.resume()
-        await sleepGate.waitUntilPaused()
+        guard await sleepGate.waitUntilPaused() else { return }
         store.stop()
         await sleepGate.resume()
+    }
+
+    func testRestartDuringFetchWaitsThenRefreshesBeforeSleeping() async {
+        let fetchGate = HistoryGate("Fetch")
+        let sleepGate = HistoryGate("Sleep")
+        let store = HistoryStore(
+            fetch: { historySnapshot(read: await fetchGate.pause()) },
+            sleep: { _ in
+                let reads = await fetchGate.count
+                XCTAssertEqual(reads, 2, "Restart must fetch again before sleeping")
+                await sleepGate.pause()
+                try Task.checkCancellation()
+            })
+        defer { stopAndRelease(store, fetchGate, sleepGate) }
+        store.start(refreshInterval: .seconds(120))
+        guard await fetchGate.waitUntilPaused() else { return }
+        store.stop()
+        store.start(refreshInterval: .seconds(120))
+        var count = await fetchGate.count
+        XCTAssertEqual(count, 1)
+        XCTAssertTrue(store.isRefreshing)
+
+        await fetchGate.resume()
+        guard await fetchGate.waitUntilPaused() else { return }
+        count = await fetchGate.count
+        XCTAssertEqual(count, 2)
+        let sleeps = await sleepGate.count
+        XCTAssertEqual(sleeps, 0)
+        XCTAssertNil(store.snapshot)  // The cancelled first fetch wasn't published.
+        XCTAssertNil(store.error)
+        store.start(refreshInterval: .seconds(120))  // Old cleanup must not clear the new handle.
+        await Task.yield()
+        count = await fetchGate.count
+        XCTAssertEqual(count, 2)
+
+        await fetchGate.resume()
+        guard await sleepGate.waitUntilPaused() else { return }
+        XCTAssertEqual(store.snapshot?.fetchedAt, historySnapshot(read: 2).fetchedAt)
+        count = await fetchGate.count
+        XCTAssertEqual(count, 2, "Old cleanup must not permit a duplicate poller")
+        XCTAssertFalse(store.isRefreshing)
+        store.stop()
+        await sleepGate.resume()
+    }
+
+    func testSleeperFailureClearsCompletedPollerSoStartWorksAgain() async {
+        let fetchGate = HistoryGate("Fetch")
+        let sleepGate = HistoryGate("Failing sleep")
+        let store = HistoryStore(
+            fetch: { historySnapshot(read: await fetchGate.pause()) },
+            sleep: { _ in
+                await sleepGate.pause()
+                throw SensitiveError()
+            })
+        defer { stopAndRelease(store, fetchGate, sleepGate) }
+        store.start(refreshInterval: .seconds(120))
+        guard await fetchGate.waitUntilPaused() else { return }
+        await fetchGate.resume()
+        guard await sleepGate.waitUntilPaused() else { return }
+        await sleepGate.resume()
+
+        // Retry start until the throwing sleeper has unwound; the gate gives a bounded failure.
+        let restart = Task {
+            while !Task.isCancelled {
+                store.start(refreshInterval: .seconds(120))
+                await Task.yield()
+            }
+        }
+        defer { restart.cancel() }
+        guard await fetchGate.waitUntilPaused() else { return }
+        restart.cancel()
+        let count = await fetchGate.count
+        XCTAssertEqual(count, 2)
+        XCTAssertNil(store.error)  // A scheduler failure isn't a history-source failure.
+        await fetchGate.resume()
+        guard await sleepGate.waitUntilPaused() else { return }
+        store.stop()
+        await sleepGate.resume()
+    }
+
+    private func stopAndRelease(_ store: HistoryStore, _ fetch: HistoryGate, _ sleep: HistoryGate) {
+        store.stop()
+        Task {
+            await fetch.resume()
+            await sleep.resume()
+        }
     }
 }
 
@@ -210,28 +306,57 @@ private actor ScriptedHistory {
     }
 }
 
-/// A deliberately non-cooperative suspension to test late results after cancellation.
+/// Non-cooperative suspension for late-result tests, with bounded failures instead of hangs.
 private actor HistoryGate {
     private(set) var count = 0
+    private let name: String
     private var pending: CheckedContinuation<Void, Never>?
-    private var started: CheckedContinuation<Void, Never>?
+    private var started: XCTestExpectation?
 
-    func pause() async {
+    init(_ name: String = "History") { self.name = name }
+
+    @discardableResult
+    func pause(file: StaticString = #filePath, line: UInt = #line) async -> Int {
+        guard pending == nil else {
+            XCTFail(
+                "\(name): overlapping pauses would overwrite a continuation", file: file, line: line
+            )
+            return count
+        }
         count += 1
+        let call = count
+        let timeout = Task {
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            guard count == call, pending != nil else { return }
+            XCTFail("\(name): pause wasn't released within 5 seconds", file: file, line: line)
+            resume()
+        }
+        defer { timeout.cancel() }
         await withCheckedContinuation {
             pending = $0
-            started?.resume()
+            started?.fulfill()
             started = nil
         }
+        return call
     }
 
-    func waitUntilPaused() async {
-        if pending != nil { return }
-        await withCheckedContinuation { started = $0 }
+    func waitUntilPaused(file: StaticString = #filePath, line: UInt = #line) async -> Bool {
+        if pending != nil { return true }
+        guard started == nil else {
+            XCTFail("\(name): only one observer may wait for a pause", file: file, line: line)
+            return false
+        }
+        let expectation = XCTestExpectation(description: "\(name) reaches pause")
+        started = expectation
+        let result = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
+        if started === expectation { started = nil }
+        XCTAssertEqual(result, .completed, "\(name): pause wasn't reached", file: file, line: line)
+        return result == .completed
     }
 
     func resume() {
-        pending?.resume()
+        let continuation = pending
         pending = nil
+        continuation?.resume()
     }
 }

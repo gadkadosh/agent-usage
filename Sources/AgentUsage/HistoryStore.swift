@@ -14,6 +14,8 @@ final class HistoryStore: ObservableObject {
     private let fetch: @Sendable () async throws -> HistorySnapshot
     private let sleep: @Sendable (Duration) async throws -> Void
     private var polling: Task<Void, Never>?
+    private var pollingID: UUID?
+    private var refreshWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(
         fetch: @escaping @Sendable () async throws -> HistorySnapshot,
@@ -30,9 +32,18 @@ final class HistoryStore: ObservableObject {
         precondition(refreshInterval > .zero)
         guard polling == nil else { return }
         let sleep = self.sleep
+        let id = UUID()
+        pollingID = id
         polling = Task { [weak self] in
+            defer {
+                // An old task must not clear a newer poller's handle after stop/start.
+                if self?.pollingID == id {
+                    self?.polling = nil
+                    self?.pollingID = nil
+                }
+            }
             while !Task.isCancelled, self != nil {
-                await self?.refresh()
+                await self?.refreshWhenIdle()
                 do {
                     try Task.checkCancellation()
                     try await sleep(refreshInterval)
@@ -46,12 +57,26 @@ final class HistoryStore: ObservableObject {
     func stop() {
         polling?.cancel()
         polling = nil
+        pollingID = nil
+    }
+
+    private func refreshWhenIdle() async {
+        // A restarted poller must wait for the old fetch, not skip straight to sleeping.
+        while isRefreshing, !Task.isCancelled {
+            await withCheckedContinuation { refreshWaiters.append($0) }
+        }
+        await refresh()
     }
 
     func refresh() async {
         guard !isRefreshing, !Task.isCancelled else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            isRefreshing = false
+            let waiters = refreshWaiters
+            refreshWaiters.removeAll()
+            for waiter in waiters { waiter.resume() }
+        }
         do {
             let result = try await fetch()
             try Task.checkCancellation()
