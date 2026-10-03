@@ -230,6 +230,52 @@ final class PiHistorySourceTests: XCTestCase {
         XCTAssertEqual(recovered.coverage.state, .ready)
     }
 
+    func testUnreadableProjectRejectsRefreshInsteadOfTreatingCachedFilesAsDeleted() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        let manager = FileManager.default
+        try fixture.write("project-a/session.jsonl", lines: [F.header(), F.message(id: "a")])
+        try fixture.write("project-b/session.jsonl", lines: [F.header(), F.message(id: "b")])
+        let projectA = fixture.root.appendingPathComponent("project-a", isDirectory: true)
+        let source = PiHistorySource(root: fixture.root)
+
+        // Both projects are readable: each contributes 190 tokens.
+        let initial = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(initial.summaries[.today]?.tokens, 380)
+        XCTAssertEqual(initial.coverage.state, .ready)
+
+        // A still exists, but the enumerator cannot inspect its contents.
+        try manager.setAttributes([.posixPermissions: 0], ofItemAtPath: projectA.path)
+        defer {
+            try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: projectA.path)
+        }
+        try XCTSkipIf(
+            manager.isReadableFile(atPath: projectA.path),
+            "This test requires directory permissions to prevent enumeration.")
+        do {
+            let incomplete = try await source.refresh(now: F.now, calendar: F.calendar)
+            XCTFail(
+                "Expected an unavailable error, but refresh returned \(incomplete.summaries[.today]?.tokens ?? -1) tokens. Project A was inaccessible, not deleted."
+            )
+        } catch {
+            XCTAssertEqual(
+                error.localizedDescription, HistoryReadError.unavailable.localizedDescription)
+        }
+
+        // Restoring access should reuse both unchanged cached files.
+        try manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: projectA.path)
+        let recovered = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(recovered.summaries[.today]?.tokens, 380)
+        let parsed = await source.filesParsed
+        XCTAssertEqual(parsed, 2, "An incomplete scan must not discard the previous file index.")
+
+        // Actually deleting A is different: a successful scan should now report only B.
+        try manager.removeItem(at: projectA)
+        let deleted = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(deleted.summaries[.today]?.tokens, 190)
+        XCTAssertEqual(deleted.coverage.state, .ready)
+    }
+
     func testOperationLimitRetriesAfterCapacityBecomesAvailable() async throws {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }

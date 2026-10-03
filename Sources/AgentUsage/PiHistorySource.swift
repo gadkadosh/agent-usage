@@ -201,10 +201,9 @@ actor PiHistorySource {
                 )
             }
         }
-        if scanFailed {
-            if filesRead == 0 { throw HistoryReadError.unavailable }
-            issues.insert(.unreadableFile)
-        }
+        // An inaccessible subtree is unknown, not deleted. Reject the refresh before replacing
+        // the index, so cached files we could not enumerate remain available for the next attempt.
+        if scanFailed { throw HistoryReadError.unavailable }
         var canonical: [String: UsageObservation] = [:]
         var conflicting: Set<String> = []
         for observation in observations {
