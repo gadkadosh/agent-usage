@@ -69,9 +69,9 @@ This benchmark is not normal menu-bar/panel runtime validation. The previously
 reported ordinary `swift run` failure remains undiagnosed; actual launch and panel
 verification remains a gate for the presentation PR.
 
-## CPU and memory follow-up (2026-10-03)
+## CPU and memory follow-up (2026-10-05)
 
-[Reproducible harnesses, raw numeric results and full methodology](https://github.com/gadkadosh/agent-usage/tree/7e84d39c30b259031cd2695024a68a811dd9e9fb/benchmarks/history-resources)
+[Reproducible harnesses, raw numeric results and full methodology](https://github.com/gadkadosh/agent-usage/tree/4ce80ad23896225c531e106a972ef90b4545c9c2/benchmarks/history-resources)
 are on a separate review branch, not in the implementation diff. Measurements
 used the unchanged production scanner at `507ed9c`, Swift `-O`, six synthetic
 workloads and three fresh scanner processes per workload. Compilation, fixture
