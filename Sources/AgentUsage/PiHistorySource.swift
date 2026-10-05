@@ -299,7 +299,12 @@ actor PiHistorySource {
         var bytesRead = 0
         var skippingLine = false
         var oversizedRecord = false
-        while let chunk = try handle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+        // Foundation may autorelease read buffers. Drain each read's temporary objects rather
+        // than accumulating the archive until the actor's surrounding pool eventually drains.
+        // The returned Data stays owned by this iteration, including any slices of the chunk.
+        while let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: 64 * 1_024) }),
+            !chunk.isEmpty
+        {
             try Task.checkCancellation()
             bytesRead += chunk.count
             remainingBytes -= chunk.count

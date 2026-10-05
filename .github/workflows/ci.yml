@@ -35,3 +35,8 @@ jobs:
 
       - name: Build and test
         run: swift test
+
+      - name: Check read-buffer memory in an isolated test process
+        env:
+          AGENT_USAGE_MEMORY_REGRESSION: '1'
+        run: swift test --skip-build --filter PiHistoryMemoryTests

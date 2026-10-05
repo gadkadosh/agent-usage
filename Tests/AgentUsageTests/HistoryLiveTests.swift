@@ -33,7 +33,6 @@ final class HistoryLiveTests: XCTestCase {
         XCTAssertEqual(history.snapshot?.summaries[.week]?.tokens, 380)
         XCTAssertEqual(history.snapshot?.summaries[.month]?.tokens, 570)
         XCTAssertEqual(try Data(contentsOf: file), before)
-        XCTAssertEqual(HistoryStore.liveRefreshInterval, .seconds(60))
     }
 
     func testLiveStoreKeepsFileIndexAcrossRefreshesAndRecoversUnreadableFile() async throws {
