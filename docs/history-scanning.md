@@ -1,136 +1,99 @@
-# Pi history scanning policy
+# Pi history factory and buffer cleanup
 
-The app now owns a live `HistoryStore`, backed by one `PiHistorySource` actor for
-its lifetime. Discovery, reads, parsing and aggregation run on that source actor,
-not the main actor. Allowance fetching remains separate. The current panel is
-unchanged; history presentation follows in a separate PR.
+This PR prepares a live `HistoryStore` factory backed by one `PiHistorySource`
+actor and fixes temporary read-buffer accumulation. **It does not activate history
+in the app.** `AgentUsageApp.swift` matches the allowance-only baseline: launch,
+polling and Refresh do not construct or scan history. UI integration and a history
+refresh policy come later; the proposed fixed minute cadence has been removed.
 
-## Scheduling and bounds
+The factory retains one actor/index across explicitly requested refreshes. Tests
+inject synthetic roots and a clock/calendar. Discovery, reads, parsing and
+aggregation execute on the source actor, independently of allowance fetching.
 
-- Scan when the menu-bar label first appears, then wait **60 seconds after each
-  completed refresh** before scanning again. Opening the menu repeatedly does
-  not start duplicate pollers.
-- The existing Refresh action starts allowance and history refreshes independently.
-  A refresh already in progress is not duplicated. Neither source waits for the
-  other, and allowance failure does not prevent history collection.
-- Retain the existing defaults: 256 MiB read budget per refresh, 128 MiB per file,
-  8 MiB per record, 20,000 visited entries and 250,000 recent usage observations.
-  These are bounds, not a promise that all histories fit.
-- Unchanged-file content is not reread. Metadata enumeration, deduplication and
-  calendar summaries still run. Changed/appended files are reparsed in full.
-- Initial scans can be partial. Cached files do not consume the next refresh's
-  read budget, allowing additional files to be indexed then. Permanently
-  oversized files/records or operation/entry limits remain explicit coverage gaps;
-  another refresh does not necessarily resolve them.
-- The index is in memory only. Restarting repeats the initial scan. No new
-  incremental reader, persisted index or accelerated catch-up scheduler is added.
-- Directory enumeration failure preserves the last snapshot and exposes an error.
-  It does not confirm deletion or zero usage. Per-file read failures can preserve
-  cached observations with partial/stale coverage.
+## Read-buffer fix
 
-## Synthetic benchmark (2026-10-03)
+Foundation can autorelease temporary objects created by `FileHandle.read`. Without
+an explicit release scope, those buffers accumulated during scans even though the
+derived index retained only normalized metadata. Each 64 KiB read now runs inside
+an `autoreleasepool`. The returned `Data` remains owned by the loop iteration and
+its slices; temporary read objects are released promptly rather than waiting for
+a surrounding pool. Files were already being closed correctly.
 
-Reproduce with full Xcode selected:
+This changes memory lifetime, **not** file selection, chunk size, token accounting,
+read budgets, cancellation or cache rules. It is not an incremental tail reader.
+
+## Matched BEFORE / AFTER measurements (2026-10-05)
+
+[Reproducible scripts, raw results and full methodology](https://github.com/gadkadosh/agent-usage/tree/313ebdc77a105a8a7418975db2b84a92d7f14d6b/benchmarks/history-resources/buffer-cleanup)
+are on a separate review branch, outside the implementation diff. All six workloads
+were rerun on the original reader (`507ed9c`) and actual fixed source (`0924704`),
+with three fresh release scanner processes per workload per version (36 total).
+The scanner benchmark does not include app activation code, so the comparison
+isolates the buffer fix rather than avoiding scans.
+
+Measured on Mac14,2 / 16 GiB / macOS 27.0.1 / Swift 6.4 / Xcode 27.0. Compilation,
+fixture generation and external append writing ran outside measured processes.
+Every history was generated at an explicit temporary root; no private histories,
+credentials, provider requests or agent SDKs were used. Disk caches were warm from
+generation. Peak below is the maximum sampled physical footprint during scan
+phases across three processes; MiB means 1,048,576 bytes. Sampling interval: 20 ms.
+These are whole-process measurements, not exact index sizes or universal limits.
+
+| Synthetic workload | BEFORE peak footprint | AFTER peak footprint |
+| --- | --- | --- |
+| ~320 MiB / 40 transcript-heavy files | 258.4 MiB | 9.3 MiB |
+| ~320 MiB / 160 operation-heavy files | 337.9 MiB | 82.6 MiB |
+| ~320 MiB / 8,192 recent files | 415.5 MiB | 111.3 MiB |
+| ~320 MiB / 8,192 old files, no recent observations | 340.3 MiB | 32.8 MiB |
+| Growing 64→104 MiB transcript-heavy file | 111.7 MiB | 7.1 MiB |
+| Growing 64→104 MiB operation-heavy file | 143.9 MiB | 38.5 MiB |
+
+CPU work is essentially unchanged. For example, indexing all transcript-heavy
+input cost 1.81–1.84 CPU seconds before vs 1.76–1.79 after; operation-heavy input
+cost 7.40–7.52 vs 7.31–7.37. A changed growing operation-heavy file still costs
+1.60–2.31 vs 1.59–2.33 CPU seconds/check. Those five checks still reread 440 MiB for
+40 MiB appended. All runs retained exact final totals, partial-to-ready catch-up,
+zero warm content rereads and one-file reparsing per append. This is a memory
+improvement, not a promise that archive processing is now cheap.
+
+## Regression and app checks
+
+The new memory regression writes a 64 MiB synthetic file using one reused 32 KiB
+block. It checks extra footprint at read completion before the source yields:
+**64.9 MiB before (expected failure), 0.58 MiB after in debug, 0.56 MiB in release**.
+It requires <24 MiB growth and is run by CI in a fresh filtered test process so
+allocator reuse from other tests cannot hide the regression:
 
 ```sh
-AGENT_USAGE_BENCHMARK=1 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-  swift test -c release --filter PiHistoryBenchmarkTests
-# Repeat without -c release to measure the ordinary debug build.
+AGENT_USAGE_MEMORY_REGRESSION=1 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  swift test --filter PiHistoryMemoryTests
 ```
 
-The opt-in test creates and removes its own temporary roots. Normal test runs skip
-it. It uses only invented v3 records, a fixed clock/calendar and no credentials,
-existing histories or network access. It checks partial-to-ready catch-up, token
-reconciliation, zero extra content reads on warm scans, and one-file reparsing
-after append. Timings and main-actor heartbeat gaps are printed, not CI thresholds.
+Regular source tests cover chunk-spanning/CRLF records, partial and oversized
+records, limits, stale recovery, cancellation and deduplication. The existing
+opt-in large-history test remains reproducible with `AGENT_USAGE_BENCHMARK=1
+swift test -c release --filter PiHistoryBenchmarkTests` and full Xcode selected.
 
-Both roots contain about 320 MiB across 20 project directories:
+Controlled release-app launches with empty and both ~320 MiB roots now all peak
+at about **15 MiB** over 20 seconds. This is because **history activation was
+removed**, not because the buffer fix alone makes a scanning app use 15 MiB.
+Input hashes were unchanged; credentials stayed absent. No menu/panel interaction
+or successful allowance fetch was exercised. The previously reported normal-launch
+issue remains undiagnosed; ordinary menu/panel validation is still a UI merge gate.
 
-| Shape | Files / operations | Release cold / catch-up | Release warm (3 runs) | Release append |
-| --- | --- | --- | --- | --- |
-| Transcript-heavy (32 KiB records) | 40 / 10,240 | 1.406 s / 0.416 s | 12–13 ms | 57 ms |
-| Operation-heavy (2 KiB records) | 160 / 163,840 | 5.667 s / 1.672 s | 241–243 ms | 285 ms |
+## Bounds and deferred work
 
-Debug: cold/catch-up 2.866/0.855 s and 8.321/2.545 s respectively; warm
-27–29 ms and 484–489 ms; append 118 ms and 550 ms. Each shape became ready on
-its second scan. A 10 ms main-actor heartbeat ran throughout the long scans;
-maximum sampled gaps were about 14.2 ms in release and 14.1 ms in debug.
+- Existing source defaults remain: 256 MiB per-refresh read budget, 128 MiB/file,
+  8 MiB/record, 20,000 visited entries and 250,000 recent observations.
+- Unchanged contents are cached, but metadata checks and aggregation still run.
+  Changed/appended files are reparsed in full; the index is in memory only.
+- Scans may be partial; cached files can permit later budget catch-up. Permanent
+  file/record/operation/entry exclusions remain explicit coverage gaps.
+- Enumeration failure preserves the previous snapshot, not an invented zero.
+- Persistent indexing, verified incremental reads, file watching and on-demand/
+  adaptive refresh are separate reviews, not hidden additions here.
 
-Measured on Mac14,2 (16 GiB), macOS 27.0.1, Apple Swift 6.4, Xcode 27.0.
-“Cold” means a fresh in-memory index, **not** a flushed operating-system disk cache:
-fixtures were just generated. These are single-machine observations, not a speed
-or responsiveness guarantee for private histories, slow disks or huge file counts.
-
-The minute cadence is **provisional**, not a demonstrated lightweight resource
-policy. The initial latency-only check missed the memory problem described below.
-No production resource fix or cadence change has been applied yet.
-
-This benchmark is not normal menu-bar/panel runtime validation. The previously
-reported ordinary `swift run` failure remains undiagnosed; actual launch and panel
-verification remains a gate for the presentation PR.
-
-## CPU and memory follow-up (2026-10-05)
-
-[Reproducible harnesses, raw numeric results and full methodology](https://github.com/gadkadosh/agent-usage/tree/4ce80ad23896225c531e106a972ef90b4545c9c2/benchmarks/history-resources)
-are on a separate review branch, not in the implementation diff. Measurements
-used the unchanged production scanner at `507ed9c`, Swift `-O`, six synthetic
-workloads and three fresh scanner processes per workload. Compilation, fixture
-generation and append writing ran outside the measured process. Roots were
-explicit temporary fixtures; no private histories/auth or agent SDKs were used.
-
-CPU is process user + system time, including instrumentation. Memory below is
-sampled **physical footprint**, not input size or exact index size. The sampler
-queries Mach memory counters every 20 ms; kernel peak RSS is recorded separately.
-Indexed-idle measurements follow a one-second wait with the source still alive.
-Warm ranges cover five unchanged checks per process. MiB means 1,048,576 bytes.
-
-| Synthetic ~320 MiB root | CPU to index all input (cold + catch-up) | Warm CPU / check | Peak footprint | Indexed-idle footprint |
-| --- | --- | --- | --- | --- |
-| 40 transcript-heavy files / 10,240 operations | 1.80–1.81 s | 12–13 ms | 258 MiB | 258 MiB |
-| 160 operation-heavy files / 163,840 operations | 7.31–7.42 s | 248–304 ms | 338 MiB | 167–232 MiB |
-| 8,192 recent files / 163,840 operations | 9.32–9.40 s | 697–707 ms | 411 MiB | 92–97 MiB |
-| 8,192 old files / no retained recent operations | 4.27–4.38 s | 430–490 ms | 341 MiB | 93–173 MiB |
-
-Peak RSS reached 437 MiB. The old-record workload still reads the archive initially
-and checks its file metadata on every refresh, even with no recent observations.
-
-Two other workloads grew a single file from 64 to 104 MiB, appending 8 MiB before
-each of five refreshes. Each refresh reparsed the whole 72–104 MiB file: **440 MiB
-reread for 40 MiB appended**. CPU cost was 0.39–0.58 s/check for 32 KiB records,
-and 1.59–2.49 s/check for operation-dense 2 KiB records (1.58–2.61 s elapsed).
-At one check/minute, the latter extrapolates to ~2.6–4.2% of one core averaged over
-the minute; 8,192 recent-file warm checks extrapolate to ~1.2%. These are not
-battery measurements. Refreshes were consecutive, not real-minute polling runs.
-
-A 10 ms main-actor heartbeat continued during scans; its largest sampled gap was
-34.5 ms. This measures schedulability, not menu interaction or rendered UI latency.
-Idle monitoring controls consumed ~0.016–0.025 CPU seconds per second; CPU figures
-were not baseline-subtracted. Disk caches were warm from fixture generation.
-Results are single-machine stress measurements, not predictions for private data.
-
-### Actual app cross-check
-
-One controlled release-app launch per fixture was observed for 20 seconds using
-external kernel process counters, excluding probe CPU/memory. With an empty
-root, peak footprint was **15 MiB**; with the transcript-heavy and operation-heavy
-roots, it was **269 MiB and 333 MiB**. Footprint was still **268/333 MiB at 20 s**.
-This covers initial scanning only, not minute catch-up. It confirms the large
-footprint is not just a standalone-harness or fixture-generation artifact.
-Synthetic input hashes were unchanged and absent credentials stayed absent.
-No menu/panel interaction or successful allowance request was exercised.
-
-### Diagnostic only: read-buffer release scope
-
-A temporary copy of the scanner wrapped each `FileHandle.read` call in an
-`autoreleasepool`, with no other source changes. One process per workload retained
-correct totals and caching behavior, with similar CPU time. Sampled peak footprint
-dropped from **258 to 9 MiB** for transcript-heavy input, **338 to 83 MiB** for
-operation-heavy input, and **411 to 113 MiB** for many recent files. Growing-file
-peaks fell from 112/138 MiB to 7/43 MiB. This strongly implicates autoreleased
-read-buffer accumulation as a major cost, rather than needing to retain transcripts
-in the derived index. **The diagnostic is not a reviewed production fix.**
-
-Recommendation: fix the buffer lifetime and add regression coverage before merging
-this as a lightweight app. Then reassess metadata/aggregation and growing-file
-reparse costs when choosing the cadence. This follow-up changes documentation
-only; it does not quietly introduce parser/index optimizations or new features.
+Memory counters and main-actor heartbeat are not native UI or battery measurements.
+These single-machine synthetic results do not establish cold-disk performance or
+performance guarantees for private histories. Remaining CPU/index costs must inform
+future activation policy; the app currently performs none of this background work.

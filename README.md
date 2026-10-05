@@ -34,13 +34,13 @@ If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is
 
 `swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
 
-## Local history (integration in progress)
+## Local history (not activated yet)
 
-The app now scans supported local pi histories in the background, independently of allowance authentication. The panel is still allowance-only; period totals and charts will arrive in a separate presentation change.
+The read-only pi history source and live-store factory are ready for later presentation work. **The current app does not scan history at launch, in the background, or on Refresh.** The panel remains allowance-only; history UI and its refresh policy will arrive separately.
 
-History is discovered in `~/.pi/agent/sessions`. `PI_CODING_AGENT_DIR` changes the agent root; `PI_CODING_AGENT_SESSION_DIR` overrides the session root directly (including `~/` paths). Only that root's flat `.jsonl` files or one project-directory level are scanned. Pi 1.0.0 session formats v2/v3 are supported; legacy v1, compressed histories, settings-only/CLI-only custom paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
+When explicitly invoked, the source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
 
-Scans are read-only. The derived index stores only normalized operation identity, timestamps and token counts, not transcripts or credentials. Raw history bytes are read while parsing; resource profiling found that read buffers can remain in memory longer than intended. There are no history uploads or writes. Initial/limited scans can be partial; failures preserve last-readable data rather than proving zero usage. An initial scan, minute polling and the existing Refresh action feed this index. See [scan bounds and CPU/memory measurements](docs/history-scanning.md), including the unresolved buffer-lifetime issue and provisional polling policy.
+The derived index stores only operation identity, timestamps and token counts, not transcripts or credentials. Temporary read buffers are now cleaned up promptly. The source performs no history uploads or writes and preserves coverage gaps/stale readings rather than proving zero usage. See [buffer cleanup, BEFORE/AFTER measurements and remaining costs](docs/history-scanning.md).
 
 ## Tests
 
