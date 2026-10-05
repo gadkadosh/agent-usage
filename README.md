@@ -40,7 +40,7 @@ The app now scans supported local pi histories in the background, independently 
 
 History is discovered in `~/.pi/agent/sessions`. `PI_CODING_AGENT_DIR` changes the agent root; `PI_CODING_AGENT_SESSION_DIR` overrides the session root directly (including `~/` paths). Only that root's flat `.jsonl` files or one project-directory level are scanned. Pi 1.0.0 session formats v2/v3 are supported; legacy v1, compressed histories, settings-only/CLI-only custom paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
 
-Scans are read-only and keep only normalized operation identity, timestamps and token counts in memory—not transcript text or credentials. There are no history uploads or writes. Initial/limited scans can be partial; failures preserve last-readable data rather than proving zero usage. An initial scan, minute polling and the existing Refresh action feed this index. See [scan bounds, cadence and synthetic benchmark results](docs/history-scanning.md).
+Scans are read-only. The derived index stores only normalized operation identity, timestamps and token counts, not transcripts or credentials. Raw history bytes are read while parsing; resource profiling found that read buffers can remain in memory longer than intended. There are no history uploads or writes. Initial/limited scans can be partial; failures preserve last-readable data rather than proving zero usage. An initial scan, minute polling and the existing Refresh action feed this index. See [scan bounds and CPU/memory measurements](docs/history-scanning.md), including the unresolved buffer-lifetime issue and provisional polling policy.
 
 ## Tests
 

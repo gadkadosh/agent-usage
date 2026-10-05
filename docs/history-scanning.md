@@ -61,12 +61,76 @@ Measured on Mac14,2 (16 GiB), macOS 27.0.1, Apple Swift 6.4, Xcode 27.0.
 fixtures were just generated. These are single-machine observations, not a speed
 or responsiveness guarantee for private histories, slow disks or huge file counts.
 
-The minute cadence keeps observed warm work low while refreshing calendar periods
-and catching up after a partial first scan. The existing bounded scans kept the
-main actor schedulable in these fixtures, so this PR retains their budgets rather
-than introducing another batching mechanism. Revisit the policy with wider
-synthetic workloads if warm work becomes material.
+The minute cadence is **provisional**, not a demonstrated lightweight resource
+policy. The initial latency-only check missed the memory problem described below.
+No production resource fix or cadence change has been applied yet.
 
 This benchmark is not normal menu-bar/panel runtime validation. The previously
 reported ordinary `swift run` failure remains undiagnosed; actual launch and panel
 verification remains a gate for the presentation PR.
+
+## CPU and memory follow-up (2026-10-03)
+
+[Reproducible harnesses, raw numeric results and full methodology](https://github.com/gadkadosh/agent-usage/tree/7e84d39c30b259031cd2695024a68a811dd9e9fb/benchmarks/history-resources)
+are on a separate review branch, not in the implementation diff. Measurements
+used the unchanged production scanner at `507ed9c`, Swift `-O`, six synthetic
+workloads and three fresh scanner processes per workload. Compilation, fixture
+generation and append writing ran outside the measured process. Roots were
+explicit temporary fixtures; no private histories/auth or agent SDKs were used.
+
+CPU is process user + system time, including instrumentation. Memory below is
+sampled **physical footprint**, not input size or exact index size. The sampler
+queries Mach memory counters every 20 ms; kernel peak RSS is recorded separately.
+Indexed-idle measurements follow a one-second wait with the source still alive.
+Warm ranges cover five unchanged checks per process. MiB means 1,048,576 bytes.
+
+| Synthetic ~320 MiB root | CPU to index all input (cold + catch-up) | Warm CPU / check | Peak footprint | Indexed-idle footprint |
+| --- | --- | --- | --- | --- |
+| 40 transcript-heavy files / 10,240 operations | 1.80–1.81 s | 12–13 ms | 258 MiB | 258 MiB |
+| 160 operation-heavy files / 163,840 operations | 7.31–7.42 s | 248–304 ms | 338 MiB | 167–232 MiB |
+| 8,192 recent files / 163,840 operations | 9.32–9.40 s | 697–707 ms | 411 MiB | 92–97 MiB |
+| 8,192 old files / no retained recent operations | 4.27–4.38 s | 430–490 ms | 341 MiB | 93–173 MiB |
+
+Peak RSS reached 437 MiB. The old-record workload still reads the archive initially
+and checks its file metadata on every refresh, even with no recent observations.
+
+Two other workloads grew a single file from 64 to 104 MiB, appending 8 MiB before
+each of five refreshes. Each refresh reparsed the whole 72–104 MiB file: **440 MiB
+reread for 40 MiB appended**. CPU cost was 0.39–0.58 s/check for 32 KiB records,
+and 1.59–2.49 s/check for operation-dense 2 KiB records (1.58–2.61 s elapsed).
+At one check/minute, the latter extrapolates to ~2.6–4.2% of one core averaged over
+the minute; 8,192 recent-file warm checks extrapolate to ~1.2%. These are not
+battery measurements. Refreshes were consecutive, not real-minute polling runs.
+
+A 10 ms main-actor heartbeat continued during scans; its largest sampled gap was
+34.5 ms. This measures schedulability, not menu interaction or rendered UI latency.
+Idle monitoring controls consumed ~0.016–0.025 CPU seconds per second; CPU figures
+were not baseline-subtracted. Disk caches were warm from fixture generation.
+Results are single-machine stress measurements, not predictions for private data.
+
+### Actual app cross-check
+
+One controlled release-app launch per fixture was observed for 20 seconds using
+external kernel process counters, excluding probe CPU/memory. With an empty
+root, peak footprint was **15 MiB**; with the transcript-heavy and operation-heavy
+roots, it was **269 MiB and 333 MiB**. Footprint was still **268/333 MiB at 20 s**.
+This covers initial scanning only, not minute catch-up. It confirms the large
+footprint is not just a standalone-harness or fixture-generation artifact.
+Synthetic input hashes were unchanged and absent credentials stayed absent.
+No menu/panel interaction or successful allowance request was exercised.
+
+### Diagnostic only: read-buffer release scope
+
+A temporary copy of the scanner wrapped each `FileHandle.read` call in an
+`autoreleasepool`, with no other source changes. One process per workload retained
+correct totals and caching behavior, with similar CPU time. Sampled peak footprint
+dropped from **258 to 9 MiB** for transcript-heavy input, **338 to 83 MiB** for
+operation-heavy input, and **411 to 113 MiB** for many recent files. Growing-file
+peaks fell from 112/138 MiB to 7/43 MiB. This strongly implicates autoreleased
+read-buffer accumulation as a major cost, rather than needing to retain transcripts
+in the derived index. **The diagnostic is not a reviewed production fix.**
+
+Recommendation: fix the buffer lifetime and add regression coverage before merging
+this as a lightweight app. Then reassess metadata/aggregation and growing-file
+reparse costs when choosing the cadence. This follow-up changes documentation
+only; it does not quietly introduce parser/index optimizations or new features.
