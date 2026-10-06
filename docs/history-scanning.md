@@ -1,10 +1,11 @@
 # Pi history factory and buffer cleanup
 
-This PR prepares a live `HistoryStore` factory backed by one `PiHistorySource`
-actor and fixes temporary read-buffer accumulation. **It does not activate history
-in the app.** `AgentUsageApp.swift` matches the allowance-only baseline: launch,
-polling and Refresh do not construct or scan history. UI integration and a history
-refresh policy come later; the proposed fixed minute cadence has been removed.
+PR #11 prepared a live `HistoryStore` factory backed by one `PiHistorySource`
+actor and fixed temporary read-buffer accumulation, without activating history.
+The dashboard integration now requests history when its panel becomes visible and
+on manual Refresh; there is no history startup scan or invisible minute timer.
+See [current behavior and coverage](../README.md#local-history). The measurements
+below describe #11's source fix, not the scanning dashboard's resource usage.
 
 The factory retains one actor/index across explicitly requested refreshes. Tests
 inject synthetic roots and a clock/calendar. Discovery, reads, parsing and
@@ -78,8 +79,8 @@ Controlled release-app launches with empty and both ~320 MiB roots now all peak
 at about **15 MiB** over 20 seconds. This is because **history activation was
 removed**, not because the buffer fix alone makes a scanning app use 15 MiB.
 Input hashes were unchanged; credentials stayed absent. No menu/panel interaction
-or successful allowance fetch was exercised. The previously reported normal-launch
-issue remains undiagnosed; ordinary menu/panel validation is still a UI merge gate.
+or successful allowance fetch was exercised. Those checks did not diagnose the
+previously reported normal-launch issue or validate native panel interaction.
 
 ## Bounds and deferred work
 
@@ -90,10 +91,10 @@ issue remains undiagnosed; ordinary menu/panel validation is still a UI merge ga
 - Scans may be partial; cached files can permit later budget catch-up. Permanent
   file/record/operation/entry exclusions remain explicit coverage gaps.
 - Enumeration failure preserves the previous snapshot, not an invented zero.
-- Persistent indexing, verified incremental reads, file watching and on-demand/
-  adaptive refresh are separate reviews, not hidden additions here.
+- The dashboard uses on-demand visibility/manual refresh. Persistent indexing,
+  verified incremental reads, file watching and adaptive batching remain separate reviews.
 
 Memory counters and main-actor heartbeat are not native UI or battery measurements.
 These single-machine synthetic results do not establish cold-disk performance or
 performance guarantees for private histories. Remaining CPU/index costs must inform
-future activation policy; the app currently performs none of this background work.
+the on-demand policy; these measurements are not a promise of cheap repeated scans.
