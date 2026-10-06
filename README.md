@@ -1,26 +1,25 @@
 # Agent Usage
 
-A minimal macOS menu-bar app showing the 5-hour and 7-day Codex usage limits associated with your ChatGPT subscription.
+A native macOS menu-bar app showing ChatGPT account allowance and observed pi token usage on this Mac.
 
 ## Requirements
 
 - macOS 13 or newer
 - Swift 6 / Apple Command Line Tools (or Xcode)
-- [pi](https://pi.dev) signed into OpenAI with your ChatGPT subscription (`/login` in pi)
+- Existing [pi](https://pi.dev) histories for local token totals
+- Optional: pi signed into OpenAI with your ChatGPT subscription (`/login` in pi) for allowance
 
-The app requests usage directly and refreshes about once a minute. The ChatGPT endpoint is not a supported public API and may change without notice.
+Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice.
 
 ## Dashboard
 
-See your remaining session and weekly allowance and reset countdowns.
+Account-wide allowance meters and reset countdowns stay separate from **On this Mac** history. Choose **Today / 7 days / 30 days** for observed tokens, an hourly/daily chart and the pi total. Other agents and API cost estimates are not supported yet.
 
-<img src="docs/dashboard.png" alt="Codex dashboard with session and weekly usage meters" width="360">
-
-*Shown with sample data.*
+Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. Source details explain exclusions. Refresh and Quit remain in the header options menu; longer error/details content scrolls.
 
 ## Run
 
-Sign into OpenAI (ChatGPT Plus/Pro) using `/login` in pi, then run:
+Run (optionally sign into OpenAI in pi first for allowance):
 
 ```sh
 swift run
@@ -34,17 +33,29 @@ If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is
 
 `swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
 
-## Local history (not activated yet)
+## Local history
 
-The read-only pi history source and live-store factory are ready for later presentation work. **The current app does not scan history at launch, in the background, or on Refresh.** The panel remains allowance-only; history UI and its refresh policy will arrive separately.
+History refreshes when the panel becomes visible and on manual Refresh, not on an invisible timer. Hiding the panel cancels its visibility-triggered scan; an explicitly requested manual refresh may finish while hidden. Changing periods uses the existing snapshot without rescanning. Periods end at the last history refresh, not a live counter; reopen or Refresh to update them. History works even when allowance access fails.
 
-When explicitly invoked, the source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
+The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
 
-The derived index stores only operation identity, timestamps and token counts, not transcripts or credentials. Temporary read buffers are now cleaned up promptly. The source performs no history uploads or writes and preserves coverage gaps/stale readings rather than proving zero usage. See [buffer cleanup, BEFORE/AFTER measurements and remaining costs](docs/history-scanning.md).
+The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes. Unchanged file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan. Large archives may exceed the 256 MiB per-refresh read budget: coverage stays partial and later opens/manual refreshes may catch up. Some permanent exclusions cannot be recovered by refreshing. See [buffer cleanup, BEFORE/AFTER measurements and remaining costs](docs/history-scanning.md).
 
 ## Tests
 
 Run tests with `swift test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
+
+### Synthetic native screenshots (development only)
+
+The opt-in rendering test uses injected synthetic snapshots only, with no live history discovery, credential access or networking:
+
+```sh
+AGENT_USAGE_RENDER_DIR=/tmp/agent-usage-captures \
+  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  swift test --filter DashboardRenderingTests
+```
+
+It captures all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode.
 
 ## Formatting
 

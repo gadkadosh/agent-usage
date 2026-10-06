@@ -60,7 +60,8 @@ final class HistoryStore: ObservableObject {
         pollingID = nil
     }
 
-    private func refreshWhenIdle() async {
+    /// Panel reopen and polling both wait for a cancelled/in-flight scan before fetching.
+    func refreshWhenIdle() async {
         // A restarted poller must wait for the old fetch, not skip straight to sleeping.
         while isRefreshing, !Task.isCancelled {
             await withCheckedContinuation { refreshWaiters.append($0) }

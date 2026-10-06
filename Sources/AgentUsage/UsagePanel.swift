@@ -1,9 +1,12 @@
+import AppKit
 import SwiftUI
 
 struct UsagePanel: View {
     let snapshot: UsageSnapshot?
     let error: String?
     let isRefreshing: Bool
+    @ObservedObject var history: HistoryStore
+    var referenceDate: Date? = nil
     let onRefresh: () -> Void
     let onQuit: () -> Void
 
@@ -13,7 +16,7 @@ struct UsagePanel: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            VStack(alignment: .leading, spacing: 18) {
+            let contents = VStack(alignment: .leading, spacing: 18) {
                 header
                 Divider()
 
@@ -23,39 +26,52 @@ struct UsagePanel: View {
 
                 if let snapshot {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("LIMITS")
+                        Text("CHATGPT · ACCOUNT-WIDE")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .tracking(1)
 
                         limitRow(
-                            title: "Session", subtitle: "5 hours", color: .orange,
+                            title: "5-hour window", subtitle: "", color: .orange,
                             window: snapshot.limits.rateLimit.primaryWindow,
-                            snapshot: snapshot, now: context.date
+                            snapshot: snapshot, now: referenceDate ?? context.date
                         )
                         limitRow(
-                            title: "Weekly", subtitle: "7 days", color: .blue,
+                            title: "Weekly window", subtitle: "7 days", color: .blue,
                             window: snapshot.limits.rateLimit.secondaryWindow,
-                            snapshot: snapshot, now: context.date
+                            snapshot: snapshot, now: referenceDate ?? context.date
                         )
                     }
                 } else if error == nil {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Loading usage…")
+                        Text("Loading allowance…")
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 80)
                 }
 
                 if snapshot != nil || error != nil {
-                    Divider()
                     footer
                 }
+
+                Divider()
+                HistoryPanel(history: history)
             }
             .padding(20)
             .frame(width: 360)
+            .fixedSize(horizontal: false, vertical: true)
+
+            // A stable, bounded viewport avoids MenuBarExtra's tiny ScrollView ideal size.
+            // Error messages and expanded details scroll rather than resizing the popover.
+            ScrollView { contents }
+                .frame(width: 360, height: panelHeight)
         }
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private var panelHeight: CGFloat {
+        max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
     }
 
     private var header: some View {
@@ -65,9 +81,9 @@ struct UsagePanel: View {
                 .foregroundStyle(Color.accentColor)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Codex")
+                Text("Agent Usage")
                     .font(.title2.weight(.semibold))
-                Text("ChatGPT subscription")
+                Text("Allowance & local history")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -80,9 +96,10 @@ struct UsagePanel: View {
         Menu {
             Button(action: onRefresh) {
                 Label(
-                    isRefreshing ? "Refreshing usage…" : "Refresh", systemImage: "arrow.clockwise")
+                    isRefreshing || history.isRefreshing ? "Refreshing…" : "Refresh",
+                    systemImage: "arrow.clockwise")
             }
-            .disabled(isRefreshing)
+            .disabled(isRefreshing || history.isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
 
             Divider()
@@ -113,9 +130,11 @@ struct UsagePanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).fontWeight(.medium)
-                Text("· \(subtitle)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if !subtitle.isEmpty {
+                    Text("· \(subtitle)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Text("\(window.remaining) remaining")
                     .monospacedDigit()
@@ -144,7 +163,7 @@ struct UsagePanel: View {
     private func errorCard(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(
-                snapshot == nil ? "Usage unavailable" : "Couldn't refresh usage",
+                snapshot == nil ? "Allowance unavailable" : "Couldn't refresh allowance",
                 systemImage: "exclamationmark.triangle"
             )
             .font(.subheadline.weight(.semibold))
