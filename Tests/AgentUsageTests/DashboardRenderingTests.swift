@@ -14,8 +14,6 @@ final class DashboardRenderingTests: XCTestCase {
         }
         let destination = URL(fileURLWithPath: directory, isDirectory: true)
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-        let allowance = UsageSnapshot(
-            limits: DashboardFixtures.limits, fetchedAt: DashboardFixtures.now)
         let scenarios: [(String, HistoryCoverage.State, HistoryPeriod, Bool)] = [
             ("ready-light-today", .ready, .today, false),
             ("ready-light-week", .ready, .week, false),
@@ -38,13 +36,21 @@ final class DashboardRenderingTests: XCTestCase {
             if name != "loading-light" { await history.refresh() }
             if name == "stale-light" { await history.refresh() }
             let unavailable = name == "allowance-unavailable-light"
-            let panel = UsagePanel(
-                snapshot: unavailable ? nil : allowance,
-                error: unavailable ? "Synthetic allowance unavailable. Sign in again in pi." : nil,
-                isRefreshing: false, history: history, referenceDate: DashboardFixtures.now,
-                onRefresh: {}, onQuit: {}
+            let usage = UsageStore(
+                fetch: {
+                    if unavailable { throw SyntheticAllowanceError.unavailable }
+                    return DashboardFixtures.limits
+                },
+                now: { DashboardFixtures.now }
             )
-            try await capture(panel, named: name, in: destination, dark: dark)
+            await usage.refresh()
+            let panel = DashboardPanel(
+                usage: usage, history: history, referenceDate: DashboardFixtures.now)
+            let countsBeforeRender = await readings.counts
+            // Capture the production layout without window-triggered refreshes changing fixtures.
+            try await capture(panel.content, named: name, in: destination, dark: dark)
+            let countsAfterRender = await readings.counts
+            XCTAssertEqual(countsAfterRender, countsBeforeRender)
         }
     }
 
@@ -77,4 +83,11 @@ final class DashboardRenderingTests: XCTestCase {
         XCTAssertGreaterThan(data.count, 1_000)
     }
 
+    private enum SyntheticAllowanceError: LocalizedError {
+        case unavailable
+
+        var errorDescription: String? {
+            "Synthetic allowance unavailable. Sign in again in pi."
+        }
+    }
 }
