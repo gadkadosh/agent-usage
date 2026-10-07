@@ -25,6 +25,44 @@ final class HistoryPanelLifecycleTests: XCTestCase {
         view.setVisible(false)
     }
 
+    func testClosingPanelDoesNotCancelManualRefresh() async {
+        let started = expectation(description: "Manual scan pauses")
+        let gate = PanelScanGate()
+        let readings = DashboardReadings()
+        let history = HistoryStore(fetch: {
+            let value = try await readings.history()
+            await gate.pause(started: started)
+            return value
+        })
+        let view = HistoryPanelLifecycle.TrackingView(history: history)
+        let finished = expectation(description: "Manual refresh finishes while hidden")
+        let manual = Task {
+            await history.refresh()
+            finished.fulfill()
+        }
+        defer {
+            manual.cancel()
+            view.setVisible(false)
+            Task { await gate.release() }
+        }
+        let start = await XCTWaiter.fulfillment(of: [started], timeout: 5)
+        XCTAssertEqual(start, .completed)
+        guard start == .completed else { return }
+        view.setVisible(true)
+        view.setVisible(false)
+        XCTAssertTrue(history.isRefreshing)
+        XCTAssertNil(history.snapshot)
+
+        await gate.release()
+        let completion = await XCTWaiter.fulfillment(of: [finished], timeout: 5)
+        XCTAssertEqual(completion, .completed)
+        XCTAssertEqual(history.summary?.tokens, 18_420)
+        XCTAssertNil(history.error)
+        XCTAssertFalse(history.isRefreshing)
+        let counts = await readings.counts
+        XCTAssertEqual(counts, [0, 1])
+    }
+
     func testRapidCloseReopenWaitsForCancelledScanThenFetches() async {
         let started = expectation(description: "First scan pauses")
         let resumed = expectation(description: "Reopen fetches")
