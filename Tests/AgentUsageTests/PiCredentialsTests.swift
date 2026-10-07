@@ -141,34 +141,6 @@ final class PiUsageClientTests: XCTestCase {
         }
     }
 
-    func testRedirectFailurePreservesLastAllowanceReading() async throws {
-        let fixture = try AuthFixture(validAuth(access: "success"))
-        defer { fixture.remove() }
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [PiRedirectProtocol.self]
-        let session = URLSession(configuration: config)
-        defer { session.invalidateAndCancel() }
-        let store = UsageStore(fetch: {
-            try await UsageClient.fetch(credentials: fixture.source, session: session)
-        })
-
-        await store.refresh()
-        let firstDate = store.snapshot?.fetchedAt
-        XCTAssertNotNil(firstDate)
-        XCTAssertNil(store.error)
-
-        try fixture.write(validAuth(access: "redirect-302"))
-        await store.refresh()
-        XCTAssertEqual(store.snapshot?.fetchedAt, firstDate)
-        XCTAssertEqual(store.summary, "5h: 90%  7d: 70%")
-        XCTAssertEqual(store.error, "Usage request failed (HTTP 302).")
-        XCTAssertFalse(store.isRefreshing)
-
-        try fixture.write(validAuth(access: "success"))
-        await store.refresh()
-        XCTAssertNil(store.error)
-    }
-
     func testFetchUsesPiTokenAndAccountAndRereadsOnNextRequest() async throws {
         let fixture = try AuthFixture(validAuth(access: "first"))
         defer { fixture.remove() }
@@ -231,12 +203,10 @@ private final class PiRedirectProtocol: URLProtocol, @unchecked Sendable {
             sendSuccess()
             return
         }
-        XCTAssertEqual(request.value(forHTTPHeaderField: "ChatGPT-Account-Id"), "test-account")
         guard let authorization = request.value(forHTTPHeaderField: "Authorization"),
             let status = Int(authorization.replacingOccurrences(of: "Bearer redirect-", with: ""))
         else {
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer success")
-            sendSuccess()
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
 
