@@ -3,9 +3,6 @@ import SwiftUI
 
 struct HistoryPanel: View {
     @ObservedObject var history: HistoryStore
-    // Disambiguate the property wrapper from the newer macro unavailable in some CLT installs.
-    private typealias DetailsState = SwiftUI.State<Bool>
-    @DetailsState private var showsSourceDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -54,7 +51,7 @@ struct HistoryPanel: View {
                     Text(snapshot.coverage.emptyDescription)
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                coverageDetails(snapshot)
+                historyFooter(snapshot)
             } else if history.error == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -103,30 +100,16 @@ struct HistoryPanel: View {
         }
     }
 
-    private func coverageDetails(_ snapshot: HistorySnapshot) -> some View {
+    private func historyFooter(_ snapshot: HistorySnapshot) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            DisclosureGroup(isExpanded: $showsSourceDetails) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(
-                        "\(snapshot.coverage.filesRead) supported pi session files read. Observed locally, not account-wide usage or a bill."
-                    )
-                    ForEach(
-                        HistoryIssue.allCases.filter { snapshot.coverage.issues.contains($0) },
-                        id: \.self
-                    ) { issue in
-                        Text(issue.description)
-                    }
-                    ForEach(HistoryCoverage.limitations, id: \.self) { Text($0) }
-                    Text("Zero chart buckets mean no recorded usage, not proof of no usage.")
-                }
-                .font(.caption).foregroundStyle(.secondary)
-                .padding(.top, 4)
-            } label: {
-                Text(snapshot.coverage.detailsTitle).font(.caption)
+            if let warning = snapshot.coverage.warning {
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
                 Text(
-                    "\(history.error == nil ? "History read" : "Last read"): \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                    "\(history.error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
                 )
                 if history.isRefreshing { ProgressView().controlSize(.mini) }
             }
@@ -136,13 +119,14 @@ struct HistoryPanel: View {
 }
 
 extension HistoryCoverage {
-    var detailsTitle: String {
-        switch state {
-        case .partial: "Partial history · details"
-        case .unavailable: "History unavailable · details"
-        case .unsupported: "Unsupported history · details"
-        case .missing, .ready: "Source details"
-        }
+    /// Show only caveats that affect the displayed totals. Empty states explain themselves.
+    var warning: String? {
+        guard hasReadings else { return nil }
+        var messages: [String] = []
+        if state == .partial { messages.append("Partial history. Totals may be incomplete.") }
+        if issues.contains(.staleFile) { messages.append("Includes older readings.") }
+        if issues.contains(.toolAggregate) { messages.append("Tool usage may be counted twice.") }
+        return messages.isEmpty ? nil : messages.joined(separator: " ")
     }
 
     var emptyDescription: String {

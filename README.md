@@ -15,7 +15,7 @@ Allowance refreshes about once a minute, independently of local history. The Cha
 
 Account-wide allowance meters and reset countdowns stay separate from **On this Mac** history. Choose **Today / 7 days / 30 days** for observed tokens, an hourly/daily chart and the pi total. Other agents and API cost estimates are not supported yet.
 
-Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. Source details explain exclusions. Refresh and Quit remain in the header options menu; longer error/details content scrolls.
+Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. The history footer shows its update time and a brief warning only when totals may be incomplete, stale or double-counted. Technical coverage limits are documented below, not listed in the panel. Refresh and Quit remain in the header options menu; longer error content scrolls.
 
 ## Build and install
 
@@ -47,7 +47,7 @@ If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is
 
 History refreshes when the panel becomes visible and on manual Refresh, not on an invisible timer. Hiding the panel cancels its visibility-triggered scan; an explicitly requested manual refresh may finish while hidden. Changing periods uses the existing snapshot without rescanning. Periods end at the last history refresh, not a live counter; reopen or Refresh to update them. History works even when allowance access fails.
 
-The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. No agent extensions or running pi process are needed.
+The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
 
 The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes. Unchanged file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan. Large archives may exceed the 256 MiB per-refresh read budget: coverage stays partial and later opens/manual refreshes may catch up. Some permanent exclusions cannot be recovered by refreshing. See [buffer cleanup, BEFORE/AFTER measurements and remaining costs](docs/history-scanning.md).
 

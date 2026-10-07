@@ -51,8 +51,6 @@ final class PiHistorySourceTests: XCTestCase {
             XCTAssertEqual(
                 error.localizedDescription, HistoryReadError.unavailable.localizedDescription)
             XCTAssertFalse(error.localizedDescription.contains(fixture.root.path))
-            XCTAssertTrue(
-                HistoryCoverage.limitations.contains { $0.contains("settings.sessionDir") })
         }
     }
 
