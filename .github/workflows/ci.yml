@@ -36,6 +36,9 @@ jobs:
       - name: Build and test
         run: swift test
 
+      - name: Build and verify the local app bundle
+        run: make app
+
       - name: Check read-buffer memory in an isolated test process
         env:
           AGENT_USAGE_MEMORY_REGRESSION: '1'

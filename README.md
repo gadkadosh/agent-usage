@@ -17,9 +17,19 @@ Account-wide allowance meters and reset countdowns stay separate from **On this 
 
 Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. Source details explain exclusions. Refresh and Quit remain in the header options menu; longer error/details content scrolls.
 
-## Run
+## Build and install
 
-Run (optionally sign into OpenAI in pi first for allowance):
+```sh
+make app
+```
+
+This builds a release executable for the current Mac's architecture and creates `.build/Agent Usage.app`. Open it in Finder, or copy it to `/Applications` and double-click it there. The app runs in the menu bar without a Dock icon. Use its options menu to Refresh or Quit.
+
+The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions. See [packaging, validation and distribution limits](docs/packaging.md).
+
+## Run from source
+
+Run without bundling (optionally sign into OpenAI in pi first for allowance):
 
 ```sh
 swift run
@@ -31,7 +41,7 @@ The app never modifies pi's credentials or refreshes tokens itself. If the token
 
 If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is honored (including `~/` paths). A Finder-launched app uses the default location unless the override is present in its own environment; it does not inherit terminal-only variables.
 
-`swift run` builds and launches an executable; it does not create an installable `.app` bundle. Packaging and additional usage sources are future steps.
+`swift run` builds and launches an executable; use `make app` for an installable `.app` bundle. Additional usage sources are future steps.
 
 ## Local history
 
