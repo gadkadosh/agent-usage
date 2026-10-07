@@ -121,6 +121,26 @@ final class PiCredentialsTests: XCTestCase {
 
 @MainActor
 final class PiUsageClientTests: XCTestCase {
+    func testRejectsRedirectsWithoutFollowingOrExposingTheirDestination() async throws {
+        let fixture = try AuthFixture(nil)
+        defer { fixture.remove() }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [PiRedirectProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+
+        for status in [301, 302, 303, 307, 308] {
+            try fixture.write(validAuth(access: "redirect-\(status)"))
+            do {
+                _ = try await UsageClient.fetch(credentials: fixture.source, session: session)
+                XCTFail("Expected HTTP \(status) to be rejected")
+            } catch {
+                // Exact text excludes the destination, credentials and response body.
+                XCTAssertEqual(error.localizedDescription, "Usage request failed (HTTP \(status)).")
+            }
+        }
+    }
+
     func testFetchUsesPiTokenAndAccountAndRereadsOnNextRequest() async throws {
         let fixture = try AuthFixture(validAuth(access: "first"))
         defer { fixture.remove() }
@@ -170,6 +190,57 @@ private struct AuthFixture {
 private func validAuth(access: String) -> String {
     // Synthetic credentials, valid until 2100. Never use the developer's real auth store in tests.
     "{\"openai-codex\":{\"type\":\"oauth\",\"access\":\"\(access)\",\"expires\":4102444800000,\"accountId\":\"test-account\"}}"
+}
+
+/// Intercepts every URL, so even an incorrectly followed redirect cannot leave the test process.
+private final class PiRedirectProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard request.url?.absoluteString == "https://chatgpt.com/backend-api/wham/usage" else {
+            XCTFail("The client followed a redirect")
+            sendSuccess()
+            return
+        }
+        guard let authorization = request.value(forHTTPHeaderField: "Authorization"),
+            let status = Int(authorization.replacingOccurrences(of: "Bearer redirect-", with: ""))
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        let destinations = [
+            301: "https://unrelated.example/usage?synthetic-secret",
+            302: "https://chatgpt.com/redirected?synthetic-secret",
+            303: "http://127.0.0.1/usage?synthetic-secret",
+            307: "http://chatgpt.com/usage?synthetic-secret",
+            308: "https://unrelated.example/usage?synthetic-secret",
+        ]
+        let destination = URL(string: destinations[status]!)!
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: status, httpVersion: nil,
+            headerFields: ["Location": destination.absoluteString])!
+        var redirectedRequest = request
+        redirectedRequest.url = destination
+        client?.urlProtocol(self, wasRedirectedTo: redirectedRequest, redirectResponse: response)
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("synthetic-secret response body".utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    private func sendSuccess() {
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        let data = Data(
+            #"{"rate_limit":{"primary_window":{"used_percent":10,"reset_after_seconds":60},"secondary_window":{"used_percent":30,"reset_after_seconds":120}}}"#
+                .utf8)
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 private final class PiUsageProtocol: URLProtocol, @unchecked Sendable {

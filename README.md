@@ -9,7 +9,7 @@ A native macOS menu-bar app showing ChatGPT account allowance and observed pi to
 - Existing [pi](https://pi.dev) histories for local token totals
 - Optional: pi signed into OpenAI with your ChatGPT subscription (`/login` in pi) for allowance
 
-Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice.
+Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
 
 ## Dashboard
 
