@@ -59,7 +59,8 @@ enum UsageClient {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(
+            for: request, delegate: RejectUsageRedirects())
         guard let status = (response as? HTTPURLResponse)?.statusCode else {
             throw UsageError.invalidResponse
         }
@@ -70,6 +71,18 @@ enum UsageClient {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(UsageLimits.self, from: data)
+    }
+}
+
+/// Apply the policy per request, including when a caller injects a session.
+private final class RejectUsageRedirects: NSObject, URLSessionTaskDelegate {
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        // Keep authenticated requests at the original endpoint, even for same-host redirects.
+        completionHandler(nil)
     }
 }
 
