@@ -126,6 +126,8 @@ actor PiHistorySource {
                 issues.insert(.unsupportedRecord)
                 continue
             }
+            // Lease sidecars are metadata, not session histories.
+            if url.lastPathComponent.hasSuffix(".jsonl.lease") { continue }
             guard url.pathExtension == "jsonl" else {
                 issues.insert(.unsupportedRecord)
                 continue
