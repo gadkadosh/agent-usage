@@ -74,6 +74,8 @@ final class DashboardRenderingTests: XCTestCase {
         // Give SwiftUI and Charts a turn to lay out and draw in a real native window.
         try await Task.sleep(for: .milliseconds(300))
         host.layoutSubtreeIfNeeded()
+        window.setContentSize(host.fittingSize)
+        host.layoutSubtreeIfNeeded()
         window.makeFirstResponder(nil)
         try await Task.sleep(for: .milliseconds(300))
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))

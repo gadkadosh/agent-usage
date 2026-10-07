@@ -15,7 +15,7 @@ Allowance refreshes about once a minute, independently of local history. The Cha
 
 Account-wide allowance meters and reset countdowns stay separate from **On this Mac** history. Choose **Today / 7 days / 30 days** for observed tokens, an hourly/daily chart and the pi total. Other agents and API cost estimates are not supported yet.
 
-Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. The history footer shows its update time and a brief warning only when totals may be incomplete, stale or double-counted. Technical coverage limits are documented below, not listed in the panel. Refresh and Quit remain in the header options menu; longer error content scrolls.
+Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. The history footer shows its update time and a brief warning only when totals may be incomplete, stale or double-counted. Technical coverage limits are documented below, not listed in the panel. Refresh and Quit remain in the header options menu. The window fits its content up to a screen-aware maximum of 600 points; longer error content scrolls.
 
 ## Build and install
 

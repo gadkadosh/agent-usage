@@ -15,8 +15,8 @@ struct DashboardPanel: View {
 
     /// The same layout can be rendered without activating native-window scans.
     var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        DashboardScrollView(
+            content: VStack(alignment: .leading, spacing: 18) {
                 DashboardHeader(
                     isRefreshing: usage.isRefreshing || history.isRefreshing,
                     onRefresh: { Task { await refresh() } },
@@ -35,20 +35,35 @@ struct DashboardPanel: View {
             .padding(20)
             .frame(width: 360)
             .fixedSize(horizontal: false, vertical: true)
-        }
-        // A stable, bounded viewport avoids MenuBarExtra's tiny ScrollView ideal size.
-        // Error messages and expanded details scroll rather than resizing the popover.
-        .frame(width: 360, height: panelHeight)
-        .fixedSize(horizontal: true, vertical: true)
-    }
-
-    private var panelHeight: CGFloat {
-        max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
+        )
     }
 
     func refresh() async {
         async let allowance: Void = usage.refresh()
         async let local: Void = history.refresh()
         _ = await (allowance, local)
+    }
+}
+
+private struct DashboardScrollView<Content: View>: View {
+    let content: Content
+    @State private var contentHeight: CGFloat?
+
+    var body: some View {
+        ScrollView {
+            content
+                .onGeometryChange(for: CGFloat.self) { geometry in
+                    ceil(geometry.size.height)
+                } action: { height in
+                    contentHeight = height
+                }
+        }
+        // Give MenuBarExtra an explicit ideal size, fitted to content until it needs to scroll.
+        .frame(width: 360, height: min(contentHeight ?? maximumHeight, maximumHeight))
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private var maximumHeight: CGFloat {
+        max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
     }
 }
