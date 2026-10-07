@@ -52,8 +52,8 @@ final class DashboardPanelTests: XCTestCase {
             XCTAssertFalse(coverage.emptyDescription.contains("No recorded"))
         }
         XCTAssertEqual(
-            HistoryCoverage(state: .partial, filesRead: 1, issues: [.staleFile]).detailsTitle,
-            "Partial history · details")
+            HistoryCoverage(state: .partial, filesRead: 1, issues: [.staleFile]).warning,
+            "Partial history. Totals may be incomplete. Includes older readings.")
         XCTAssertTrue(
             HistoryCoverage(state: .missing, filesRead: 0, issues: []).emptyDescription
                 .contains("isn't zero usage"))
