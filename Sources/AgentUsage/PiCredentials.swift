@@ -67,7 +67,9 @@ struct PiCredentialSource: Sendable {
             throw PiCredentialError.invalidFile
         }
         return PiCredentials(
-            accessToken: access, accountID: accountID?.isEmpty == false ? accountID : nil)
+            accessToken: access,
+            accountID: accountID?.isEmpty == false ? accountID : nil
+        )
     }
 
     private struct AuthFile: Decodable {

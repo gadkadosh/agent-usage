@@ -17,7 +17,8 @@ final class HistoryLiveTests: XCTestCase {
                 + [0, 3, 20].map { days in
                     let date = calendar.date(byAdding: .day, value: -days, to: now)!
                     return message(id: "day-\(days)", at: date)
-                })
+                }
+        )
         let before = try Data(contentsOf: file)
         let history = liveStore(root: fixture.root)
         let allowance = UsageStore(fetch: { throw URLError(.notConnectedToInternet) })
@@ -46,7 +47,9 @@ final class HistoryLiveTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
         defer {
             try? FileManager.default.setAttributes(
-                [.posixPermissions: 0o600], ofItemAtPath: file.path)
+                [.posixPermissions: 0o600],
+                ofItemAtPath: file.path
+            )
         }
         try XCTSkipIf(FileManager.default.isReadableFile(atPath: file.path))
         await history.refresh()
@@ -69,10 +72,14 @@ final class HistoryLiveTests: XCTestCase {
         await history.refresh()
         let previous = try XCTUnwrap(history.snapshot)
         try FileManager.default.setAttributes(
-            [.posixPermissions: 0], ofItemAtPath: fixture.root.path)
+            [.posixPermissions: 0],
+            ofItemAtPath: fixture.root.path
+        )
         defer {
             try? FileManager.default.setAttributes(
-                [.posixPermissions: 0o700], ofItemAtPath: fixture.root.path)
+                [.posixPermissions: 0o700],
+                ofItemAtPath: fixture.root.path
+            )
         }
         try XCTSkipIf(FileManager.default.isReadableFile(atPath: fixture.root.path))
         await history.refresh()
@@ -81,7 +88,9 @@ final class HistoryLiveTests: XCTestCase {
         XCTAssertEqual(history.snapshot?.summaries[.month]?.tokens, 190)
 
         try FileManager.default.setAttributes(
-            [.posixPermissions: 0o700], ofItemAtPath: fixture.root.path)
+            [.posixPermissions: 0o700],
+            ofItemAtPath: fixture.root.path
+        )
         await history.refresh()
         XCTAssertNil(history.error)
         XCTAssertEqual(history.snapshot?.coverage.state, .ready)

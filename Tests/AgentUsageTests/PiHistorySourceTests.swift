@@ -22,7 +22,9 @@ final class PiHistorySourceTests: XCTestCase {
             ),
         ] {
             XCTAssertEqual(
-                PiHistorySource.defaultRoot(home: home, environment: environment).path, expected)
+                PiHistorySource.defaultRoot(home: home, environment: environment).path,
+                expected
+            )
         }
     }
 
@@ -49,7 +51,9 @@ final class PiHistorySourceTests: XCTestCase {
             XCTFail("Expected an unavailable directory")
         } catch {
             XCTAssertEqual(
-                error.localizedDescription, HistoryReadError.unavailable.localizedDescription)
+                error.localizedDescription,
+                HistoryReadError.unavailable.localizedDescription
+            )
             XCTAssertFalse(error.localizedDescription.contains(fixture.root.path))
         }
     }
@@ -68,10 +72,13 @@ final class PiHistorySourceTests: XCTestCase {
             lines: [
                 F.header(id: "fork", parent: "/must-not-be-read/auth.json"), F.message(),
                 F.message(id: "fork-new"),
-            ])
+            ]
+        )
         let forkBefore = try Data(contentsOf: fork)
         try fixture.write(
-            "copy.jsonl", lines: [F.header(), F.message(), F.message(id: "abandoned")])
+            "copy.jsonl",
+            lines: [F.header(), F.message(), F.message(id: "abandoned")]
+        )
         let source = PiHistorySource(root: fixture.root)
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.coverage.state, .ready)
@@ -101,7 +108,9 @@ final class PiHistorySourceTests: XCTestCase {
         parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
         let tomorrow = try await source.refresh(
-            now: F.now.addingTimeInterval(86_400), calendar: F.calendar)
+            now: F.now.addingTimeInterval(86_400),
+            calendar: F.calendar
+        )
         XCTAssertEqual(tomorrow.summaries[.today]?.tokens, 0)
         XCTAssertEqual(tomorrow.summaries[.week]?.tokens, 380)
         parsed = await source.filesParsed
@@ -111,7 +120,9 @@ final class PiHistorySourceTests: XCTestCase {
         let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
         try fixture.write(lines: [F.header(), F.message(id: "operation-b"), F.message(id: "new")])
         try FileManager.default.setAttributes(
-            [.modificationDate: attributes[.modificationDate]!], ofItemAtPath: file.path)
+            [.modificationDate: attributes[.modificationDate]!],
+            ofItemAtPath: file.path
+        )
         let sameSize = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(sameSize.summaries[.today]?.tokens, 380)
         parsed = await source.filesParsed
@@ -120,12 +131,15 @@ final class PiHistorySourceTests: XCTestCase {
         let priorBytes = try Data(contentsOf: file)
         let changedBytes = Data(
             String(decoding: priorBytes, as: UTF8.self)
-                .replacingOccurrences(of: "\"input\":100", with: "\"input\":200").utf8)
+                .replacingOccurrences(of: "\"input\":100", with: "\"input\":200").utf8
+        )
         let writer = try FileHandle(forWritingTo: file)
         try writer.write(contentsOf: changedBytes)
         try writer.close()
         try FileManager.default.setAttributes(
-            [.modificationDate: attributes[.modificationDate]!], ofItemAtPath: file.path)
+            [.modificationDate: attributes[.modificationDate]!],
+            ofItemAtPath: file.path
+        )
         let edited = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(edited.summaries[.today]?.tokens, 580)
         parsed = await source.filesParsed
@@ -216,7 +230,9 @@ final class PiHistorySourceTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
         defer {
             try? FileManager.default.setAttributes(
-                [.posixPermissions: 0o600], ofItemAtPath: file.path)
+                [.posixPermissions: 0o600],
+                ofItemAtPath: file.path
+            )
         }
         let stale = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(stale.summaries[.today]?.tokens, 190)
@@ -249,7 +265,8 @@ final class PiHistorySourceTests: XCTestCase {
         }
         try XCTSkipIf(
             manager.isReadableFile(atPath: projectA.path),
-            "This test requires directory permissions to prevent enumeration.")
+            "This test requires directory permissions to prevent enumeration."
+        )
         do {
             let incomplete = try await source.refresh(now: F.now, calendar: F.calendar)
             XCTFail(
@@ -257,7 +274,9 @@ final class PiHistorySourceTests: XCTestCase {
             )
         } catch {
             XCTAssertEqual(
-                error.localizedDescription, HistoryReadError.unavailable.localizedDescription)
+                error.localizedDescription,
+                HistoryReadError.unavailable.localizedDescription
+            )
         }
 
         // Restoring access should reuse both unchanged cached files.
@@ -322,7 +341,8 @@ final class PiHistorySourceTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideFile)
         try FileManager.default.createSymbolicLink(
             at: fixture.root.appendingPathComponent("linked-directory"),
-            withDestinationURL: outside.root)
+            withDestinationURL: outside.root
+        )
         let source = PiHistorySource(root: fixture.root)
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
@@ -338,7 +358,8 @@ final class PiHistorySourceTests: XCTestCase {
             lines: [
                 F.header(id: "copy"),
                 F.message(usage: #"{"input":500,"output":20,"cacheRead":30,"cacheWrite":40}"#),
-            ])
+            ]
+        )
         let source = PiHistorySource(root: fixture.root)
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 0)
@@ -352,7 +373,9 @@ final class PiHistorySourceTests: XCTestCase {
         try fixture.write(lines: [F.header(), F.message(time: oldTime)])
         let source = PiHistorySource(root: fixture.root)
         let newer = try await source.refresh(
-            now: F.now.addingTimeInterval(86_400), calendar: F.calendar)
+            now: F.now.addingTimeInterval(86_400),
+            calendar: F.calendar
+        )
         XCTAssertEqual(newer.summaries[.month]?.tokens, 0)
         let older = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(older.summaries[.month]?.tokens, 190)
@@ -362,7 +385,9 @@ final class PiHistorySourceTests: XCTestCase {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }
         let oversized = F.message(
-            id: "excluded", extra: ",\"content\":\"\(String(repeating: "x", count: 150_000))\"")
+            id: "excluded",
+            extra: ",\"content\":\"\(String(repeating: "x", count: 150_000))\""
+        )
         let file = try fixture.write(lines: [F.header(), oversized, "invalid-json", F.message()])
         let before = try Data(contentsOf: file)
         let source = PiHistorySource(root: fixture.root, limits: .init(lineBytes: 1_024))
@@ -414,7 +439,8 @@ final class PiHistorySourceTests: XCTestCase {
             root: fixture.root,
             didReadFile: {
                 try fixture.write(lines: [F.header(), F.message(id: "different")])
-            })
+            }
+        )
         let excluded = try await fresh.refresh(now: F.now, calendar: F.calendar)
         XCTAssertFalse(excluded.coverage.hasReadings)
         XCTAssertEqual(excluded.summaries[.today]?.tokens, 0)

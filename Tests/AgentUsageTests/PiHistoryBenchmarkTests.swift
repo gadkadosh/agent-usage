@@ -30,7 +30,9 @@ final class PiHistoryBenchmarkTests: XCTestCase {
                     lines.append(F.message(id: id, extra: ",\"content\":\"\(padding)\""))
                 }
                 let file = try fixture.write(
-                    "project-\(fileIndex % 20)/session-\(fileIndex).jsonl", lines: lines)
+                    "project-\(fileIndex % 20)/session-\(fileIndex).jsonl",
+                    lines: lines
+                )
                 if firstFile == nil { firstFile = file }
                 bytes += (try file.resourceValues(forKeys: [.fileSizeKey])).fileSize!
             }

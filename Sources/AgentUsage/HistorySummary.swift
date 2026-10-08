@@ -39,7 +39,10 @@ struct PeriodSummary: Equatable, Sendable {
     let buckets: [HistoryBucket]
 
     static func aggregate(
-        _ observations: [UsageObservation], period: HistoryPeriod, now: Date, calendar: Calendar
+        _ observations: [UsageObservation],
+        period: HistoryPeriod,
+        now: Date,
+        calendar: Calendar
     ) -> Self {
         let start = period.start(at: now, calendar: calendar)
         let end = calendar.dateInterval(of: .day, for: now)!.end
@@ -50,7 +53,8 @@ struct PeriodSummary: Equatable, Sendable {
                 end,
                 period == .today
                     ? calendar.date(byAdding: .hour, value: 1, to: cursor)!
-                    : calendar.dateInterval(of: .day, for: cursor)!.end)
+                    : calendar.dateInterval(of: .day, for: cursor)!.end
+            )
             buckets.append(HistoryBucket(start: cursor, end: next))
             cursor = next
         }

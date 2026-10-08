@@ -8,7 +8,9 @@ final class PiCredentialsTests: XCTestCase {
 
     func testDefaultPathDoesNotRequireEnvironment() {
         let url = PiCredentialSource.defaultAuthURL(
-            home: URL(fileURLWithPath: "/Users/test"), environment: [:])
+            home: URL(fileURLWithPath: "/Users/test"),
+            environment: [:]
+        )
         XCTAssertEqual(url.path, "/Users/test/.pi/agent/auth.json")
     }
 
@@ -21,7 +23,9 @@ final class PiCredentialsTests: XCTestCase {
             ("", "/Users/test/.pi/agent/auth.json"),
         ] {
             let url = PiCredentialSource.defaultAuthURL(
-                home: home, environment: ["PI_CODING_AGENT_DIR": override])
+                home: home,
+                environment: ["PI_CODING_AGENT_DIR": override]
+            )
             XCTAssertEqual(url.path, expected)
         }
     }
@@ -42,7 +46,8 @@ final class PiCredentialsTests: XCTestCase {
 
     func testLegacyEntryWithoutAccountIDOrRefreshToken() throws {
         let fixture = try AuthFixture(
-            #"{"openai-codex":{"type":"oauth","access":"test-access","expires":1700000001000}}"#)
+            #"{"openai-codex":{"type":"oauth","access":"test-access","expires":1700000001000}}"#
+        )
         defer { fixture.remove() }
         XCTAssertNil(try fixture.source.load(now: now).accountID)
     }
@@ -60,7 +65,9 @@ final class PiCredentialsTests: XCTestCase {
         try assertError(.missingLogin, content: #"{"openai":{"type":"api_key","key":"test-key"}}"#)
         try assertError(.missingLogin, content: "{}")
         try assertError(
-            .unsupportedLogin, content: #"{"openai-codex":{"type":"api_key","key":"test-key"}}"#)
+            .unsupportedLogin,
+            content: #"{"openai-codex":{"type":"api_key","key":"test-key"}}"#
+        )
     }
 
     func testExpiredAndExactlyExpiringTokens() throws {
@@ -219,8 +226,11 @@ private final class PiRedirectProtocol: URLProtocol, @unchecked Sendable {
         ]
         let destination = URL(string: destinations[status]!)!
         let response = HTTPURLResponse(
-            url: request.url!, statusCode: status, httpVersion: nil,
-            headerFields: ["Location": destination.absoluteString])!
+            url: request.url!,
+            statusCode: status,
+            httpVersion: nil,
+            headerFields: ["Location": destination.absoluteString]
+        )!
         var redirectedRequest = request
         redirectedRequest.url = destination
         client?.urlProtocol(self, wasRedirectedTo: redirectedRequest, redirectResponse: response)
@@ -231,10 +241,15 @@ private final class PiRedirectProtocol: URLProtocol, @unchecked Sendable {
 
     private func sendSuccess() {
         let response = HTTPURLResponse(
-            url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )!
         let data = Data(
             #"{"rate_limit":{"primary_window":{"used_percent":10,"reset_after_seconds":60},"secondary_window":{"used_percent":30,"reset_after_seconds":120}}}"#
-                .utf8)
+                .utf8
+        )
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
@@ -256,10 +271,15 @@ private final class PiUsageProtocol: URLProtocol, @unchecked Sendable {
         let status = authorization == "Bearer rejected" ? 401 : 200
         let percent = authorization == "Bearer first" ? 10 : 20
         let response = HTTPURLResponse(
-            url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+            url: request.url!,
+            statusCode: status,
+            httpVersion: nil,
+            headerFields: nil
+        )!
         let data = Data(
             "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"reset_after_seconds\":120}}}"
-                .utf8)
+                .utf8
+        )
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)

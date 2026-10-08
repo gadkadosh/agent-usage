@@ -21,19 +21,26 @@ struct UsagePanel: View {
                             .tracking(1)
 
                         limitRow(
-                            title: "5-hour window", subtitle: "", color: .orange,
+                            title: "5-hour window",
+                            subtitle: "",
+                            color: .orange,
                             window: snapshot.limits.rateLimit.primaryWindow,
-                            snapshot: snapshot, now: referenceDate ?? context.date
+                            snapshot: snapshot,
+                            now: referenceDate ?? context.date
                         )
                         limitRow(
-                            title: "Weekly window", subtitle: "7 days", color: .blue,
+                            title: "Weekly window",
+                            subtitle: "7 days",
+                            color: .blue,
                             window: snapshot.limits.rateLimit.secondaryWindow,
-                            snapshot: snapshot, now: referenceDate ?? context.date
+                            snapshot: snapshot,
+                            now: referenceDate ?? context.date
                         )
                     }
                 } else if error == nil {
                     HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
+                        ProgressView()
+                            .controlSize(.small)
                         Text("Loading allowance…")
                             .foregroundStyle(.secondary)
                     }
@@ -48,12 +55,17 @@ struct UsagePanel: View {
     }
 
     private func limitRow(
-        title: String, subtitle: String, color: Color, window: UsageLimits.Window,
-        snapshot: UsageSnapshot, now: Date
+        title: String,
+        subtitle: String,
+        color: Color,
+        window: UsageLimits.Window,
+        snapshot: UsageSnapshot,
+        now: Date
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).fontWeight(.medium)
+                Text(title)
+                    .fontWeight(.medium)
                 if !subtitle.isEmpty {
                     Text("· \(subtitle)")
                         .font(.caption)
@@ -66,7 +78,8 @@ struct UsagePanel: View {
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
                     Capsule()
                         .fill(color.opacity(window.meterOpacity))
                         .frame(width: geometry.size.width * window.remainingFraction)

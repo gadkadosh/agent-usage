@@ -30,7 +30,8 @@ final class DashboardRenderingTests: XCTestCase {
         for (name, state, period, dark) in scenarios {
             let readings = DashboardReadings(
                 failHistoryAfterFirst: name == "stale-light",
-                snapshot: DashboardFixtures.history(state: state, zero: name == "zero-light"))
+                snapshot: DashboardFixtures.history(state: state, zero: name == "zero-light")
+            )
             let history = HistoryStore(fetch: { try await readings.history() })
             history.period = period
             if name != "loading-light" { await history.refresh() }
@@ -45,7 +46,10 @@ final class DashboardRenderingTests: XCTestCase {
             )
             await usage.refresh()
             let panel = DashboardPanel(
-                usage: usage, history: history, referenceDate: DashboardFixtures.now)
+                usage: usage,
+                history: history,
+                referenceDate: DashboardFixtures.now
+            )
             let countsBeforeRender = await readings.counts
             // Capture the production layout without window-triggered refreshes changing fixtures.
             try await capture(panel.content, named: name, in: destination, dark: dark)
@@ -55,18 +59,25 @@ final class DashboardRenderingTests: XCTestCase {
     }
 
     private func capture<V: View>(
-        _ view: V, named name: String, in directory: URL, dark: Bool
+        _ view: V,
+        named name: String,
+        in directory: URL,
+        dark: Bool
     ) async throws {
         _ = NSApplication.shared
         let host = NSHostingView(
             rootView:
                 view
                 .environment(\.colorScheme, dark ? .dark : .light)
-                .background(Color(nsColor: .windowBackgroundColor)))
+                .background(Color(nsColor: .windowBackgroundColor))
+        )
         host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 600),
-            styleMask: [.borderless], backing: .buffered, defer: false)
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
         window.isReleasedWhenClosed = false
         window.contentView = host
         window.orderBack(nil)

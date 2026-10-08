@@ -7,15 +7,19 @@ struct HistoryPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("PI HISTORY").font(.caption.weight(.semibold)).tracking(1)
+                Text("PI HISTORY")
+                    .font(.caption.weight(.semibold))
+                    .tracking(1)
                 Spacer()
-                Text("On this Mac").font(.caption)
+                Text("On this Mac")
+                    .font(.caption)
             }
             .foregroundStyle(.secondary)
 
             Picker("History period", selection: $history.period) {
                 ForEach(HistoryPeriod.allCases, id: \.self) { period in
-                    Text(period.title).tag(period)
+                    Text(period.title)
+                        .tag(period)
                 }
             }
             .pickerStyle(.segmented)
@@ -24,10 +28,12 @@ struct HistoryPanel: View {
             if let error = history.error {
                 Label("Couldn't refresh pi history", systemImage: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
-                Text(error).font(.caption)
+                Text(error)
+                    .font(.caption)
                 if history.snapshot != nil {
                     Text("Showing the last readable history. Totals may have changed.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -35,27 +41,38 @@ struct HistoryPanel: View {
                 if snapshot.coverage.hasReadings, let summary = history.summary {
                     HStack(alignment: .firstTextBaseline) {
                         Text(summary.tokens.formatted(.number.notation(.compactName)))
-                            .font(.system(size: 28, weight: .medium)).monospacedDigit()
+                            .font(.system(size: 28, weight: .medium))
+                            .monospacedDigit()
                             .accessibilityLabel("\(summary.tokens) observed tokens")
-                        Text("tokens processed").font(.caption).foregroundStyle(.secondary)
+                        Text("tokens processed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     historyChart(summary)
                     HStack {
-                        Text("π").font(.title3).accessibilityHidden(true)
-                        Text("pi").fontWeight(.medium)
+                        Text("π")
+                            .font(.title3)
+                            .accessibilityHidden(true)
+                        Text("pi")
+                            .fontWeight(.medium)
                         Spacer()
-                        Text("\(summary.tokens.formatted()) tokens").monospacedDigit()
+                        Text("\(summary.tokens.formatted()) tokens")
+                            .monospacedDigit()
                     }
                     .font(.subheadline)
                 } else {
                     Text(snapshot.coverage.emptyDescription)
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 historyFooter(snapshot)
             } else if history.error == nil {
                 HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Reading pi history…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -71,9 +88,11 @@ struct HistoryPanel: View {
                     xEnd: .value(
                         "End",
                         bucket.end.addingTimeInterval(
-                            -bucket.end.timeIntervalSince(bucket.start) * 0.1)
+                            -bucket.end.timeIntervalSince(bucket.start) * 0.1
+                        )
                     ),
-                    yStart: .value("Baseline", 0), yEnd: .value("Observed tokens", bucket.tokens)
+                    yStart: .value("Baseline", 0),
+                    yEnd: .value("Observed tokens", bucket.tokens)
                 )
                 .foregroundStyle(Color.accentColor.opacity(0.65))
                 .accessibilityLabel(
@@ -111,9 +130,13 @@ struct HistoryPanel: View {
                 Text(
                     "\(history.error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
                 )
-                if history.isRefreshing { ProgressView().controlSize(.mini) }
+                if history.isRefreshing {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
             }
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 }

@@ -17,7 +17,9 @@ final class HistoryStoreTests: XCTestCase {
             store.period = period
             XCTAssertEqual(store.summary, historySnapshot().summaries[period])
             XCTAssertEqual(
-                store.summary?.tokens, period == .today ? 100 : period == .week ? 200 : 300)
+                store.summary?.tokens,
+                period == .today ? 100 : period == .week ? 200 : 300
+            )
             XCTAssertEqual(store.summary?.buckets.count, period == .today ? 24 : period.rawValue)
         }
         let count = await fetcher.count
@@ -79,7 +81,9 @@ final class HistoryStoreTests: XCTestCase {
             UsageLimits(
                 rateLimit: .init(
                     primaryWindow: .init(usedPercent: 25, resetAfterSeconds: 300),
-                    secondaryWindow: .init(usedPercent: 50, resetAfterSeconds: 600)))
+                    secondaryWindow: .init(usedPercent: 50, resetAfterSeconds: 600)
+                )
+            )
         })
         let failedHistory = HistoryStore(fetch: { throw SensitiveError() })
         await workingAllowance.refresh()
@@ -218,7 +222,8 @@ private func historySnapshot(read: Int = 1, state: HistoryCoverage.State = .read
             UsageObservation(
                 operationID: "synthetic-\($0)",
                 timestamp: calendar.date(byAdding: .day, value: -$0, to: now)!,
-                tokens: Int64(read * 100))
+                tokens: Int64(read * 100)
+            )
         } : []
     return HistorySnapshot(
         summaries: Dictionary(
@@ -227,11 +232,15 @@ private func historySnapshot(read: Int = 1, state: HistoryCoverage.State = .read
                     $0,
                     PeriodSummary.aggregate(observations, period: $0, now: now, calendar: calendar)
                 )
-            }),
+            }
+        ),
         coverage: HistoryCoverage(
-            state: state, filesRead: readable ? 1 : 0,
-            issues: state == .partial ? [.unreadableFile] : []),
-        fetchedAt: now)
+            state: state,
+            filesRead: readable ? 1 : 0,
+            issues: state == .partial ? [.unreadableFile] : []
+        ),
+        fetchedAt: now
+    )
 }
 
 private struct SensitiveError: LocalizedError {
@@ -260,7 +269,9 @@ private actor HistoryGate {
     func pause(file: StaticString = #filePath, line: UInt = #line) async -> Int {
         guard pending == nil else {
             XCTFail(
-                "\(name): overlapping pauses would overwrite a continuation", file: file, line: line
+                "\(name): overlapping pauses would overwrite a continuation",
+                file: file,
+                line: line
             )
             return count
         }

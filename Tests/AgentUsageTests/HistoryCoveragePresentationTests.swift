@@ -10,7 +10,8 @@ final class HistoryCoveragePresentationTests: XCTestCase {
     func testEmptyStatesDoNotRepeatTheirExplanationInTheFooter() {
         for state in [HistoryCoverage.State.missing, .unsupported, .unavailable, .partial] {
             XCTAssertNil(
-                HistoryCoverage(state: state, filesRead: 0, issues: [.unreadableFile]).warning)
+                HistoryCoverage(state: state, filesRead: 0, issues: [.unreadableFile]).warning
+            )
         }
     }
 
@@ -18,17 +19,21 @@ final class HistoryCoveragePresentationTests: XCTestCase {
         for issue in HistoryIssue.allCases where issue != .staleFile && issue != .toolAggregate {
             XCTAssertEqual(
                 HistoryCoverage(state: .partial, filesRead: 1, issues: [issue]).warning,
-                "Partial history. Totals may be incomplete.")
+                "Partial history. Totals may be incomplete."
+            )
         }
         XCTAssertEqual(
             HistoryCoverage(state: .partial, filesRead: 1, issues: []).warning,
-            "Partial history. Totals may be incomplete.")
+            "Partial history. Totals may be incomplete."
+        )
     }
 
     func testStaleAndOverlappingUsageRemainVisibleAlongsideExclusions() {
         XCTAssertEqual(
             HistoryCoverage(
-                state: .partial, filesRead: 1, issues: Set(HistoryIssue.allCases)
+                state: .partial,
+                filesRead: 1,
+                issues: Set(HistoryIssue.allCases)
             ).warning,
             "Partial history. Totals may be incomplete. Includes older readings. Tool usage may be counted twice."
         )
@@ -37,6 +42,7 @@ final class HistoryCoveragePresentationTests: XCTestCase {
     func testToolOverlapIsNotPresentedAsMissingUsage() {
         XCTAssertEqual(
             HistoryCoverage(state: .ready, filesRead: 1, issues: [.toolAggregate]).warning,
-            "Tool usage may be counted twice.")
+            "Tool usage may be counted twice."
+        )
     }
 }

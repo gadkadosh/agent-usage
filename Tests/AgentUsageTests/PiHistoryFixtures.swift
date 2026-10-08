@@ -26,8 +26,12 @@ enum PiHistoryFixtures {
     }
 
     static func message(
-        id: String = "operation-a", role: String = "assistant", stop: String = "stop",
-        usage: String? = tokens, time: Int64 = milliseconds, extra: String = ""
+        id: String = "operation-a",
+        role: String = "assistant",
+        stop: String = "stop",
+        usage: String? = tokens,
+        time: Int64 = milliseconds,
+        extra: String = ""
     ) -> String {
         let usageField = usage.map { ",\"usage\":\($0)" } ?? ""
         return

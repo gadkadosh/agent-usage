@@ -53,10 +53,12 @@ final class DashboardPanelTests: XCTestCase {
         }
         XCTAssertEqual(
             HistoryCoverage(state: .partial, filesRead: 1, issues: [.staleFile]).warning,
-            "Partial history. Totals may be incomplete. Includes older readings.")
+            "Partial history. Totals may be incomplete. Includes older readings."
+        )
         XCTAssertTrue(
             HistoryCoverage(state: .missing, filesRead: 0, issues: []).emptyDescription
-                .contains("isn't zero usage"))
+                .contains("isn't zero usage")
+        )
     }
 
     private func stores(_ readings: DashboardReadings) -> (UsageStore, HistoryStore) {
@@ -73,10 +75,13 @@ enum DashboardFixtures {
     static let limits = UsageLimits(
         rateLimit: .init(
             primaryWindow: .init(usedPercent: 28, resetAfterSeconds: 8_280),
-            secondaryWindow: .init(usedPercent: 54, resetAfterSeconds: 280_800)))
+            secondaryWindow: .init(usedPercent: 54, resetAfterSeconds: 280_800)
+        )
+    )
 
     static func history(
-        state: HistoryCoverage.State = .ready, zero: Bool = false
+        state: HistoryCoverage.State = .ready,
+        zero: Bool = false
     ) -> HistorySnapshot {
         let readable = state == .ready || state == .partial
         let calendar = Calendar.autoupdatingCurrent
@@ -84,7 +89,8 @@ enum DashboardFixtures {
             UsageObservation(
                 operationID: "synthetic-\(day)",
                 timestamp: calendar.date(byAdding: .day, value: -day, to: now)!,
-                tokens: Int64((day % 5 + 1) * 18_420))
+                tokens: Int64((day % 5 + 1) * 18_420)
+            )
         }
         return HistorySnapshot(
             summaries: Dictionary(
@@ -92,14 +98,21 @@ enum DashboardFixtures {
                     (
                         $0,
                         PeriodSummary.aggregate(
-                            readable && !zero ? observations : [], period: $0, now: now,
-                            calendar: calendar)
+                            readable && !zero ? observations : [],
+                            period: $0,
+                            now: now,
+                            calendar: calendar
+                        )
                     )
-                }),
+                }
+            ),
             coverage: HistoryCoverage(
-                state: state, filesRead: readable ? 12 : 0,
-                issues: state == .partial ? [.unsupportedVersion, .staleFile] : []),
-            fetchedAt: now)
+                state: state,
+                filesRead: readable ? 12 : 0,
+                issues: state == .partial ? [.unsupportedVersion, .staleFile] : []
+            ),
+            fetchedAt: now
+        )
     }
 }
 
@@ -110,7 +123,8 @@ actor DashboardReadings {
     let snapshot: HistorySnapshot
 
     init(
-        allowanceFails: Bool = false, failHistoryAfterFirst: Bool = false,
+        allowanceFails: Bool = false,
+        failHistoryAfterFirst: Bool = false,
         snapshot: HistorySnapshot = DashboardFixtures.history()
     ) {
         self.allowanceFails = allowanceFails

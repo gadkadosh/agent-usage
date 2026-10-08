@@ -74,6 +74,8 @@ make format        # Format Swift files in place
 make format-check  # Check formatting without changing files
 ```
 
+Swift formatting uses four-space indentation and a 100-column target. Wrapped argument and parameter lists use one item per line. Existing line breaks are preserved, so expanded chains stay expanded; the formatter does not automatically expand short chains.
+
 Use Xcode 26.3 to match CI's formatter; formatting can differ between toolchain versions.
 
 ## License
