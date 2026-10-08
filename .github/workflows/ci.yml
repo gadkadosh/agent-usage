@@ -36,7 +36,9 @@ jobs:
       - name: Build and test
         run: swift test
 
-      - name: Build and verify the local app bundle
+      - name: Build and verify the local app bundle with Command Line Tools
+        env:
+          DEVELOPER_DIR: /Library/Developer/CommandLineTools
         run: make app
 
       - name: Check read-buffer memory in an isolated test process
