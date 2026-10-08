@@ -25,7 +25,7 @@ make app
 
 This builds a release executable for the current Mac's architecture and creates `.build/Agent Usage.app`. Open it in Finder, or copy it to `/Applications` and double-click it there. The app runs in the menu bar without a Dock icon. Use its options menu to Refresh or Quit.
 
-The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions. See [packaging, validation and distribution limits](docs/packaging.md).
+Quit the installed app before replacing it with a new build. The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Downloaded or quarantined copies may be blocked by Gatekeeper. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions.
 
 ## Run from source
 
@@ -49,11 +49,20 @@ History refreshes when the panel becomes visible and on manual Refresh, not on a
 
 The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
 
-The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes. Unchanged file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan. Large archives may exceed the 256 MiB per-refresh read budget: coverage stays partial and later opens/manual refreshes may catch up. Some permanent exclusions cannot be recovered by refreshing. See [buffer cleanup, BEFORE/AFTER measurements and remaining costs](docs/history-scanning.md).
+The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes. Unchanged file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan. Large archives may exceed the 256 MiB per-refresh read budget: coverage stays partial and later opens/manual refreshes may catch up. Some permanent exclusions cannot be recovered by refreshing.
 
 ## Tests
 
 Run tests with `swift test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
+
+Run the opt-in history checks in separate test processes with full Xcode selected:
+
+```sh
+AGENT_USAGE_MEMORY_REGRESSION=1 swift test --filter PiHistoryMemoryTests
+AGENT_USAGE_BENCHMARK=1 swift test -c release --filter PiHistoryBenchmarkTests
+```
+
+The memory regression must run alone so allocator reuse cannot hide buffer accumulation. Historical buffer-cleanup measurements are recorded in [PR #11](https://github.com/gadkadosh/agent-usage/pull/11).
 
 ### Synthetic native screenshots (development only)
 
