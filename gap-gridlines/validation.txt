@@ -1,0 +1,73 @@
+Fresh local CLT release build:
+[129 / 135]
+[130 / 135]
+[131 / 135] AgentUsage-product
+/Users/gadkadosh/Code/usage/Package.swift: AgentUsage-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/gadkadosh/Code/usage/Package.swift: AgentUsage-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[133 / 135] AgentUsage-product
+[134 / 135] AgentUsage-product
+Build complete! (34,63 secs)
+
+Local Xcode tests:
+Test Case '-[AgentUsageTests.UsageStoreTests testSuccessfulRefreshRecordsStructuredDataAndTimestamp]' started.
+Test Case '-[AgentUsageTests.UsageStoreTests testSuccessfulRefreshRecordsStructuredDataAndTimestamp]' passed (0.000 seconds).
+Test Suite 'UsageStoreTests' passed at 2026-10-08 22:08:46.799.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'AgentUsageTests.xctest' passed at 2026-10-08 22:08:46.799.
+	 Executed 102 tests, with 3 tests skipped and 0 failures (0 unexpected) in 3.202 (3.210) seconds
+Test Suite 'All tests' passed at 2026-10-08 22:08:46.799.
+	 Executed 102 tests, with 3 tests skipped and 0 failures (0 unexpected) in 3.202 (3.211) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+Formatting:
+swift format lint --configuration .swift-format --strict --recursive Package.swift Sources Tests
+
+Before native capture:
+/Users/gadkadosh/Code/usage/.scratch/gap-gridlines/before-source/.build/app-staging.wz5NLy/Agent Usage.app: replacing existing signature
+Built /Users/gadkadosh/Code/usage/.scratch/gap-gridlines/before-source/.build/Agent Usage.app
+/Users/gadkadosh/Code/usage/.scratch/gap-gridlines/Chart QA.app: replacing existing signature
+action AXPress of menu bar item Chart Column of menu bar 2 of application process ChartQA
+1, 0, 0
+0, 1, 0
+0, 0, 1
+
+After native capture:
+/Users/gadkadosh/Code/usage/.build/app-staging.QtUohk/Agent Usage.app: replacing existing signature
+Built /Users/gadkadosh/Code/usage/.build/Agent Usage.app
+/Users/gadkadosh/Code/usage/.scratch/gap-gridlines/Chart QA.app: replacing existing signature
+action AXPress of menu bar item Chart Column of menu bar 2 of application process ChartQA
+1, 0, 0
+0, 1, 0
+0, 0, 1
+
+Native caption pixel check:
+today: native caption pixels unchanged
+week: native caption pixels unchanged
+month: native caption pixels unchanged
+
+Remote CI:
+  ✓ Check formatting
+  ✓ Build and test, including isolated memory regression
+  * Build and verify the local app bundle with Command Line Tools
+  * Post Check out repository
+✓ fix/full-width-history-chart CI gadkadosh/agent-usage#22 · 37837566560
+Triggered via pull_request about 3 minutes ago
+
+JOBS
+✓ Formatting and tests in 2m52s (ID 113518421261)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Show toolchain
+  ✓ Check formatting
+  ✓ Build and test, including isolated memory regression
+  ✓ Build and verify the local app bundle with Command Line Tools
+  ✓ Post Check out repository
+  ✓ Complete job
+
+ANNOTATIONS
+- Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+Formatting and tests: .github#1
+
