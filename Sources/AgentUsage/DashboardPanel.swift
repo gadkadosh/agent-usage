@@ -15,7 +15,7 @@ struct DashboardPanel: View {
 
     /// The same layout can be rendered without activating native-window scans.
     var content: some View {
-        DashboardScrollView(
+        DashboardViewport(
             content: VStack(alignment: .leading, spacing: 18) {
                 DashboardHeader(
                     isRefreshing: usage.isRefreshing || history.isRefreshing,
@@ -45,23 +45,18 @@ struct DashboardPanel: View {
     }
 }
 
-private struct DashboardScrollView<Content: View>: View {
+private struct DashboardViewport<Content: View>: View {
     let content: Content
-    // Select the property wrapper so Command Line Tools does not need the State macro plugin.
-    private typealias HeightState = SwiftUI.State<CGFloat?>
-    @HeightState private var contentHeight: CGFloat?
 
     var body: some View {
-        ScrollView {
+        // Resolve the ideal size during layout, not after the native window has opened.
+        ViewThatFits(in: .vertical) {
             content
-                .onGeometryChange(for: CGFloat.self) { geometry in
-                    ceil(geometry.size.height)
-                } action: { height in
-                    contentHeight = height
-                }
+            ScrollView { content }
+                .frame(height: maximumHeight)
         }
-        // Give MenuBarExtra an explicit ideal size, fitted to content until it needs to scroll.
-        .frame(width: 360, height: min(contentHeight ?? maximumHeight, maximumHeight))
+        .frame(width: 360)
+        .frame(maxHeight: maximumHeight)
         .fixedSize(horizontal: true, vertical: true)
     }
 
