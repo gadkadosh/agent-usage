@@ -43,8 +43,7 @@ actor PiHistorySource {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
         return PiCredentialSource.defaultAuthURL(home: home, environment: environment)
-            .deletingLastPathComponent()
-            .appendingPathComponent("sessions", isDirectory: true)
+            .deletingLastPathComponent().appendingPathComponent("sessions", isDirectory: true)
     }
 
     func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws

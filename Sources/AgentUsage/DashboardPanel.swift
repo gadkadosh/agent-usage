@@ -15,10 +15,7 @@ struct DashboardPanel: View {
                 }
             }
             // No history startup timer. A manual request may finish after the panel closes.
-            .background(
-                HistoryPanelLifecycle(history: history)
-                    .frame(width: 0, height: 0)
-            )
+            .background(HistoryPanelLifecycle(history: history).frame(width: 0, height: 0))
     }
 
     /// The same layout can be rendered without activating native-window scans.

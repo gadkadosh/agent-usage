@@ -39,8 +39,7 @@ struct UsagePanel: View {
                     }
                 } else if error == nil {
                     HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
+                        ProgressView().controlSize(.small)
                         Text("Loading allowance…")
                             .foregroundStyle(.secondary)
                     }
@@ -64,8 +63,7 @@ struct UsagePanel: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .fontWeight(.medium)
+                Text(title).fontWeight(.medium)
                 if !subtitle.isEmpty {
                     Text("· \(subtitle)")
                         .font(.caption)
@@ -78,8 +76,7 @@ struct UsagePanel: View {
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.08))
+                    Capsule().fill(Color.primary.opacity(0.08))
                     Capsule()
                         .fill(color.opacity(window.meterOpacity))
                         .frame(width: geometry.size.width * window.remainingFraction)
