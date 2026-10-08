@@ -90,16 +90,27 @@ fi
 osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click $OPTIONS"
 ```
 
-Wait briefly and inspect `get exists menu 1 of $OPTIONS`. The macOS 15 runner also returned a successful menu-button click without exposing a menu. If the menu remains absent, reuse the native mouse fallback at this control's current bounds; do not repeat a toggle after it opens:
+Inspect both observed menu containers after the click. Locally the menu is under its button; on macOS 15 CI it is beside the scroll area under the window's root group. A missing menu under the button does **not** establish a failed click:
 
 ```bash
-if [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists menu 1 of $OPTIONS")" != true ]; then
-  read -r x y w h <<< "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get {position, size} of $OPTIONS" | tr ',' ' ')"
-  "$INPUT" click "$((x + w / 2))" "$((y + h / 2))"
+MENU="menu 1 of $OPTIONS"
+if [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists menu item \"Refresh\" of $MENU")" != true ]; then
+  MENU='menu 1 of group 1 of window 1'
 fi
-osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists menu 1 of $OPTIONS"
-# Require true before selecting Refresh.
-osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click menu item \"Refresh\" of menu 1 of $OPTIONS"
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists menu item \"Refresh\" of $MENU"
+```
+
+If neither container exposes Refresh after a short wait, inspect the hierarchy before assuming an input failure. Only if the menu really remains closed, reuse the existing native click at the options control's current bounds, then repeat the read-only menu selection above. Do not toggle an already open menu:
+
+```bash
+read -r x y w h <<< "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get {position, size} of $OPTIONS" | tr ',' ' ')"
+"$INPUT" click "$((x + w / 2))" "$((y + h / 2))"
+```
+
+Once the Refresh item exists:
+
+```bash
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click menu item \"Refresh\" of $MENU"
 ```
 
 Require an observable updated result after refreshing. A successful accessibility action is not proof the app refreshed.

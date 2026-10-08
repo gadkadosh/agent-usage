@@ -155,16 +155,25 @@ def main():
                     if apple(pid, f"get exists {options}") != "true":
                         assert apple(pid, f"get count of menu buttons of {group}") == "1", "Options menu is ambiguous"
                         options = f"menu button 1 of {group}"
+                    def refresh_item():
+                        # Observed native trees: local menu under the button; macOS 15
+                        # menu beside the scroll area, under the window's root group.
+                        for menu in (f"menu 1 of {options}", "menu 1 of group 1 of window 1"):
+                            selector = f'menu item "Refresh" of {menu}'
+                            if apple(pid, f"get exists {selector}") == "true":
+                                return selector
+                        return None
+
                     apple(pid, f"click {options}")
                     try:
-                        wait_for(lambda: apple(pid, f"get exists menu 1 of {options}") == "true", "accessible options menu", timeout=2)
+                        refresh = wait_for(refresh_item, "accessible options menu", timeout=2)
                     except RuntimeError:
-                        action("accessibility click did not open options; use native mouse fallback")
+                        action("no exposed Refresh item after accessibility click; use native mouse fallback")
                         x, y, w, h = bounds(pid, options)
                         run(helper, "click", str(x + w // 2), str(y + h // 2))
-                    (output / "options.ax.txt").write_text(apple(pid, "get entire contents") + "\n")
-                    wait_for(lambda: apple(pid, f"get exists menu 1 of {options}") == "true", "open options menu")
-                    apple(pid, f'click menu item "Refresh" of menu 1 of {options}')
+                        refresh = wait_for(refresh_item, "open options menu")
+                    (output / "options.ax.txt").write_text(apple(pid, "get entire contents of window 1") + "\n")
+                    apple(pid, f"click {refresh}")
                     wait_for(lambda: not partial_warning() and tokens() == 18420, "same-window recovery")
                     recovered = capture("partial-recovered", 18420)
                     assert abs(recovered - ready_height) <= 1, "Recovered native height differs from fresh ready window"
