@@ -88,14 +88,19 @@ struct HistoryPanel: View {
             }
             .chartXScale(
                 domain: first.start...last.end,
-                range: .plotDimension(startPadding: 0, endPadding: 28)
+                range: .plotDimension(startPadding: 0, endPadding: 0)
             )
             .chartYScale(domain: 0...max(1, summary.buckets.map(\.tokens).max() ?? 0))
             .chartYAxis(.hidden)
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: history.period == .month ? 3 : 4)) {
+                    value in
                     AxisGridLine()
-                    AxisValueLabel(anchor: .topLeading)
+                    // Keep edge labels inward and interior labels centered on their ticks.
+                    AxisValueLabel(
+                        anchor: value.index == 0
+                            ? .topLeading : value.index == value.count - 1 ? .topTrailing : .top
+                    )
                 }
             }
             .frame(height: 76)
