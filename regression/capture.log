@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/Users/gadkadosh/Code/usage/scripts/capture-menu-bar.py", line 165, in <module>
+    main()
+    ~~~~^^
+  File "/Users/gadkadosh/Code/usage/scripts/capture-menu-bar.py", line 143, in main
+    capture(pid, helper, output, state)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/gadkadosh/Code/usage/scripts/capture-menu-bar.py", line 95, in capture
+    assert 15 <= title[1] - wy <= 40, f"Content centered in stale native window: {geometry}"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Content centered in stale native window: {'window': [961, 35, 360, 600], 'status_item': [960, 4, 38, 24], 'title': [1032, 179, 102, 20]}

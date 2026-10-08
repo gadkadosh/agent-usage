@@ -1,0 +1,8 @@
+missing: window=[925, 35, 360, 600], title inset=20
+ready: window=[925, 35, 360, 600], title inset=20
+ready-week: window=[925, 35, 360, 600], title inset=20
+ready-month: window=[925, 35, 360, 600], title inset=20
+ready-reopened: window=[925, 35, 360, 600], title inset=20
+partial: window=[925, 35, 360, 600], title inset=20
+unsupported: window=[925, 35, 360, 600], title inset=20
+zero: window=[925, 35, 360, 600], title inset=20
