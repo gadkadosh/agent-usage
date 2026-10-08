@@ -65,15 +65,11 @@ struct HistoryPanel: View {
     private func historyChart(_ summary: PeriodSummary) -> some View {
         // Aggregated snapshots have buckets, but injected/empty snapshots must also be safe.
         if let first = summary.buckets.first, let last = summary.buckets.last {
+            let labels = summary.chartLabelBuckets(for: history.period)
             Chart(summary.buckets) { bucket in
                 RectangleMark(
                     xStart: .value("Start", bucket.start),
-                    xEnd: .value(
-                        "End",
-                        bucket.end.addingTimeInterval(
-                            -bucket.end.timeIntervalSince(bucket.start) * 0.1
-                        )
-                    ),
+                    xEnd: .value("End", bucket.barEnd),
                     yStart: .value("Baseline", 0),
                     yEnd: .value("Observed tokens", bucket.tokens)
                 )
@@ -93,14 +89,16 @@ struct HistoryPanel: View {
             .chartYScale(domain: 0...max(1, summary.buckets.map(\.tokens).max() ?? 0))
             .chartYAxis(.hidden)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: history.period == .month ? 3 : 4)) {
-                    value in
-                    AxisGridLine()
-                    // Keep edge labels inward and interior labels centered on their ticks.
-                    AxisValueLabel(
-                        anchor: value.index == 0
-                            ? .topLeading : value.index == value.count - 1 ? .topTrailing : .top
-                    )
+                AxisMarks(values: labels.map(\.barCenter)) { value in
+                    if let bucket = labels.first(where: { $0.barCenter == value.as(Date.self) }) {
+                        AxisValueLabel(centered: false, anchor: .top) {
+                            Text(
+                                bucket.start,
+                                format: history.period == .today
+                                    ? .dateTime.hour() : .dateTime.month(.abbreviated).day()
+                            )
+                        }
+                    }
                 }
             }
             .frame(height: 76)
@@ -122,6 +120,25 @@ struct HistoryPanel: View {
             }
             .font(.caption).foregroundStyle(.secondary)
         }
+    }
+}
+
+extension HistoryBucket {
+    var barEnd: Date {
+        end.addingTimeInterval(-end.timeIntervalSince(start) * 0.1)
+    }
+
+    // Center the caption on the painted rectangle, excluding its trailing gutter.
+    var barCenter: Date {
+        start.addingTimeInterval(barEnd.timeIntervalSince(start) / 2)
+    }
+}
+
+extension PeriodSummary {
+    func chartLabelBuckets(for period: HistoryPeriod) -> [HistoryBucket] {
+        let count = min(period == .today ? 4 : 3, buckets.count)
+        // Sample the middle of each section, keeping long date captions away from the edges.
+        return (0..<count).map { buckets[(2 * $0 + 1) * buckets.count / (2 * count)] }
     }
 }
 
