@@ -1,7 +1,7 @@
 .PHONY: app format format-check
 
 SWIFT ?= swift
-SWIFT_FILES := Package.swift Sources Tests
+SWIFT_FILES := Package.swift Sources Tests .agents/skills/verification/scripts
 
 app:
 	SWIFT="$(SWIFT)" /bin/bash scripts/build-app.sh
