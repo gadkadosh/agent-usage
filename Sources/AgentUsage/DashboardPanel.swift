@@ -9,6 +9,11 @@ struct DashboardPanel: View {
 
     var body: some View {
         content
+            .background {
+                GeometryReader { geometry in
+                    DashboardWindowSize(size: geometry.size)
+                }
+            }
             // No history startup timer. A manual request may finish after the panel closes.
             .background(HistoryPanelLifecycle(history: history).frame(width: 0, height: 0))
     }

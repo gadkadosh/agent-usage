@@ -18,8 +18,10 @@ final class DashboardSizingTests: XCTestCase {
                 usage: usage, history: history, referenceDate: DashboardFixtures.now))
         let window = makeWindow(host)
         defer { window.close() }
+        let top = window.frame.maxY
 
         let ready = try await fittedSize(host)
+        assertWindow(window, fits: ready, top: top)
         XCTAssertEqual(ready.width, 360, accuracy: 1)
         let cap = max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
         XCTAssertGreaterThan(ready.height, 0)
@@ -30,6 +32,7 @@ final class DashboardSizingTests: XCTestCase {
         await readings.setError("Synthetic allowance unavailable. Sign in again in pi.")
         await usage.refresh()
         let warning = try await fittedSize(host)
+        assertWindow(window, fits: warning, top: top)
         XCTAssertEqual(warning.width, 360, accuracy: 1)
         XCTAssertGreaterThan(warning.height, 0)
         XCTAssertLessThanOrEqual(warning.height, cap + 1)
@@ -38,6 +41,7 @@ final class DashboardSizingTests: XCTestCase {
         await readings.setError(String(repeating: "Synthetic allowance unavailable. ", count: 80))
         await usage.refresh()
         let overflowing = try await fittedSize(host)
+        assertWindow(window, fits: overflowing, top: top)
         XCTAssertEqual(overflowing.height, cap, accuracy: 1)
         let scroll = try XCTUnwrap(scrollView(in: host))
         let document = try XCTUnwrap(scroll.documentView)
@@ -50,7 +54,38 @@ final class DashboardSizingTests: XCTestCase {
         await readings.setError(nil)
         await usage.refresh()
         let recovered = try await fittedSize(host)
+        assertWindow(window, fits: recovered, top: top)
         XCTAssertEqual(recovered.height, ready.height, accuracy: 1)
+    }
+
+    func testRetainedWindowShrinksWithHistoryAndKeepsTopEdge() async throws {
+        let readings = SizingReadings()
+        await readings.setHistoryState(.partial)
+        let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
+        let history = HistoryStore(fetch: { await readings.history() })
+        await usage.refresh()
+        await history.refresh()
+        let host = NSHostingView(
+            rootView: DashboardPanel(
+                usage: usage, history: history, referenceDate: DashboardFixtures.now))
+        let window = makeWindow(host)
+        defer { window.close() }
+        let top = window.frame.maxY
+        let partial = try await fittedSize(host)
+        assertWindow(window, fits: partial, top: top)
+
+        var heights: [CGFloat] = []
+        for state in [HistoryCoverage.State.ready, .missing, .partial, .ready] {
+            await readings.setHistoryState(state)
+            await history.refresh()
+            let size = try await fittedSize(host)
+            assertWindow(window, fits: size, top: top)
+            heights.append(size.height)
+        }
+        XCTAssertLessThan(heights[0], partial.height)
+        XCTAssertLessThan(heights[1], heights[0])
+        XCTAssertEqual(heights[2], partial.height, accuracy: 1)
+        XCTAssertEqual(heights[3], heights[0], accuracy: 1)
     }
 
     func testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout() async throws {
@@ -87,9 +122,21 @@ final class DashboardSizingTests: XCTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        // Test the dashboard's native resize boundary, not hosting min/max constraints.
+        host.sizingOptions = [.intrinsicContentSize]
         window.contentView = host
         window.orderBack(nil)
         return window
+    }
+
+    private func assertWindow(
+        _ window: NSWindow, fits size: NSSize, top: CGFloat,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let actual = window.contentRect(forFrameRect: window.frame).size
+        XCTAssertEqual(actual.width, size.width, accuracy: 1, file: file, line: line)
+        XCTAssertEqual(actual.height, size.height, accuracy: 1, file: file, line: line)
+        XCTAssertEqual(window.frame.maxY, top, accuracy: 1, file: file, line: line)
     }
 
     private func scrollView(in view: NSView) -> NSScrollView? {
@@ -109,8 +156,11 @@ final class DashboardSizingTests: XCTestCase {
 
 private actor SizingReadings {
     var error: String?
+    var historyState = HistoryCoverage.State.ready
 
     func setError(_ error: String?) { self.error = error }
+    func setHistoryState(_ state: HistoryCoverage.State) { historyState = state }
+    func history() -> HistorySnapshot { DashboardFixtures.history(state: historyState) }
 
     func allowance() throws -> UsageLimits {
         if let error { throw Failure(message: error) }
