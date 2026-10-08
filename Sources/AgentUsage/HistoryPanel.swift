@@ -65,7 +65,7 @@ struct HistoryPanel: View {
     private func historyChart(_ summary: PeriodSummary) -> some View {
         // Aggregated snapshots have buckets, but injected/empty snapshots must also be safe.
         if let first = summary.buckets.first, let last = summary.buckets.last {
-            let labels = summary.chartLabelBuckets(for: history.period)
+            let labels = summary.chartLabelBuckets
             Chart(summary.buckets) { bucket in
                 RectangleMark(
                     xStart: .value("Start", bucket.start),
@@ -90,8 +90,14 @@ struct HistoryPanel: View {
             .chartYAxis(.hidden)
             .chartXAxis {
                 AxisMarks(values: labels.map(\.barCenter)) { value in
+                    AxisGridLine()
                     if let bucket = labels.first(where: { $0.barCenter == value.as(Date.self) }) {
-                        AxisValueLabel(centered: false, anchor: .top) {
+                        // Edge captions may use the panel margin without hiding or shifting.
+                        AxisValueLabel(
+                            centered: false,
+                            anchor: .top,
+                            collisionResolution: .disabled
+                        ) {
                             Text(
                                 bucket.start,
                                 format: history.period == .today
@@ -135,10 +141,14 @@ extension HistoryBucket {
 }
 
 extension PeriodSummary {
-    func chartLabelBuckets(for period: HistoryPeriod) -> [HistoryBucket] {
-        let count = min(period == .today ? 4 : 3, buckets.count)
-        // Sample the middle of each section, keeping long date captions away from the edges.
-        return (0..<count).map { buckets[(2 * $0 + 1) * buckets.count / (2 * count)] }
+    var chartLabelBuckets: [HistoryBucket] {
+        let count = min(4, buckets.count)
+        guard count > 1 else { return buckets }
+        // Include both endpoint bars and distribute the remaining captions between them.
+        return (0..<count).map { index in
+            let position = Double(index) * Double(buckets.count - 1) / Double(count - 1)
+            return buckets[Int(position.rounded())]
+        }
     }
 }
 
