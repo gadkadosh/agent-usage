@@ -47,6 +47,8 @@ struct HistoryPanel: View {
                         Text("\(summary.tokens.formatted()) tokens").monospacedDigit()
                     }
                     .font(.subheadline)
+                } else if snapshot.hasMoreFiles {
+                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(snapshot.coverage.emptyDescription)
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -121,9 +123,13 @@ struct HistoryPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
-                Text(
-                    "\(history.error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
-                )
+                if snapshot.hasMoreFiles && history.isRefreshing {
+                    Text("Loading history… Totals are still updating.")
+                } else {
+                    Text(
+                        "\(history.error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                    )
+                }
                 if history.isRefreshing { ProgressView().controlSize(.mini) }
             }
             .font(.caption).foregroundStyle(.secondary)

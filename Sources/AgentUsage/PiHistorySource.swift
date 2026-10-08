@@ -97,6 +97,8 @@ actor PiHistorySource {
         var filesRead = 0
         var visited = 0
         var remainingBytes = limits.refreshBytes
+        var hasMoreFiles = false
+        var madeProgress = false
         let since = HistoryPeriod.month.start(at: now, calendar: calendar)
         // A clock/timezone change can move the range backwards; cached files may then lack records.
         let previousCache = (cacheStart.map { since >= $0 } ?? true) ? cache : [:]
@@ -181,12 +183,15 @@ actor PiHistorySource {
                     )
                     if !file.issues.contains(.scanLimit) {
                         indexed[url] = file
+                        madeProgress = true
                     }
                 }
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                if error is ChangingFileError {
+                if error is BatchLimitError {
+                    hasMoreFiles = true
+                } else if error is ChangingFileError {
                     issues.insert(.changingFile)
                 } else {
                     issues.insert(error is FileLimitError ? .scanLimit : .unreadableFile)
@@ -194,7 +199,7 @@ actor PiHistorySource {
                 if let previous = previousCache[url] {
                     file = previous
                     indexed[url] = previous
-                    issues.insert(.staleFile)
+                    if !(error is BatchLimitError) { issues.insert(.staleFile) }
                 } else {
                     continue
                 }
@@ -220,6 +225,10 @@ actor PiHistorySource {
         // An inaccessible subtree is unknown, not deleted. Reject the refresh before replacing
         // the index, so cached files we could not enumerate remain available for the next attempt.
         if scanFailed { throw HistoryReadError.unavailable }
+        if hasMoreFiles && observations.count >= limits.operations {
+            issues.insert(.scanLimit)
+            hasMoreFiles = false
+        }
         var canonical: [String: UsageObservation] = [:]
         var conflicting: Set<String> = []
         for observation in observations {
@@ -240,7 +249,7 @@ actor PiHistorySource {
         } else {
             state = issues.isEmpty ? .missing : .unavailable
         }
-        let result = snapshot(
+        var result = snapshot(
             Array(canonical.values),
             filesRead: filesRead,
             issues: issues,
@@ -248,6 +257,9 @@ actor PiHistorySource {
             now: now,
             calendar: calendar
         )
+        // Continue byte-budget deferrals only while the index advances. Failed reads and
+        // permanent safety limits must not cause an endless background retry loop.
+        result.hasMoreFiles = hasMoreFiles && madeProgress
         try Task.checkCancellation()
         // Commit only a completed refresh. Deleted files disappear; retain 30 calendar days.
         cache = indexed
@@ -336,7 +348,8 @@ actor PiHistorySource {
         maxOperations: Int,
         remainingBytes: inout Int
     ) throws -> (observations: [UsageObservation], issues: Set<HistoryIssue>, isSupported: Bool) {
-        guard size <= min(limits.fileBytes, remainingBytes) else { throw FileLimitError() }
+        guard size <= min(limits.fileBytes, limits.refreshBytes) else { throw FileLimitError() }
+        guard size <= remainingBytes else { throw BatchLimitError() }
         var parser = PiHistoryParser(since: since, maxOperations: maxOperations)
         var line = Data()
         var bytesRead = 0
@@ -397,6 +410,7 @@ actor PiHistorySource {
     }
 
     private struct FileLimitError: Error {}
+    private struct BatchLimitError: Error {}
     private struct ChangingFileError: Error {}
 }
 

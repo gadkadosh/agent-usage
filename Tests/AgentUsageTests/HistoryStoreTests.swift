@@ -94,37 +94,21 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertNotNil(failedHistory.error)
     }
 
-    func testOverlapAndCancelledLateResultPreservePreviousSnapshotAndError() async {
-        let fetcher = ScriptedHistory()
+    func testOverlapJoinsOwnedScanAndCallerCancellationDoesNotDiscardResult() async {
         let gate = HistoryGate()
-        let store = HistoryStore(fetch: {
-            let result = try await fetcher.fetch()
-            if result.fetchedAt == historySnapshot(read: 3).fetchedAt { await gate.pause() }
-            return result
-        })
-        await store.refresh()
-        await store.refresh()
-        let finished = expectation(description: "Cancelled refresh finishes")
-        let task = Task {
-            await store.refresh()
-            finished.fulfill()
-        }
-        defer {
-            task.cancel()
-            Task { await gate.resume() }
-        }
+        let store = HistoryStore(fetch: { historySnapshot(read: await gate.pause()) })
+        let first = Task { await store.refresh() }
+        defer { Task { await gate.resume() } }
         guard await gate.waitUntilPaused() else { return }
-        XCTAssertTrue(store.isRefreshing)
-        await store.refresh()
-        let count = await fetcher.count
-        XCTAssertEqual(count, 3)
-        task.cancel()
+        let joined = Task { await store.refresh() }
+        first.cancel()
         await gate.resume()
-        let completion = await XCTWaiter.fulfillment(of: [finished], timeout: 5)
-        XCTAssertEqual(completion, .completed)
-        XCTAssertEqual(store.snapshot?.fetchedAt, historySnapshot().fetchedAt)
-        XCTAssertEqual(store.summary, historySnapshot().summaries[.today])
-        XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
+        await first.value
+        await joined.value
+        let count = await gate.count
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(store.summary?.tokens, 100)
+        XCTAssertNil(store.error)
         XCTAssertFalse(store.isRefreshing)
     }
 
@@ -136,75 +120,81 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertFalse(store.isRefreshing)
     }
 
-    func testReopenWaitsForCancelledScanThenPublishesNewReading() async {
+    func testStartupReturnsBeforeIOAndIsIdempotentAfterCompletion() async {
         let gate = HistoryGate()
         let store = HistoryStore(fetch: { historySnapshot(read: await gate.pause()) })
-        let first = Task { await store.refresh() }
-        defer {
-            first.cancel()
-            Task { await gate.resume() }
-        }
-        guard await gate.waitUntilPaused() else { return }
-        first.cancel()
-
-        let waiting = expectation(description: "Reopen waits for the cancelled scan")
-        let reopened = Task {
-            waiting.fulfill()
-            await store.refreshWhenIdle()
-        }
-        defer { reopened.cancel() }
-        let started = await XCTWaiter.fulfillment(of: [waiting], timeout: 5)
-        XCTAssertEqual(started, .completed)
-        var count = await gate.count
-        XCTAssertEqual(count, 1)
+        store.start()
+        store.start()
         XCTAssertTrue(store.isRefreshing)
         XCTAssertNil(store.snapshot)
-
-        await gate.resume()
-        await first.value
+        defer { Task { await gate.resume() } }
         guard await gate.waitUntilPaused() else { return }
-        count = await gate.count
-        XCTAssertEqual(count, 2)
-        XCTAssertTrue(store.isRefreshing)
-        XCTAssertNil(store.snapshot, "The cancelled scan must not publish its late result")
-        XCTAssertNil(store.error)
-
+        let joined = Task { await store.refresh() }
         await gate.resume()
-        await reopened.value
-        XCTAssertEqual(store.snapshot?.fetchedAt, historySnapshot(read: 2).fetchedAt)
-        XCTAssertEqual(store.summary, historySnapshot(read: 2).summaries[.today])
-        XCTAssertNil(store.error)
+        await joined.value
+        store.start()
+        let count = await gate.count
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(store.summary?.tokens, 100)
         XCTAssertFalse(store.isRefreshing)
     }
 
-    func testCancelledReopenDoesNotFetchAfterInFlightScanCompletes() async {
+    func testStartupPublishesIntermediateBatchAndCatchesUpWithoutPanel() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        let lines = [PiHistoryFixtures.header(), PiHistoryFixtures.message()]
+        let first = try fixture.write("a.jsonl", lines: lines)
+        // Distinct operation IDs, but identical file sizes, keep exactly one file per batch.
+        try fixture.write(
+            "b.jsonl",
+            lines: [
+                PiHistoryFixtures.header(), PiHistoryFixtures.message(id: "operation-b"),
+            ]
+        )
+        let size = try Data(contentsOf: first).count
+        let source = PiHistorySource(root: fixture.root, limits: .init(refreshBytes: size))
         let gate = HistoryGate()
-        let store = HistoryStore(fetch: { historySnapshot(read: await gate.pause()) })
-        let first = Task { await store.refresh() }
-        defer {
-            first.cancel()
-            Task { await gate.resume() }
-        }
+        let store = HistoryStore(fetch: {
+            let result = try await source.refresh(
+                now: PiHistoryFixtures.now,
+                calendar: PiHistoryFixtures.calendar
+            )
+            if !result.hasMoreFiles { await gate.pause() }
+            return result
+        })
+        store.start()
+        defer { Task { await gate.resume() } }
         guard await gate.waitUntilPaused() else { return }
-
-        let waiting = expectation(description: "Reopen waits for the in-flight scan")
-        let reopened = Task {
-            waiting.fulfill()
-            await store.refreshWhenIdle()
-        }
-        defer { reopened.cancel() }
-        let started = await XCTWaiter.fulfillment(of: [waiting], timeout: 5)
-        XCTAssertEqual(started, .completed)
-        reopened.cancel()
+        XCTAssertEqual(store.summary?.tokens, 190)
+        XCTAssertEqual(store.snapshot?.hasMoreFiles, true)
+        XCTAssertEqual(store.snapshot?.coverage.issues, [])
+        XCTAssertTrue(store.isRefreshing)
+        let joined = Task { await store.refresh() }
         await gate.resume()
-        await first.value
-        await reopened.value
-
-        let count = await gate.count
-        XCTAssertEqual(count, 1, "A panel closed while waiting must not start another scan")
-        XCTAssertEqual(store.summary, historySnapshot().summaries[.today])
-        XCTAssertNil(store.error)
+        await joined.value
+        XCTAssertEqual(store.summary?.tokens, 380)
+        XCTAssertEqual(store.snapshot?.hasMoreFiles, false)
         XCTAssertFalse(store.isRefreshing)
+        let parsed = await source.filesParsed
+        XCTAssertEqual(parsed, 2)
+    }
+
+    func testCatchUpFailureKeepsIntermediateReadingAndManualRefreshRecovers() async {
+        let fetcher = ScriptedHistory()
+        let store = HistoryStore(fetch: {
+            var snapshot = try await fetcher.fetch()
+            snapshot.hasMoreFiles = snapshot.fetchedAt == historySnapshot().fetchedAt
+            return snapshot
+        })
+        await store.refresh()
+        XCTAssertEqual(store.summary?.tokens, 100)
+        XCTAssertEqual(store.snapshot?.hasMoreFiles, true)
+        XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
+        XCTAssertFalse(store.isRefreshing)
+        await store.refresh()
+        XCTAssertEqual(store.summary?.tokens, 300)
+        XCTAssertEqual(store.snapshot?.hasMoreFiles, false)
+        XCTAssertNil(store.error)
     }
 }
 

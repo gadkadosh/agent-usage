@@ -14,4 +14,6 @@ struct HistorySnapshot: Sendable {
     let summaries: [HistoryPeriod: PeriodSummary]
     let coverage: HistoryCoverage
     let fetchedAt: Date
+    /// Files deferred by this batch's byte budget, not a permanent coverage gap.
+    var hasMoreFiles = false
 }

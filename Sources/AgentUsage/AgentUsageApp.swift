@@ -11,7 +11,10 @@ struct AgentUsageApp: App {
             DashboardPanel(usage: usage, history: history)
         } label: {
             Label(usage.summary, systemImage: "chart.bar")
-                .onAppear { usage.start() }
+                .onAppear {
+                    usage.start()
+                    history.start()
+                }
         }
         .menuBarExtraStyle(.window)
     }
