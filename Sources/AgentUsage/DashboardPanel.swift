@@ -47,7 +47,9 @@ struct DashboardPanel: View {
 
 private struct DashboardScrollView<Content: View>: View {
     let content: Content
-    @State private var contentHeight: CGFloat?
+    // Select the property wrapper so Command Line Tools does not need the State macro plugin.
+    private typealias HeightState = SwiftUI.State<CGFloat?>
+    @HeightState private var contentHeight: CGFloat?
 
     var body: some View {
         ScrollView {
