@@ -6,7 +6,7 @@ import XCTest
 
 @MainActor
 final class DashboardSizingTests: XCTestCase {
-    func testPanelRemainsBoundedAndScrollableAfterRefresh() async throws {
+    func testPanelFitsContentAndResizesAfterRefresh() async throws {
         let readings = SizingReadings()
         let usage = UsageStore(
             fetch: { try await readings.allowance() }, now: { DashboardFixtures.now })
@@ -24,6 +24,8 @@ final class DashboardSizingTests: XCTestCase {
         let cap = max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
         XCTAssertGreaterThan(ready.height, 0)
         XCTAssertLessThanOrEqual(ready.height, cap + 1)
+        XCTAssertLessThan(
+            ready.height, 590, "A healthy dashboard should not reserve space for errors.")
 
         await readings.setError("Synthetic allowance unavailable. Sign in again in pi.")
         await usage.refresh()
@@ -31,6 +33,7 @@ final class DashboardSizingTests: XCTestCase {
         XCTAssertEqual(warning.width, 360, accuracy: 1)
         XCTAssertGreaterThan(warning.height, 0)
         XCTAssertLessThanOrEqual(warning.height, cap + 1)
+        XCTAssertGreaterThan(warning.height, ready.height)
 
         await readings.setError(String(repeating: "Synthetic allowance unavailable. ", count: 80))
         await usage.refresh()
@@ -50,10 +53,11 @@ final class DashboardSizingTests: XCTestCase {
         XCTAssertEqual(recovered.height, ready.height, accuracy: 1)
     }
 
-    func testHistoryLayoutsRemainBoundedAndDoNotRefetch() async throws {
+    func testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout() async throws {
         let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
         await usage.refresh()
         let cap = max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
+        var heights: [CGFloat] = []
         for state in [HistoryCoverage.State.ready, .partial, .missing] {
             let readings = DashboardReadings(snapshot: DashboardFixtures.history(state: state))
             let history = HistoryStore(fetch: { try await readings.history() })
@@ -67,10 +71,14 @@ final class DashboardSizingTests: XCTestCase {
             XCTAssertEqual(size.width, 360, accuracy: 1)
             XCTAssertGreaterThan(size.height, 0)
             XCTAssertLessThanOrEqual(size.height, cap + 1)
+            heights.append(size.height)
             window.close()
             let counts = await readings.counts
             XCTAssertEqual(counts, [0, 1])
         }
+        XCTAssertGreaterThan(
+            heights[1], heights[0], "Warnings should add only their actual height.")
+        XCTAssertLessThan(heights[2], heights[0], "No chart should mean a shorter window.")
     }
 
     private func makeWindow<V: View>(_ host: NSHostingView<V>) -> NSWindow {
