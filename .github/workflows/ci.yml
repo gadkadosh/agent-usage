@@ -33,15 +33,12 @@ jobs:
       - name: Check formatting
         run: make format-check
 
-      - name: Validate a clean Command Line Tools release build
-        env:
-          DEVELOPER_DIR: /Library/Developer/CommandLineTools
-        run: swift build --configuration release --product AgentUsage --scratch-path .build/clt-validation
-
       - name: Build and test
         run: swift test
 
-      - name: Build and verify the local app bundle
+      - name: Build and verify the local app bundle with Command Line Tools
+        env:
+          DEVELOPER_DIR: /Library/Developer/CommandLineTools
         run: make app
 
       - name: Check read-buffer memory in an isolated test process
