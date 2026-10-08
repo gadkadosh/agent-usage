@@ -35,7 +35,9 @@ struct DashboardWindowSize: NSViewRepresentable {
                     self.contentSize.width > 0, self.contentSize.height > 0
                 else { return }
                 let size = CGSize(
-                    width: ceil(self.contentSize.width), height: ceil(self.contentSize.height))
+                    width: ceil(self.contentSize.width),
+                    height: ceil(self.contentSize.height)
+                )
                 guard window.contentRect(forFrameRect: window.frame).size != size else { return }
                 var frame = window.frameRect(forContentRect: CGRect(origin: .zero, size: size))
                 frame.origin = CGPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
