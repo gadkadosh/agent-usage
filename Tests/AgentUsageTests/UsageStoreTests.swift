@@ -73,7 +73,8 @@ private let sampleLimits = UsageLimits(
     rateLimit: .init(
         primaryWindow: .init(usedPercent: 24, resetAfterSeconds: 3_720),
         secondaryWindow: .init(usedPercent: 12.5, resetAfterSeconds: 90_000)
-    ))
+    )
+)
 
 private enum FetchError: LocalizedError {
     case unavailable

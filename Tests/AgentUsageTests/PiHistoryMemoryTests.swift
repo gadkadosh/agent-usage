@@ -37,12 +37,16 @@ final class PiHistoryMemoryTests: XCTestCase {
                 let growth = try physicalFootprint() - baseline
                 print("MEMORY REGRESSION: extra footprint at read completion = \(growth) bytes")
                 XCTAssertLessThan(
-                    growth, 24 * 1_024 * 1_024,
+                    growth,
+                    24 * 1_024 * 1_024,
                     "A 64 MiB transcript-only payload must not accumulate as retained read buffers."
                 )
-            })
+            }
+        )
         let snapshot = try await source.refresh(
-            now: PiHistoryFixtures.now, calendar: PiHistoryFixtures.calendar)
+            now: PiHistoryFixtures.now,
+            calendar: PiHistoryFixtures.calendar
+        )
         XCTAssertEqual(snapshot.coverage.state, .ready)
         XCTAssertEqual(snapshot.coverage.filesRead, 1)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
@@ -54,7 +58,8 @@ final class PiHistoryMemoryTests: XCTestCase {
 private func physicalFootprint() throws -> Int64 {
     var info = task_vm_info_data_t()
     var count = mach_msg_type_number_t(
-        MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size
+    )
     let status = withUnsafeMutablePointer(to: &info) {
         $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
             task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)

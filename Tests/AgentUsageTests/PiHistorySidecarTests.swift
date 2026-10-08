@@ -34,7 +34,9 @@ final class PiHistorySidecarTests: XCTestCase {
         defer { fixture.remove() }
         try fixture.write("orphan.jsonl.lease", lines: ["not a session"])
         let snapshot = try await PiHistorySource(root: fixture.root).refresh(
-            now: F.now, calendar: F.calendar)
+            now: F.now,
+            calendar: F.calendar
+        )
         XCTAssertEqual(snapshot.coverage.state, .missing)
         XCTAssertEqual(snapshot.coverage.filesRead, 0)
         XCTAssertTrue(snapshot.coverage.issues.isEmpty)
@@ -47,7 +49,9 @@ final class PiHistorySidecarTests: XCTestCase {
             try fixture.write(lines: [F.header(), F.message()])
             try fixture.write(path, lines: ["not a supported history"])
             let snapshot = try await PiHistorySource(root: fixture.root).refresh(
-                now: F.now, calendar: F.calendar)
+                now: F.now,
+                calendar: F.calendar
+            )
             XCTAssertEqual(snapshot.coverage.state, .partial)
             XCTAssertEqual(snapshot.coverage.filesRead, 1)
             XCTAssertEqual(snapshot.coverage.issues, [.unsupportedRecord])

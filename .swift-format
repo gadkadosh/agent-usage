@@ -2,5 +2,7 @@
   "indentation": {
     "spaces": 4
   },
-  "lineLength": 100
+  "lineLength": 100,
+  "lineBreakBeforeEachArgument": true,
+  "respectsExistingLineBreaks": true
 }

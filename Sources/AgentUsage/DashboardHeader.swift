@@ -32,7 +32,8 @@ struct DashboardHeader: View {
             Button(action: onRefresh) {
                 Label(
                     isRefreshing ? "Refreshing…" : "Refresh",
-                    systemImage: "arrow.clockwise")
+                    systemImage: "arrow.clockwise"
+                )
             }
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)

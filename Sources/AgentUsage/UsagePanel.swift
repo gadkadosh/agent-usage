@@ -21,14 +21,20 @@ struct UsagePanel: View {
                             .tracking(1)
 
                         limitRow(
-                            title: "5-hour window", subtitle: "", color: .orange,
+                            title: "5-hour window",
+                            subtitle: "",
+                            color: .orange,
                             window: snapshot.limits.rateLimit.primaryWindow,
-                            snapshot: snapshot, now: referenceDate ?? context.date
+                            snapshot: snapshot,
+                            now: referenceDate ?? context.date
                         )
                         limitRow(
-                            title: "Weekly window", subtitle: "7 days", color: .blue,
+                            title: "Weekly window",
+                            subtitle: "7 days",
+                            color: .blue,
                             window: snapshot.limits.rateLimit.secondaryWindow,
-                            snapshot: snapshot, now: referenceDate ?? context.date
+                            snapshot: snapshot,
+                            now: referenceDate ?? context.date
                         )
                     }
                 } else if error == nil {
@@ -48,8 +54,12 @@ struct UsagePanel: View {
     }
 
     private func limitRow(
-        title: String, subtitle: String, color: Color, window: UsageLimits.Window,
-        snapshot: UsageSnapshot, now: Date
+        title: String,
+        subtitle: String,
+        color: Color,
+        window: UsageLimits.Window,
+        snapshot: UsageSnapshot,
+        now: Date
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {

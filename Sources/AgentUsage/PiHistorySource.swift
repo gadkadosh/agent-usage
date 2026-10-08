@@ -20,7 +20,8 @@ actor PiHistorySource {
     private(set) var filesParsed = 0
 
     init(
-        root: URL, limits: Limits = Limits(),
+        root: URL,
+        limits: Limits = Limits(),
         didReadFile: @escaping @Sendable () throws -> Void = {}
     ) {
         self.root = root.resolvingSymlinksInPath()
@@ -60,7 +61,13 @@ actor PiHistorySource {
         {
             cache = [:]
             return snapshot(
-                [], filesRead: 0, issues: [], state: .missing, now: now, calendar: calendar)
+                [],
+                filesRead: 0,
+                issues: [],
+                state: .missing,
+                now: now,
+                calendar: calendar
+            )
         } catch {
             throw HistoryReadError.unavailable
         }
@@ -152,7 +159,10 @@ actor PiHistorySource {
                 } else {
                     let remaining = max(0, limits.operations - observations.count)
                     let parsed = try read(
-                        handle, size: before.size, since: since, maxOperations: remaining,
+                        handle,
+                        size: before.size,
+                        since: since,
+                        maxOperations: remaining,
                         remainingBytes: &remainingBytes
                     )
                     filesParsed += 1
@@ -164,7 +174,9 @@ actor PiHistorySource {
                         before == (try signature(current))
                     else { throw ChangingFileError() }
                     file = IndexedFile(
-                        signature: before, observations: parsed.observations, issues: parsed.issues,
+                        signature: before,
+                        observations: parsed.observations,
+                        issues: parsed.issues,
                         supported: parsed.isSupported
                     )
                     if !file.issues.contains(.scanLimit) {
@@ -198,7 +210,9 @@ actor PiHistorySource {
                 indexed.removeValue(forKey: url)
             } else if let entry = indexed[url] {
                 indexed[url] = IndexedFile(
-                    signature: entry.signature, observations: recent, issues: entry.issues,
+                    signature: entry.signature,
+                    observations: recent,
+                    issues: entry.issues,
                     supported: entry.supported
                 )
             }
@@ -227,8 +241,13 @@ actor PiHistorySource {
             state = issues.isEmpty ? .missing : .unavailable
         }
         let result = snapshot(
-            Array(canonical.values), filesRead: filesRead, issues: issues, state: state, now: now,
-            calendar: calendar)
+            Array(canonical.values),
+            filesRead: filesRead,
+            issues: issues,
+            state: state,
+            now: now,
+            calendar: calendar
+        )
         try Task.checkCancellation()
         // Commit only a completed refresh. Deleted files disappear; retain 30 calendar days.
         cache = indexed
@@ -237,8 +256,12 @@ actor PiHistorySource {
     }
 
     private func snapshot(
-        _ observations: [UsageObservation], filesRead: Int, issues: Set<HistoryIssue>,
-        state: HistoryCoverage.State, now: Date, calendar: Calendar
+        _ observations: [UsageObservation],
+        filesRead: Int,
+        issues: Set<HistoryIssue>,
+        state: HistoryCoverage.State,
+        now: Date,
+        calendar: Calendar
     ) -> HistorySnapshot {
         HistorySnapshot(
             summaries: Dictionary(
@@ -246,9 +269,14 @@ actor PiHistorySource {
                     (
                         $0,
                         PeriodSummary.aggregate(
-                            observations, period: $0, now: now, calendar: calendar)
+                            observations,
+                            period: $0,
+                            now: now,
+                            calendar: calendar
+                        )
                     )
-                }),
+                }
+            ),
             coverage: HistoryCoverage(state: state, filesRead: filesRead, issues: issues),
             fetchedAt: now
         )
@@ -261,14 +289,19 @@ actor PiHistorySource {
         var directory = rootDescriptor
         if relative.count == 2 {
             directory = openat(
-                rootDescriptor, String(relative[0]), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+                rootDescriptor,
+                String(relative[0]),
+                O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
             )
             guard directory >= 0 else { throw HistoryReadError.unavailable }
         }
         defer { if directory != rootDescriptor { close(directory) } }
         // NONBLOCK also avoids hanging if a regular file is replaced with a FIFO.
         let descriptor = openat(
-            directory, String(relative.last!), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+            directory,
+            String(relative.last!),
+            O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC
+        )
         guard descriptor >= 0 else { throw HistoryReadError.unavailable }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         do {
@@ -286,13 +319,21 @@ actor PiHistorySource {
             throw HistoryReadError.unavailable
         }
         return FileSignature(
-            size: info.st_size, device: info.st_dev, inode: info.st_ino,
-            modifiedSeconds: info.st_mtimespec.tv_sec, modifiedNanos: info.st_mtimespec.tv_nsec,
-            changedSeconds: info.st_ctimespec.tv_sec, changedNanos: info.st_ctimespec.tv_nsec)
+            size: info.st_size,
+            device: info.st_dev,
+            inode: info.st_ino,
+            modifiedSeconds: info.st_mtimespec.tv_sec,
+            modifiedNanos: info.st_mtimespec.tv_nsec,
+            changedSeconds: info.st_ctimespec.tv_sec,
+            changedNanos: info.st_ctimespec.tv_nsec
+        )
     }
 
     private func read(
-        _ handle: FileHandle, size: Int64, since: Date, maxOperations: Int,
+        _ handle: FileHandle,
+        size: Int64,
+        since: Date,
+        maxOperations: Int,
         remainingBytes: inout Int
     ) throws -> (observations: [UsageObservation], issues: Set<HistoryIssue>, isSupported: Bool) {
         guard size <= min(limits.fileBytes, remainingBytes) else { throw FileLimitError() }

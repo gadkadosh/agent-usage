@@ -27,8 +27,11 @@ struct HistoryPanelLifecycle: NSViewRepresentable {
             NotificationCenter.default.removeObserver(self)
             if let window {
                 NotificationCenter.default.addObserver(
-                    self, selector: #selector(visibilityChanged),
-                    name: NSWindow.didChangeOcclusionStateNotification, object: window)
+                    self,
+                    selector: #selector(visibilityChanged),
+                    name: NSWindow.didChangeOcclusionStateNotification,
+                    object: window
+                )
             }
             visibilityChanged()
         }

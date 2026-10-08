@@ -19,7 +19,8 @@ final class PiHistoryParserTests: XCTestCase {
         XCTAssertEqual(parser.observations.map(\.tokens), [190])
         XCTAssertEqual(
             parser.observations.first?.timestamp,
-            Date(timeIntervalSince1970: Double(F.milliseconds) / 1_000))
+            Date(timeIntervalSince1970: Double(F.milliseconds) / 1_000)
+        )
         XCTAssertFalse(String(describing: parser).contains("private-secret"))
     }
 
@@ -100,13 +101,17 @@ final class PiHistoryParserTests: XCTestCase {
             F.message(id: "custom", role: "custom-provider-role"),
             F.message(id: "bad-reason", stop: "future-stop"),
             F.message(
-                id: "fraction", usage: #"{"input":1.5,"output":0,"cacheRead":0,"cacheWrite":0}"#),
+                id: "fraction",
+                usage: #"{"input":1.5,"output":0,"cacheRead":0,"cacheWrite":0}"#
+            ),
             F.message(
                 id: "too-large",
-                usage: #"{"input":1000000001,"output":0,"cacheRead":0,"cacheWrite":0}"#),
+                usage: #"{"input":1000000001,"output":0,"cacheRead":0,"cacheWrite":0}"#
+            ),
             F.message(
                 id: "bad-subset",
-                usage: #"{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":1}"#),
+                usage: #"{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":1}"#
+            ),
             F.message(id: "valid"),
         ])
         XCTAssertEqual(parser.observations.count, 1)
@@ -127,7 +132,9 @@ final class PiHistoryParserTests: XCTestCase {
         let fork = F.parser([
             F.header(id: "fork", parent: "/not-followed/source.jsonl"),
             F.message().replacingOccurrences(
-                of: "\"parentId\":null", with: "\"parentId\":\"changed\""),
+                of: "\"parentId\":null",
+                with: "\"parentId\":\"changed\""
+            ),
         ]).observations[0]
         XCTAssertEqual(original, fork)
         let unrelated = F.parser([F.header(), F.message(time: F.milliseconds + 1)]).observations[0]
@@ -153,8 +160,11 @@ final class PiHistoryParserTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let summary = PeriodSummary.aggregate(
-            original + copy.observations + newWork, period: .today,
-            now: Date(timeIntervalSince1970: Double(F.milliseconds) / 1_000), calendar: calendar)
+            original + copy.observations + newWork,
+            period: .today,
+            now: Date(timeIntervalSince1970: Double(F.milliseconds) / 1_000),
+            calendar: calendar
+        )
         XCTAssertEqual(summary.tokens, 6 * 190)
         // A conflicting copy must keep its identity so the later index can exclude both.
         let conflict = F.parser([
@@ -175,15 +185,20 @@ final class PiHistoryParserTests: XCTestCase {
             F.message(id: ""), F.message(id: String(repeating: "a", count: 257)),
             F.message(time: -1), F.message(time: 32_503_680_000_000),
             F.message().replacingOccurrences(
-                of: "\"timestamp\":\(F.milliseconds)", with: "\"timestamp\":null"),
+                of: "\"timestamp\":\(F.milliseconds)",
+                with: "\"timestamp\":null"
+            ),
             F.entry("usage", id: "bad-time").replacingOccurrences(of: F.timestamp, with: "invalid"),
             F.entry("usage", id: "no-usage", usage: nil),
         ]
         let parser = F.parser(
             [F.header()] + lines + [
                 F.message(
-                    id: "zero", usage: #"{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}"#)
-            ])
+                    id: "zero",
+                    usage: #"{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}"#
+                )
+            ]
+        )
         XCTAssertEqual(parser.observations.map(\.tokens), [0])
         XCTAssertEqual(parser.issues, [.invalidUsage])
     }
@@ -202,7 +217,8 @@ final class PiHistoryParserTests: XCTestCase {
             F.entry("usage", id: "seconds").replacingOccurrences(of: ".000Z", with: "Z"),
             F.entry("compaction", id: "summary").replacingOccurrences(
                 of: "\"kind\":",
-                with: "\"summary\":\"private-secret\",\"details\":{\"arbitrary\":true},\"kind\":"),
+                with: "\"summary\":\"private-secret\",\"details\":{\"arbitrary\":true},\"kind\":"
+            ),
         ])
         XCTAssertEqual(parser.observations.map(\.tokens), [190, 190])
         XCTAssertEqual(parser.observations[0].timestamp, parser.observations[1].timestamp)
@@ -215,9 +231,13 @@ final class PiHistoryParserTests: XCTestCase {
         let parser = F.parser([
             F.header(), F.message(time: time - 1), F.message(id: "boundary", time: time),
             F.entry("compaction", id: "old").replacingOccurrences(
-                of: F.timestamp, with: "2026-09-02T23:59:59.999Z"),
+                of: F.timestamp,
+                with: "2026-09-02T23:59:59.999Z"
+            ),
             F.entry("usage", id: "boundary-usage").replacingOccurrences(
-                of: F.timestamp, with: "2026-09-03T00:00:00.000Z"),
+                of: F.timestamp,
+                with: "2026-09-03T00:00:00.000Z"
+            ),
         ])
         XCTAssertEqual(parser.observations.map(\.timestamp), [F.since, F.since])
         XCTAssertTrue(parser.issues.isEmpty)
@@ -228,7 +248,9 @@ final class PiHistoryParserTests: XCTestCase {
             [
                 F.header(), F.message(id: "old", time: 1_600_000_000_000),
                 F.message(), F.message(id: "second"),
-            ], maxOperations: 1)
+            ],
+            maxOperations: 1
+        )
         XCTAssertEqual(parser.observations.count, 1)
         XCTAssertEqual(parser.issues, [.scanLimit])
     }

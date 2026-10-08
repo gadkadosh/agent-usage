@@ -71,9 +71,11 @@ struct HistoryPanel: View {
                     xEnd: .value(
                         "End",
                         bucket.end.addingTimeInterval(
-                            -bucket.end.timeIntervalSince(bucket.start) * 0.1)
+                            -bucket.end.timeIntervalSince(bucket.start) * 0.1
+                        )
                     ),
-                    yStart: .value("Baseline", 0), yEnd: .value("Observed tokens", bucket.tokens)
+                    yStart: .value("Baseline", 0),
+                    yEnd: .value("Observed tokens", bucket.tokens)
                 )
                 .foregroundStyle(Color.accentColor.opacity(0.65))
                 .accessibilityLabel(
