@@ -89,8 +89,10 @@ struct HistoryPanel: View {
             .chartYScale(domain: 0...max(1, summary.buckets.map(\.tokens).max() ?? 0))
             .chartYAxis(.hidden)
             .chartXAxis {
-                AxisMarks(values: labels.map(\.barCenter)) { value in
+                AxisMarks(values: summary.chartGridlines) { _ in
                     AxisGridLine()
+                }
+                AxisMarks(values: labels.map(\.barCenter)) { value in
                     if let bucket = labels.first(where: { $0.barCenter == value.as(Date.self) }) {
                         // Edge captions may use the panel margin without hiding or shifting.
                         AxisValueLabel(
@@ -141,6 +143,18 @@ extension HistoryBucket {
 }
 
 extension PeriodSummary {
+    var chartGridlines: [Date] {
+        guard let first = buckets.first, let last = buckets.last else { return [] }
+        // The fixed 320-point plot has room for individual separators up to seven bars.
+        let groups = buckets.count <= 7 ? buckets.count : 3
+        let interior = (1..<groups).map { group in
+            let index = Int((Double(group) * Double(buckets.count) / Double(groups)).rounded())
+            let gapStart = buckets[index - 1].barEnd
+            return gapStart.addingTimeInterval(buckets[index].start.timeIntervalSince(gapStart) / 2)
+        }
+        return [first.start] + interior + [last.end]
+    }
+
     var chartLabelBuckets: [HistoryBucket] {
         let count = min(4, buckets.count)
         guard count > 1 else { return buckets }
