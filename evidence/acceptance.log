@@ -1,0 +1,9 @@
+FAIL: head-missing/03-ready: expected size/inset=([360, 489], 20); actual=([360, 508], 29)
+FAIL: head-missing/04-missing: expected size/inset=([360, 351], 20); actual=([360, 508], 98)
+FAIL: head-partial/01-ready: expected size/inset=([360, 489], 20); actual=([360, 508], 29)
+FAIL: head-partial/03-ready: expected size/inset=([360, 489], 20); actual=([360, 508], 29)
+FAIL: head-partial/04-missing: expected size/inset=([360, 351], 20); actual=([360, 508], 98)
+FAIL: head-partial/05-ready: expected size/inset=([360, 489], 20); actual=([360, 508], 29)
+FAIL: head-partial-manual/01-ready: expected size/inset=([360, 489], 20); actual=([360, 508], 29)
+FAIL: head-partial-manual/03-ready: expected size/inset=([360, 489], 20); actual=([360, 508], 29)
+8 retained-window geometry failures.

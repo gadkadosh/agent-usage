@@ -1,0 +1,28 @@
+{
+  "pid": 92107,
+  "state": "partial",
+  "period": 1,
+  "window": [
+    925,
+    35,
+    360,
+    600
+  ],
+  "status_item": [
+    924,
+    4,
+    38,
+    24
+  ],
+  "title": [
+    996,
+    55,
+    102,
+    20
+  ],
+  "header_inset": 20,
+  "partial_warning": "true",
+  "selected": "1",
+  "text": "Agent Usage, Allowance & local history, Allowance unavailable, No ChatGPT login found in pi. Open pi, run /login, and select OpenAI (ChatGPT Plus/Pro), then refresh., Not updated yet, PI HISTORY, On this Mac, 18.420 observed tokens, tokens processed, pi, 18.420 tokens, Partial history. Totals may be incomplete., Updated: 8. Oct 2026 at 16:28",
+  "contents": "static text Agent Usage of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Allowance & local history of scroll area 1 of group 1 of window 1 of application process AgentUsage, menu button More options of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Allowance unavailable of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text No ChatGPT login found in pi. Open pi, run /login, and select OpenAI (ChatGPT Plus/Pro), then refresh. of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Not updated yet of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text PI HISTORY of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text On this Mac of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio button 1 of radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio button 2 of radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio button 3 of radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text 18.420 observed tokens of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text tokens processed of scroll area 1 of group 1 of window 1 of application process AgentUsage, group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 1 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 2 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 3 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 4 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 5 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 6 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 7 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 8 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 9 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 10 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 11 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 12 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 13 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 14 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 15 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 16 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 17 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 18 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 19 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 20 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 21 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 22 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 23 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, UI element 24 of group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text pi of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text 18.420 tokens of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Partial history. Totals may be incomplete. of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Updated: 8. Oct 2026 at 16:28 of scroll area 1 of group 1 of window 1 of application process AgentUsage"
+}

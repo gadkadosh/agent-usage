@@ -1,0 +1,28 @@
+{
+  "pid": 92069,
+  "state": "unsupported",
+  "period": 1,
+  "window": [
+    925,
+    35,
+    360,
+    600
+  ],
+  "status_item": [
+    924,
+    4,
+    38,
+    24
+  ],
+  "title": [
+    996,
+    55,
+    102,
+    20
+  ],
+  "header_inset": 20,
+  "partial_warning": "false",
+  "selected": "1",
+  "text": "Agent Usage, Allowance & local history, Allowance unavailable, No ChatGPT login found in pi. Open pi, run /login, and select OpenAI (ChatGPT Plus/Pro), then refresh., Not updated yet, PI HISTORY, On this Mac, Pi history was found, but its session format isn't supported yet., Updated: 8. Oct 2026 at 16:28",
+  "contents": "static text Agent Usage of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Allowance & local history of scroll area 1 of group 1 of window 1 of application process AgentUsage, menu button More options of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Allowance unavailable of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text No ChatGPT login found in pi. Open pi, run /login, and select OpenAI (ChatGPT Plus/Pro), then refresh. of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Not updated yet of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text PI HISTORY of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text On this Mac of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio button 1 of radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio button 2 of radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, radio button 3 of radio group 1 of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Pi history was found, but its session format isn't supported yet. of scroll area 1 of group 1 of window 1 of application process AgentUsage, static text Updated: 8. Oct 2026 at 16:28 of scroll area 1 of group 1 of window 1 of application process AgentUsage"
+}

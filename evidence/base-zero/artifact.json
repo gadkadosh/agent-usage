@@ -1,0 +1,10 @@
+{
+  "commit": "439d25551f47ee81e890283df8e0a01e5ab05131",
+  "executable_sha256": "eea41287c7b9a0cdeedfd726ad13635b37b111d3fdcdf61317f777ec61230adc",
+  "copied_binary_verified": true,
+  "environment": {
+    "PI_CODING_AGENT_DIR": "/private/tmp/pr18-review-20261008/instances/base-zero/data",
+    "PI_CODING_AGENT_SESSION_DIR": "/private/tmp/pr18-review-20261008/instances/base-zero/data/sessions"
+  },
+  "auth_present": false
+}

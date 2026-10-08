@@ -1,0 +1,50 @@
+Building for production...
+[Planning deferred tasks]
+[16 / 21]
+[17 / 22] AgentUsage-product
+[27 / 135]
+[30 / 135]
+[36 / 135]
+[40 / 135]
+[42 / 135]
+[43 / 135]
+[47 / 135]
+[49 / 135]
+[52 / 135]
+[55 / 135]
+[60 / 135]
+[63 / 135]
+[65 / 135]
+[66 / 135]
+[76 / 135]
+[79 / 135]
+[80 / 135]
+[83 / 135]
+[85 / 135]
+[86 / 135]
+[92 / 135]
+[93 / 135]
+[94 / 135]
+[99 / 135]
+[100 / 135]
+[101 / 135]
+[104 / 135]
+[106 / 135]
+[115 / 135]
+[117 / 135]
+[118 / 135]
+[122 / 135]
+[125 / 135]
+[127 / 135]
+[128 / 135]
+[129 / 135]
+[130 / 135]
+[131 / 135] AgentUsage-product
+/private/tmp/pr18-review-20261008/head/Package.swift: AgentUsage-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/private/tmp/pr18-review-20261008/head/Package.swift: AgentUsage-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[133 / 135] AgentUsage-product
+[134 / 135] AgentUsage-product
+Build complete! (32,48 secs)
+/tmp/pr18-review-20261008/head/.build/app-staging.cFHddg/Agent Usage.app/Contents/Info.plist: OK
+/tmp/pr18-review-20261008/head/.build/app-staging.cFHddg/Agent Usage.app: replacing existing signature
+Built /tmp/pr18-review-20261008/head/.build/Agent Usage.app
