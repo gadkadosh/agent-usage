@@ -25,7 +25,7 @@ make app
 
 This builds a release executable for the current Mac's architecture and creates `.build/Agent Usage.app`. Open it in Finder, or copy it to `/Applications` and double-click it there. The app runs in the menu bar without a Dock icon. Use its options menu to Refresh or Quit.
 
-Quit the installed app before replacing it with a new build. The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Downloaded or quarantined copies may be blocked by Gatekeeper. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions.
+The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Downloaded or quarantined copies may be blocked by Gatekeeper. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions.
 
 ## Run from source
 
@@ -54,15 +54,6 @@ The in-memory index stores only operation identity, timestamps and token counts,
 ## Tests
 
 Run tests with `swift test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
-
-Run the opt-in history checks in separate test processes with full Xcode selected:
-
-```sh
-AGENT_USAGE_MEMORY_REGRESSION=1 swift test --filter PiHistoryMemoryTests
-AGENT_USAGE_BENCHMARK=1 swift test -c release --filter PiHistoryBenchmarkTests
-```
-
-The memory regression must run alone so allocator reuse cannot hide buffer accumulation. Historical buffer-cleanup measurements are recorded in [PR #11](https://github.com/gadkadosh/agent-usage/pull/11).
 
 ### Synthetic native screenshots (development only)
 
