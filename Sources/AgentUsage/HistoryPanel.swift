@@ -65,15 +65,11 @@ struct HistoryPanel: View {
     private func historyChart(_ summary: PeriodSummary) -> some View {
         // Aggregated snapshots have buckets, but injected/empty snapshots must also be safe.
         if let first = summary.buckets.first, let last = summary.buckets.last {
+            let labels = summary.chartLabelBuckets
             Chart(summary.buckets) { bucket in
                 RectangleMark(
                     xStart: .value("Start", bucket.start),
-                    xEnd: .value(
-                        "End",
-                        bucket.end.addingTimeInterval(
-                            -bucket.end.timeIntervalSince(bucket.start) * 0.1
-                        )
-                    ),
+                    xEnd: .value("End", bucket.barEnd),
                     yStart: .value("Baseline", 0),
                     yEnd: .value("Observed tokens", bucket.tokens)
                 )
@@ -88,14 +84,29 @@ struct HistoryPanel: View {
             }
             .chartXScale(
                 domain: first.start...last.end,
-                range: .plotDimension(startPadding: 0, endPadding: 28)
+                range: .plotDimension(startPadding: 0, endPadding: 0)
             )
             .chartYScale(domain: 0...max(1, summary.buckets.map(\.tokens).max() ?? 0))
             .chartYAxis(.hidden)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: history.period == .month ? 3 : 4)) {
+                AxisMarks(values: summary.chartGridlines) { _ in
                     AxisGridLine()
-                    AxisValueLabel(anchor: .topLeading)
+                }
+                AxisMarks(values: labels.map(\.barCenter)) { value in
+                    if let bucket = labels.first(where: { $0.barCenter == value.as(Date.self) }) {
+                        // Edge captions may use the panel margin without hiding or shifting.
+                        AxisValueLabel(
+                            centered: false,
+                            anchor: .top,
+                            collisionResolution: .disabled
+                        ) {
+                            Text(
+                                bucket.start,
+                                format: history.period == .today
+                                    ? .dateTime.hour() : .dateTime.month(.abbreviated).day()
+                            )
+                        }
+                    }
                 }
             }
             .frame(height: 76)
@@ -116,6 +127,41 @@ struct HistoryPanel: View {
                 if history.isRefreshing { ProgressView().controlSize(.mini) }
             }
             .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+extension HistoryBucket {
+    var barEnd: Date {
+        end.addingTimeInterval(-end.timeIntervalSince(start) * 0.1)
+    }
+
+    // Center the caption on the painted rectangle, excluding its trailing gutter.
+    var barCenter: Date {
+        start.addingTimeInterval(barEnd.timeIntervalSince(start) / 2)
+    }
+}
+
+extension PeriodSummary {
+    var chartGridlines: [Date] {
+        guard let first = buckets.first, let last = buckets.last else { return [] }
+        // The fixed 320-point plot has room for individual separators up to seven bars.
+        let groups = buckets.count <= 7 ? buckets.count : 3
+        let interior = (1..<groups).map { group in
+            let index = Int((Double(group) * Double(buckets.count) / Double(groups)).rounded())
+            let gapStart = buckets[index - 1].barEnd
+            return gapStart.addingTimeInterval(buckets[index].start.timeIntervalSince(gapStart) / 2)
+        }
+        return [first.start] + interior + [last.end]
+    }
+
+    var chartLabelBuckets: [HistoryBucket] {
+        let count = min(4, buckets.count)
+        guard count > 1 else { return buckets }
+        // Include both endpoint bars and distribute the remaining captions between them.
+        return (0..<count).map { index in
+            let position = Double(index) * Double(buckets.count - 1) / Double(count - 1)
+            return buckets[Int(position.rounded())]
         }
     }
 }
