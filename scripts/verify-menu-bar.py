@@ -29,8 +29,8 @@ def content(pid):
     return scroll if apple(pid, f"get exists {scroll}") == "true" else "group 1 of window 1"
 
 
-def wait_for(action, description):
-    deadline = time.monotonic() + 10
+def wait_for(action, description, timeout=10):
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             result = action()
@@ -156,6 +156,14 @@ def main():
                         assert apple(pid, f"get count of menu buttons of {group}") == "1", "Options menu is ambiguous"
                         options = f"menu button 1 of {group}"
                     apple(pid, f"click {options}")
+                    try:
+                        wait_for(lambda: apple(pid, f"get exists menu 1 of {options}") == "true", "accessible options menu", timeout=2)
+                    except RuntimeError:
+                        action("accessibility click did not open options; use native mouse fallback")
+                        x, y, w, h = bounds(pid, options)
+                        run(helper, "click", str(x + w // 2), str(y + h // 2))
+                    (output / "options.ax.txt").write_text(apple(pid, "get entire contents") + "\n")
+                    wait_for(lambda: apple(pid, f"get exists menu 1 of {options}") == "true", "open options menu")
                     apple(pid, f'click menu item "Refresh" of menu 1 of {options}')
                     wait_for(lambda: not partial_warning() and tokens() == 18420, "same-window recovery")
                     recovered = capture("partial-recovered", 18420)

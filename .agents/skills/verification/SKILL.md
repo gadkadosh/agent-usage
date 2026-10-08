@@ -47,7 +47,7 @@ Use direct `osascript` for inspection and accessible controls. Do not invent a c
 
 ### Open and close the actual window
 
-The tested status item reports `AXPress`, but both AppleScript `click` and `perform action "AXPress"` returned success without opening it. Use the bundled CoreGraphics fallback **only for this demonstrated exception**:
+The tested status item reports `AXPress`, but both AppleScript `click` and `perform action "AXPress"` returned success without opening it. Use the bundled CoreGraphics fallback for this demonstrated exception:
 
 ```bash
 read -r x y w h <<< "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get {position, size} of menu bar item 1 of menu bar 2" | tr ',' ' ')"
@@ -88,6 +88,17 @@ if [ "$(osascript -e "tell application \"System Events\" to tell (first process 
   OPTIONS="menu button 1 of $CONTENT"
 fi
 osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click $OPTIONS"
+```
+
+Wait briefly and inspect `get exists menu 1 of $OPTIONS`. The macOS 15 runner also returned a successful menu-button click without exposing a menu. If the menu remains absent, reuse the native mouse fallback at this control's current bounds; do not repeat a toggle after it opens:
+
+```bash
+if [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists menu 1 of $OPTIONS")" != true ]; then
+  read -r x y w h <<< "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get {position, size} of $OPTIONS" | tr ',' ' ')"
+  "$INPUT" click "$((x + w / 2))" "$((y + h / 2))"
+fi
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists menu 1 of $OPTIONS"
+# Require true before selecting Refresh.
 osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click menu item \"Refresh\" of menu 1 of $OPTIONS"
 ```
 
