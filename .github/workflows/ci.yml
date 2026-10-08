@@ -33,11 +33,27 @@ jobs:
       - name: Check formatting
         run: make format-check
 
+      - name: Validate a clean Command Line Tools release build
+        env:
+          DEVELOPER_DIR: /Library/Developer/CommandLineTools
+        run: swift build --configuration release --product AgentUsage --scratch-path .build/clt-validation
+
       - name: Build and test
         run: swift test
 
       - name: Build and verify the local app bundle
         run: make app
+
+      - name: Capture and verify the packaged menu-bar UI
+        run: python3 scripts/capture-menu-bar.py --output .build/menu-bar-captures
+
+      - name: Publish native UI evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-menu-bar-${{ github.sha }}
+          path: .build/menu-bar-captures
+          if-no-files-found: warn
 
       - name: Check read-buffer memory in an isolated test process
         env:
