@@ -71,7 +71,7 @@ Wait for the visibility-triggered history scan: inspect until `Reading pi histor
 
 ### Switch periods and refresh
 
-Radio buttons are identified by **description**, not name. The options control is a **menu button**, not a button. These direct accessibility clicks were exercised against the packaged app:
+Radio buttons are identified by **description**, not name. The options control is a **menu button**, not a button. Locally it is named `More options`; the macOS 15 CI tree exposes it unnamed. Prefer the name and allow the singleton selector only after confirming exactly one menu button. These direct accessibility recipes are exercised against the packaged app:
 
 ```bash
 osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click (first radio button of radio group 1 of $CONTENT whose description is \"7 days\")"
@@ -82,8 +82,13 @@ osascript -e "tell application \"System Events\" to tell (first process whose un
 Use `Today` or `30 days` similarly. Require the selected value and resulting total; number grouping follows the Mac's locale.
 
 ```bash
-osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click menu button \"More options\" of $CONTENT"
-osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click menu item \"Refresh\" of menu 1 of menu button \"More options\" of $CONTENT"
+OPTIONS="menu button \"More options\" of $CONTENT"
+if [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get exists $OPTIONS")" != true ]; then
+  test "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to get count of menu buttons of $CONTENT")" = 1
+  OPTIONS="menu button 1 of $CONTENT"
+fi
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click $OPTIONS"
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to click menu item \"Refresh\" of menu 1 of $OPTIONS"
 ```
 
 Require an observable updated result after refreshing. A successful accessibility action is not proof the app refreshed.

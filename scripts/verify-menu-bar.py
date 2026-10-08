@@ -106,6 +106,7 @@ def main():
                     geometry = {"window": window, "status_item": button, "title": title}
                     (output / f"{name}.json").write_text(json.dumps(geometry, indent=2) + "\n")
                     (output / f"{name}.ax.txt").write_text(apple(pid, "get entire contents of window 1") + "\n")
+                    (output / f"{name}.controls.txt").write_text(apple(pid, f"get {{name, description}} of menu buttons of {group}") + "\n")
                     wx, wy, ww, wh = window
                     bx, by, bw, bh = button
                     left, right = min(wx, bx) - 10, max(wx + ww, bx + bw) + 10
@@ -149,8 +150,13 @@ def main():
                     path = Path(session["data"]) / "sessions/synthetic.jsonl"
                     action("remove malformed record without restarting app; click More options > Refresh")
                     path.write_text("\n".join(path.read_text().splitlines()[:-1]) + "\n")
-                    apple(pid, f'click menu button "More options" of {content(pid)}')
-                    apple(pid, f'click menu item "Refresh" of menu 1 of menu button "More options" of {content(pid)}')
+                    group = content(pid)
+                    options = f'menu button "More options" of {group}'
+                    if apple(pid, f"get exists {options}") != "true":
+                        assert apple(pid, f"get count of menu buttons of {group}") == "1", "Options menu is ambiguous"
+                        options = f"menu button 1 of {group}"
+                    apple(pid, f"click {options}")
+                    apple(pid, f'click menu item "Refresh" of menu 1 of {options}')
                     wait_for(lambda: not partial_warning() and tokens() == 18420, "same-window recovery")
                     recovered = capture("partial-recovered", 18420)
                     assert abs(recovered - ready_height) <= 1, "Recovered native height differs from fresh ready window"
