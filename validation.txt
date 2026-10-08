@@ -1,0 +1,43 @@
+Clean CLT release build (fresh .scratch/history-chart/clt-final-clean):
+[130 / 135]
+[131 / 135] AgentUsage-product
+/Users/gadkadosh/Code/usage/Package.swift: AgentUsage-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/usr/lib' not found
+/Users/gadkadosh/Code/usage/Package.swift: AgentUsage-product: ld: warning: search path '/Library/Developer/CommandLineTools/Developer/Library/Frameworks' not found
+[133 / 135] AgentUsage-product
+[134 / 135]
+Build complete! (29,87 secs)
+
+Xcode tests:
+Test Case '-[AgentUsageTests.UsageStoreTests testSuccessfulRefreshRecordsStructuredDataAndTimestamp]' started.
+Test Case '-[AgentUsageTests.UsageStoreTests testSuccessfulRefreshRecordsStructuredDataAndTimestamp]' passed (0.000 seconds).
+Test Suite 'UsageStoreTests' passed at 2026-10-08 21:04:19.885.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'AgentUsageTests.xctest' passed at 2026-10-08 21:04:19.885.
+	 Executed 95 tests, with 3 tests skipped and 0 failures (0 unexpected) in 3.014 (3.021) seconds
+Test Suite 'All tests' passed at 2026-10-08 21:04:19.885.
+	 Executed 95 tests, with 3 tests skipped and 0 failures (0 unexpected) in 3.014 (3.022) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+Formatting:
+swift format lint --configuration .swift-format --strict --recursive Package.swift Sources Tests
+
+Before native capture:
+/Users/gadkadosh/Code/usage/.scratch/history-chart/before-source/.build/app-staging.tYbeW9/Agent Usage.app: replacing existing signature
+Built /Users/gadkadosh/Code/usage/.scratch/history-chart/before-source/.build/Agent Usage.app
+/Users/gadkadosh/Code/usage/.scratch/history-chart/Chart QA.app: replacing existing signature
+action AXPress of menu bar item Chart Column of menu bar 2 of application process ChartQA
+1, 0, 0
+0, 1, 0
+0, 0, 1
+
+After native capture:
+/Users/gadkadosh/Code/usage/.build/app-staging.C8eO5Y/Agent Usage.app: replacing existing signature
+Built /Users/gadkadosh/Code/usage/.build/Agent Usage.app
+/Users/gadkadosh/Code/usage/.scratch/history-chart/Chart QA.app: replacing existing signature
+action AXPress of menu bar item Chart Column of menu bar 2 of application process ChartQA
+1, 0, 0
+0, 1, 0
+0, 0, 1
