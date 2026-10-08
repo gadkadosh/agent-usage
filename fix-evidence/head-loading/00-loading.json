@@ -1,0 +1,28 @@
+{
+  "pid": 95517,
+  "state": "loading",
+  "period": 1,
+  "window": [
+    925,
+    35,
+    360,
+    328
+  ],
+  "status_item": [
+    924,
+    4,
+    38,
+    24
+  ],
+  "title": [
+    996,
+    55,
+    102,
+    20
+  ],
+  "header_inset": 20,
+  "partial_warning": "false",
+  "selected": "1",
+  "text": "Agent Usage, Allowance & local history, Allowance unavailable, No ChatGPT login found in pi. Open pi, run /login, and select OpenAI (ChatGPT Plus/Pro), then refresh., Not updated yet, PI HISTORY, On this Mac, Reading pi history\u2026",
+  "contents": "static text Agent Usage of group 1 of window 1 of application process AgentUsage, static text Allowance & local history of group 1 of window 1 of application process AgentUsage, menu button More options of group 1 of window 1 of application process AgentUsage, static text Allowance unavailable of group 1 of window 1 of application process AgentUsage, static text No ChatGPT login found in pi. Open pi, run /login, and select OpenAI (ChatGPT Plus/Pro), then refresh. of group 1 of window 1 of application process AgentUsage, static text Not updated yet of group 1 of window 1 of application process AgentUsage, static text PI HISTORY of group 1 of window 1 of application process AgentUsage, static text On this Mac of group 1 of window 1 of application process AgentUsage, radio group 1 of group 1 of window 1 of application process AgentUsage, radio button 1 of radio group 1 of group 1 of window 1 of application process AgentUsage, radio button 2 of radio group 1 of group 1 of window 1 of application process AgentUsage, radio button 3 of radio group 1 of group 1 of window 1 of application process AgentUsage, busy indicator 1 of group 1 of window 1 of application process AgentUsage, static text Reading pi history\u2026 of group 1 of window 1 of application process AgentUsage"
+}

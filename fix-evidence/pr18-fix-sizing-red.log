@@ -1,0 +1,27 @@
+Building for debugging...
+[2 / 6] AgentUsageTests-product
+[4 / 8] AgentUsageTests-product
+[9 / 11] AgentUsageTests-product
+Build complete! (1,29 secs)
+Test Suite 'Selected tests' started at 2026-10-08 16:45:18.613.
+Test Suite 'AgentUsageTests.xctest' started at 2026-10-08 16:45:18.614.
+Test Suite 'DashboardSizingTests' started at 2026-10-08 16:45:18.614.
+Test Case '-[AgentUsageTests.DashboardSizingTests testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout]' started.
+Test Case '-[AgentUsageTests.DashboardSizingTests testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout]' passed (0.863 seconds).
+Test Case '-[AgentUsageTests.DashboardSizingTests testPanelFitsContentAndResizesAfterRefresh]' started.
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/DashboardSizingTests.swift:24: error: -[AgentUsageTests.DashboardSizingTests testPanelFitsContentAndResizesAfterRefresh] : XCTAssertEqualWithAccuracy failed: ("600.0") is not equal to ("567.5") +/- ("1.0")
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/DashboardSizingTests.swift:57: error: -[AgentUsageTests.DashboardSizingTests testPanelFitsContentAndResizesAfterRefresh] : XCTAssertEqualWithAccuracy failed: ("600.0") is not equal to ("567.5") +/- ("1.0")
+Test Case '-[AgentUsageTests.DashboardSizingTests testPanelFitsContentAndResizesAfterRefresh]' failed (1.079 seconds).
+Test Case '-[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge]' started.
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/DashboardSizingTests.swift:82: error: -[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge] : XCTAssertEqualWithAccuracy failed: ("600.0") is not equal to ("567.5") +/- ("1.0")
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/DashboardSizingTests.swift:82: error: -[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge] : XCTAssertEqualWithAccuracy failed: ("600.0") is not equal to ("429.5") +/- ("1.0")
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/DashboardSizingTests.swift:82: error: -[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge] : XCTAssertEqualWithAccuracy failed: ("600.0") is not equal to ("567.5") +/- ("1.0")
+Test Case '-[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge]' failed (1.201 seconds).
+Test Suite 'DashboardSizingTests' failed at 2026-10-08 16:45:21.757.
+	 Executed 3 tests, with 5 failures (0 unexpected) in 3.143 (3.144) seconds
+Test Suite 'AgentUsageTests.xctest' failed at 2026-10-08 16:45:21.757.
+	 Executed 3 tests, with 5 failures (0 unexpected) in 3.143 (3.144) seconds
+Test Suite 'Selected tests' failed at 2026-10-08 16:45:21.758.
+	 Executed 3 tests, with 5 failures (0 unexpected) in 3.143 (3.145) seconds
+Note: Some test targets reported failures:
+  - AgentUsageTests (XCTest)

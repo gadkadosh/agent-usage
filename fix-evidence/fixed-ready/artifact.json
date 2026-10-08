@@ -1,0 +1,10 @@
+{
+  "commit": "7f96995594b05780934823158b68c5c3393d7180",
+  "executable_sha256": "cfb87fd14cda5f41b2255df230e0598e3cebc8cc9b08397346a17e4f16c1076d",
+  "copied_binary_verified": true,
+  "environment": {
+    "PI_CODING_AGENT_DIR": "/private/tmp/pr18-review-20261008/instances/fixed-ready/data",
+    "PI_CODING_AGENT_SESSION_DIR": "/private/tmp/pr18-review-20261008/instances/fixed-ready/data/sessions"
+  },
+  "auth_present": false
+}

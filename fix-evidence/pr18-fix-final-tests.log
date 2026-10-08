@@ -1,0 +1,260 @@
+Building for debugging...
+[1 / 3] AgentUsageTests-product
+Build complete! (0,23 secs)
+Test Suite 'All tests' started at 2026-10-08 16:50:26.741.
+Test Suite 'AgentUsageTests.xctest' started at 2026-10-08 16:50:26.742.
+Test Suite 'DashboardPanelTests' started at 2026-10-08 16:50:26.742.
+Test Case '-[AgentUsageTests.DashboardPanelTests testAllowanceFailureDoesNotBlockHistory]' started.
+Test Case '-[AgentUsageTests.DashboardPanelTests testAllowanceFailureDoesNotBlockHistory]' passed (0.004 seconds).
+Test Case '-[AgentUsageTests.DashboardPanelTests testCoverageMessagesDoNotPresentUnreadableSourcesAsZero]' started.
+Test Case '-[AgentUsageTests.DashboardPanelTests testCoverageMessagesDoNotPresentUnreadableSourcesAsZero]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.DashboardPanelTests testHistoryFailureDoesNotBlockAllowanceOrClearLastReading]' started.
+Test Case '-[AgentUsageTests.DashboardPanelTests testHistoryFailureDoesNotBlockAllowanceOrClearLastReading]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.DashboardPanelTests testManualRefreshUpdatesBothSourcesAndPeriodSwitchDoesNotFetch]' started.
+Test Case '-[AgentUsageTests.DashboardPanelTests testManualRefreshUpdatesBothSourcesAndPeriodSwitchDoesNotFetch]' passed (0.000 seconds).
+Test Suite 'DashboardPanelTests' passed at 2026-10-08 16:50:26.748.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'DashboardRenderingTests' started at 2026-10-08 16:50:26.748.
+Test Case '-[AgentUsageTests.DashboardRenderingTests testRenderSyntheticDashboard]' started.
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/DashboardRenderingTests.swift:13: -[AgentUsageTests.DashboardRenderingTests testRenderSyntheticDashboard] : Test skipped - Set AGENT_USAGE_RENDER_DIR to save synthetic native captures.
+Test Case '-[AgentUsageTests.DashboardRenderingTests testRenderSyntheticDashboard]' skipped (0.001 seconds).
+Test Suite 'DashboardRenderingTests' passed at 2026-10-08 16:50:26.748.
+	 Executed 1 test, with 1 test skipped and 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'DashboardSizingTests' started at 2026-10-08 16:50:26.748.
+Test Case '-[AgentUsageTests.DashboardSizingTests testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout]' started.
+Test Case '-[AgentUsageTests.DashboardSizingTests testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout]' passed (0.845 seconds).
+Test Case '-[AgentUsageTests.DashboardSizingTests testPanelFitsContentAndResizesAfterRefresh]' started.
+Test Case '-[AgentUsageTests.DashboardSizingTests testPanelFitsContentAndResizesAfterRefresh]' passed (1.010 seconds).
+Test Case '-[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge]' started.
+Test Case '-[AgentUsageTests.DashboardSizingTests testRetainedWindowShrinksWithHistoryAndKeepsTopEdge]' passed (1.193 seconds).
+Test Suite 'DashboardSizingTests' passed at 2026-10-08 16:50:29.797.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 3.048 (3.049) seconds
+Test Suite 'HistoryCoveragePresentationTests' started at 2026-10-08 16:50:29.797.
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testEmptyStatesDoNotRepeatTheirExplanationInTheFooter]' started.
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testEmptyStatesDoNotRepeatTheirExplanationInTheFooter]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testExclusionsShareOneWarningInsteadOfListingParserDetails]' started.
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testExclusionsShareOneWarningInsteadOfListingParserDetails]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testHealthyHistoryHasNoWarning]' started.
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testHealthyHistoryHasNoWarning]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testStaleAndOverlappingUsageRemainVisibleAlongsideExclusions]' started.
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testStaleAndOverlappingUsageRemainVisibleAlongsideExclusions]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testToolOverlapIsNotPresentedAsMissingUsage]' started.
+Test Case '-[AgentUsageTests.HistoryCoveragePresentationTests testToolOverlapIsNotPresentedAsMissingUsage]' passed (0.000 seconds).
+Test Suite 'HistoryCoveragePresentationTests' passed at 2026-10-08 16:50:29.799.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'HistoryLiveTests' started at 2026-10-08 16:50:29.799.
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStoreKeepsFileIndexAcrossRefreshesAndRecoversUnreadableFile]' started.
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStoreKeepsFileIndexAcrossRefreshesAndRecoversUnreadableFile]' passed (0.009 seconds).
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStoreMissingRootIsNotCreatedOrReportedAsObservedZero]' started.
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStoreMissingRootIsNotCreatedOrReportedAsObservedZero]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStorePreservesLastSnapshotWhenRootFailsAndRecovers]' started.
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStorePreservesLastSnapshotWhenRootFailsAndRecovers]' passed (0.004 seconds).
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStoreReadsPeriodsFromInjectedRootWithoutAllowanceOrInputWrites]' started.
+Test Case '-[AgentUsageTests.HistoryLiveTests testLiveStoreReadsPeriodsFromInjectedRootWithoutAllowanceOrInputWrites]' passed (0.003 seconds).
+Test Suite 'HistoryLiveTests' passed at 2026-10-08 16:50:29.817.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.017 (0.018) seconds
+Test Suite 'HistoryPanelLifecycleTests' started at 2026-10-08 16:50:29.817.
+Test Case '-[AgentUsageTests.HistoryPanelLifecycleTests testClosingPanelDoesNotCancelManualRefresh]' started.
+Test Case '-[AgentUsageTests.HistoryPanelLifecycleTests testClosingPanelDoesNotCancelManualRefresh]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryPanelLifecycleTests testHiddenPanelDoesNotScanAndDuplicateVisibleNotificationsDoNotRescan]' started.
+Test Case '-[AgentUsageTests.HistoryPanelLifecycleTests testHiddenPanelDoesNotScanAndDuplicateVisibleNotificationsDoNotRescan]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryPanelLifecycleTests testRapidCloseReopenWaitsForCancelledScanThenFetches]' started.
+Test Case '-[AgentUsageTests.HistoryPanelLifecycleTests testRapidCloseReopenWaitsForCancelledScanThenFetches]' passed (0.001 seconds).
+Test Suite 'HistoryPanelLifecycleTests' passed at 2026-10-08 16:50:29.821.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'HistoryStoreTests' started at 2026-10-08 16:50:29.821.
+Test Case '-[AgentUsageTests.HistoryStoreTests testAllowanceAndHistoryFailuresAreIndependent]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testAllowanceAndHistoryFailuresAreIndependent]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testCancellationErrorDoesNotBecomeSourceFailure]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testCancellationErrorDoesNotBecomeSourceFailure]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testCancelledReopenDoesNotFetchAfterInFlightScanCompletes]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testCancelledReopenDoesNotFetchAfterInFlightScanCompletes]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testCoverageStatesArePublishedWithoutInventingReadings]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testCoverageStatesArePublishedWithoutInventingReadings]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testEnumerationFailurePreservesSnapshotAndRecoveryClearsError]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testEnumerationFailurePreservesSnapshotAndRecoveryClearsError]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testInitialFailureIsUnavailableNotZeroAndDoesNotLeakError]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testInitialFailureIsUnavailableNotZeroAndDoesNotLeakError]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testOverlapAndCancelledLateResultPreservePreviousSnapshotAndError]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testOverlapAndCancelledLateResultPreservePreviousSnapshotAndError]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testPeriodSelectionUsesSnapshotWithoutRefetch]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testPeriodSelectionUsesSnapshotWithoutRefetch]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistoryStoreTests testReopenWaitsForCancelledScanThenPublishesNewReading]' started.
+Test Case '-[AgentUsageTests.HistoryStoreTests testReopenWaitsForCancelledScanThenPublishesNewReading]' passed (0.001 seconds).
+Test Suite 'HistoryStoreTests' passed at 2026-10-08 16:50:29.830.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+Test Suite 'HistorySummaryTests' started at 2026-10-08 16:50:29.830.
+Test Case '-[AgentUsageTests.HistorySummaryTests testCalendarRangesAndOperationTimestampsNotSessionLifetime]' started.
+Test Case '-[AgentUsageTests.HistorySummaryTests testCalendarRangesAndOperationTimestampsNotSessionLifetime]' passed (0.003 seconds).
+Test Case '-[AgentUsageTests.HistorySummaryTests testCopiesCountOnceButSameTokenCountDoesNotMeanSameOperation]' started.
+Test Case '-[AgentUsageTests.HistorySummaryTests testCopiesCountOnceButSameTokenCountDoesNotMeanSameOperation]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistorySummaryTests testDSTTodayHas23Or25HoursAndRepeatedHourStaysSeparate]' started.
+Test Case '-[AgentUsageTests.HistorySummaryTests testDSTTodayHas23Or25HoursAndRepeatedHourStaysSeparate]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.HistorySummaryTests testHalfHourDSTShiftsStillCountEveryTimestampExactlyOnce]' started.
+Test Case '-[AgentUsageTests.HistorySummaryTests testHalfHourDSTShiftsStillCountEveryTimestampExactlyOnce]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistorySummaryTests testMidnightAndTimeZoneChangesUseLocalCalendar]' started.
+Test Case '-[AgentUsageTests.HistorySummaryTests testMidnightAndTimeZoneChangesUseLocalCalendar]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.HistorySummaryTests testMidnightDSTUsesActualCalendarDayBoundaries]' started.
+Test Case '-[AgentUsageTests.HistorySummaryTests testMidnightDSTUsesActualCalendarDayBoundaries]' passed (0.000 seconds).
+Test Suite 'HistorySummaryTests' passed at 2026-10-08 16:50:29.839.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+Test Suite 'PiCredentialsTests' started at 2026-10-08 16:50:29.839.
+Test Case '-[AgentUsageTests.PiCredentialsTests testCustomPiDirectoryAndTildeExpansion]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testCustomPiDirectoryAndTildeExpansion]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testDefaultPathDoesNotRequireEnvironment]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testDefaultPathDoesNotRequireEnvironment]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testExpiredAndExactlyExpiringTokens]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testExpiredAndExactlyExpiringTokens]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testInvalidCredentialsHaveSanitizedErrors]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testInvalidCredentialsHaveSanitizedErrors]' passed (0.004 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testLegacyEntryWithoutAccountIDOrRefreshToken]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testLegacyEntryWithoutAccountIDOrRefreshToken]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testMissingFileDoesNotCreateCredentials]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testMissingFileDoesNotCreateCredentials]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testMissingLoginAndAPIKeyAreNotUsedAsFallbacks]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testMissingLoginAndAPIKeyAreNotUsedAsFallbacks]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testReadsOnlyChatGPTCredentialsAndLeavesFileUnchanged]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testReadsOnlyChatGPTCredentialsAndLeavesFileUnchanged]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testReloadsRotatedCredentialsAndDetectsLogout]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testReloadsRotatedCredentialsAndDetectsLogout]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiCredentialsTests testUnreadableFileHasDistinctError]' started.
+Test Case '-[AgentUsageTests.PiCredentialsTests testUnreadableFileHasDistinctError]' passed (0.001 seconds).
+Test Suite 'PiCredentialsTests' passed at 2026-10-08 16:50:29.851.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.012 (0.012) seconds
+Test Suite 'PiHistoryBenchmarkTests' started at 2026-10-08 16:50:29.851.
+Test Case '-[AgentUsageTests.PiHistoryBenchmarkTests testLargeSyntheticColdCatchUpWarmAndAppendScans]' started.
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/PiHistoryBenchmarkTests.swift:13: -[AgentUsageTests.PiHistoryBenchmarkTests testLargeSyntheticColdCatchUpWarmAndAppendScans] : Test skipped - Set AGENT_USAGE_BENCHMARK=1 to generate and scan large synthetic roots.
+Test Case '-[AgentUsageTests.PiHistoryBenchmarkTests testLargeSyntheticColdCatchUpWarmAndAppendScans]' skipped (0.000 seconds).
+Test Suite 'PiHistoryBenchmarkTests' passed at 2026-10-08 16:50:29.852.
+	 Executed 1 test, with 1 test skipped and 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'PiHistoryMemoryTests' started at 2026-10-08 16:50:29.852.
+Test Case '-[AgentUsageTests.PiHistoryMemoryTests testReadBuffersDoNotAccumulateAcrossA64MiBFile]' started.
+/private/tmp/pr18-fix-20261008/Tests/AgentUsageTests/PiHistoryMemoryTests.swift:13: -[AgentUsageTests.PiHistoryMemoryTests testReadBuffersDoNotAccumulateAcrossA64MiBFile] : Test skipped - Opt-in memory regression; run with --filter PiHistoryMemoryTests.
+Test Case '-[AgentUsageTests.PiHistoryMemoryTests testReadBuffersDoNotAccumulateAcrossA64MiBFile]' skipped (0.000 seconds).
+Test Suite 'PiHistoryMemoryTests' passed at 2026-10-08 16:50:29.852.
+	 Executed 1 test, with 1 test skipped and 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'PiHistoryParserTests' started at 2026-10-08 16:50:29.852.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testAllCanonicalUsageSourcesAndAbandonedBranchesAreCountedInV2AndV3]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testAllCanonicalUsageSourcesAndAbandonedBranchesAreCountedInV2AndV3]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testCopiesOfEveryUsageKindAggregateOnceWithoutHidingNewWork]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testCopiesOfEveryUsageKindAggregateOnceWithoutHidingNewWork]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testEmptyInputAndMalformedHeaderDoNotClaimSupport]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testEmptyInputAndMalformedHeaderDoNotClaimSupport]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testEntryTimestampsAcceptSecondsAndIgnoreUnknownPrivateFields]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testEntryTimestampsAcceptSecondsAndIgnoreUnknownPrivateFields]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testIdentitySurvivesForksAndParentChangesButNotUnrelatedOperations]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testIdentitySurvivesForksAndParentChangesButNotUnrelatedOperations]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testInclusiveCutoffUsesUsageTimeRatherThanSessionOrContextTime]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testInclusiveCutoffUsesUsageTimeRatherThanSessionOrContextTime]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testKnownMetadataAndToolWithoutUsageAreNotGaps]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testKnownMetadataAndToolWithoutUsageAreNotGaps]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testMalformedUnknownAndInvalidRecordsAreCoverageGapsWithoutLeakingPayloads]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testMalformedUnknownAndInvalidRecordsAreCoverageGapsWithoutLeakingPayloads]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testMissingInvalidCountsTimestampsAndIDsAreExcludedButZeroIsValid]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testMissingInvalidCountsTimestampsAndIDsAreExcludedButZeroIsValid]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testNormalizesSubsetsAndIgnoresReportedTotalCostAndContent]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testNormalizesSubsetsAndIgnoresReportedTotalCostAndContent]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testOldOperationsAreFilteredAndSafetyLimitReported]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testOldOperationsAreFilteredAndSafetyLimitReported]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testPartialFinalLineAndCompleteLineWithoutNewline]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testPartialFinalLineAndCompleteLineWithoutNewline]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testPendingAndDeferredExcludedButFinalErrorsAndAbortsWithUsageCount]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testPendingAndDeferredExcludedButFinalErrorsAndAbortsWithUsageCount]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testToolAggregateDoesNotAddNestedUsageAgainAndWarnsAboutSavedChildren]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testToolAggregateDoesNotAddNestedUsageAgainAndWarnsAboutSavedChildren]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistoryParserTests testUnsupportedVersionsAndMissingHeadersNeverInventIDsOrMigrate]' started.
+Test Case '-[AgentUsageTests.PiHistoryParserTests testUnsupportedVersionsAndMissingHeadersNeverInventIDsOrMigrate]' passed (0.001 seconds).
+Test Suite 'PiHistoryParserTests' passed at 2026-10-08 16:50:29.867.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.014 (0.015) seconds
+Test Suite 'PiHistorySidecarTests' started at 2026-10-08 16:50:29.867.
+Test Case '-[AgentUsageTests.PiHistorySidecarTests testLeaseSidecarsAreIgnoredInFlatAndProjectRoots]' started.
+Test Case '-[AgentUsageTests.PiHistorySidecarTests testLeaseSidecarsAreIgnoredInFlatAndProjectRoots]' passed (0.004 seconds).
+Test Case '-[AgentUsageTests.PiHistorySidecarTests testOrphanLeaseSidecarIsNotReportedAsUnavailableHistory]' started.
+Test Case '-[AgentUsageTests.PiHistorySidecarTests testOrphanLeaseSidecarIsNotReportedAsUnavailableHistory]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistorySidecarTests testOtherUnsupportedFilesStillProduceCoverageWarnings]' started.
+Test Case '-[AgentUsageTests.PiHistorySidecarTests testOtherUnsupportedFilesStillProduceCoverageWarnings]' passed (0.003 seconds).
+Test Suite 'PiHistorySidecarTests' passed at 2026-10-08 16:50:29.875.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'PiHistorySourceTests' started at 2026-10-08 16:50:29.875.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testCancellationDoesNotPublishPartialScan]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testCancellationDoesNotPublishPartialScan]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testChangingReadsAreExcludedAndCancelledReadsDoNotCommitCache]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testChangingReadsAreExcludedAndCancelledReadsDoNotCommitCache]' passed (0.005 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testClockMovingBackwardsReloadsOlderRecordsInsteadOfReusingTrimmedIndex]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testClockMovingBackwardsReloadsOlderRecordsInsteadOfReusingTrimmedIndex]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testConflictingOperationsExcludedRatherThanPickingArbitraryCopy]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testConflictingOperationsExcludedRatherThanPickingArbitraryCopy]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testDefaultAndCustomRootsWithoutReadingHomeOrAuth]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testDefaultAndCustomRootsWithoutReadingHomeOrAuth]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testEmptyOrOversizedFileAndScanDepthLimitsAreExplicitGaps]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testEmptyOrOversizedFileAndScanDepthLimitsAreExplicitGaps]' passed (0.003 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testForkCloneAndFileCopiesDeduplicateWithoutFollowingParentPathsOrEditingInputs]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testForkCloneAndFileCopiesDeduplicateWithoutFollowingParentPathsOrEditingInputs]' passed (0.003 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testMissingEmptyUnsupportedAndUnreadableSourcesAreNotZeroReadings]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testMissingEmptyUnsupportedAndUnreadableSourcesAreNotZeroReadings]' passed (0.001 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testOperationLimitRetriesAfterCapacityBecomesAvailable]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testOperationLimitRetriesAfterCapacityBecomesAvailable]' passed (0.003 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testOversizedAndMalformedRecordsDoNotHideLaterUsage]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testOversizedAndMalformedRecordsDoNotHideLaterUsage]' passed (0.007 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testPartialWritesRecoverAndMixedUnsupportedFilesRemainPartial]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testPartialWritesRecoverAndMixedUnsupportedFilesRemainPartial]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testRecordsSpanningReadChunksAndCRLFDoNotLoseUsage]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testRecordsSpanningReadChunksAndCRLFDoNotLoseUsage]' passed (0.030 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testRefreshByteBudgetAllowsCachedFilesAndRetriesExcludedFiles]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testRefreshByteBudgetAllowsCachedFilesAndRetriesExcludedFiles]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testSymlinksAreNotFollowedAndRootFilesMayBeFlat]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testSymlinksAreNotFollowedAndRootFilesMayBeFlat]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testUnchangedFilesAreCachedAppendReplacementDeletionAndMidnightRefreshCorrectly]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testUnchangedFilesAreCachedAppendReplacementDeletionAndMidnightRefreshCorrectly]' passed (0.005 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testUnreadableChangedFileRetainsLastReadableDataAndRecovers]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testUnreadableChangedFileRetainsLastReadableDataAndRecovers]' passed (0.002 seconds).
+Test Case '-[AgentUsageTests.PiHistorySourceTests testUnreadableProjectRejectsRefreshInsteadOfTreatingCachedFilesAsDeleted]' started.
+Test Case '-[AgentUsageTests.PiHistorySourceTests testUnreadableProjectRejectsRefreshInsteadOfTreatingCachedFilesAsDeleted]' passed (0.003 seconds).
+Test Suite 'PiHistorySourceTests' passed at 2026-10-08 16:50:29.948.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.073 (0.074) seconds
+Test Suite 'PiUsageClientTests' started at 2026-10-08 16:50:29.948.
+Test Case '-[AgentUsageTests.PiUsageClientTests testFetchUsesPiTokenAndAccountAndRereadsOnNextRequest]' started.
+Test Case '-[AgentUsageTests.PiUsageClientTests testFetchUsesPiTokenAndAccountAndRereadsOnNextRequest]' passed (0.006 seconds).
+Test Case '-[AgentUsageTests.PiUsageClientTests testRejectsRedirectsWithoutFollowingOrExposingTheirDestination]' started.
+Test Case '-[AgentUsageTests.PiUsageClientTests testRejectsRedirectsWithoutFollowingOrExposingTheirDestination]' passed (0.002 seconds).
+Test Suite 'PiUsageClientTests' passed at 2026-10-08 16:50:29.957.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+Test Suite 'UsageLimitsTests' started at 2026-10-08 16:50:29.957.
+Test Case '-[AgentUsageTests.UsageLimitsTests testDecodesAndDisplaysBothWindows]' started.
+Test Case '-[AgentUsageTests.UsageLimitsTests testDecodesAndDisplaysBothWindows]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageLimitsTests testRejectsMissingQuotaWindows]' started.
+Test Case '-[AgentUsageTests.UsageLimitsTests testRejectsMissingQuotaWindows]' passed (0.000 seconds).
+Test Suite 'UsageLimitsTests' passed at 2026-10-08 16:50:29.957.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'UsageSnapshotTests' started at 2026-10-08 16:50:29.957.
+Test Case '-[AgentUsageTests.UsageSnapshotTests testCountdownUsesTimeSinceFetch]' started.
+Test Case '-[AgentUsageTests.UsageSnapshotTests testCountdownUsesTimeSinceFetch]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageSnapshotTests testMeterOpacityIncreasesGraduallyWithRemaining]' started.
+Test Case '-[AgentUsageTests.UsageSnapshotTests testMeterOpacityIncreasesGraduallyWithRemaining]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageSnapshotTests testMeterValuesRepresentRemainingAllowance]' started.
+Test Case '-[AgentUsageTests.UsageSnapshotTests testMeterValuesRepresentRemainingAllowance]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageSnapshotTests testOutOfRangeMeterValuesAreClamped]' started.
+Test Case '-[AgentUsageTests.UsageSnapshotTests testOutOfRangeMeterValuesAreClamped]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageSnapshotTests testWeeklyAndMinuteCountdowns]' started.
+Test Case '-[AgentUsageTests.UsageSnapshotTests testWeeklyAndMinuteCountdowns]' passed (0.000 seconds).
+Test Suite 'UsageSnapshotTests' passed at 2026-10-08 16:50:29.958.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'UsageStoreTests' started at 2026-10-08 16:50:29.958.
+Test Case '-[AgentUsageTests.UsageStoreTests testFailedRefreshKeepsLastReadingAndRecoveryClearsError]' started.
+Test Case '-[AgentUsageTests.UsageStoreTests testFailedRefreshKeepsLastReadingAndRecoveryClearsError]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageStoreTests testInitialFailureShowsUnavailableState]' started.
+Test Case '-[AgentUsageTests.UsageStoreTests testInitialFailureShowsUnavailableState]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageStoreTests testOverlappingRefreshesOnlyFetchOnce]' started.
+Test Case '-[AgentUsageTests.UsageStoreTests testOverlappingRefreshesOnlyFetchOnce]' passed (0.000 seconds).
+Test Case '-[AgentUsageTests.UsageStoreTests testSuccessfulRefreshRecordsStructuredDataAndTimestamp]' started.
+Test Case '-[AgentUsageTests.UsageStoreTests testSuccessfulRefreshRecordsStructuredDataAndTimestamp]' passed (0.000 seconds).
+Test Suite 'UsageStoreTests' passed at 2026-10-08 16:50:29.960.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'AgentUsageTests.xctest' passed at 2026-10-08 16:50:29.960.
+	 Executed 95 tests, with 3 tests skipped and 0 failures (0 unexpected) in 3.209 (3.218) seconds
+Test Suite 'All tests' passed at 2026-10-08 16:50:29.960.
+	 Executed 95 tests, with 3 tests skipped and 0 failures (0 unexpected) in 3.209 (3.218) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

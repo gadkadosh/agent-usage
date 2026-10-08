@@ -1,0 +1,10 @@
+head/00-partial-tool: height=521, inset=20, footer=945, 522, 148, 13
+head/01-overflow-top: height=600, inset=20, footer=945, 610, 169, 13
+scroll actions: AXScrollLeftByPage, AXScrollRightByPage, AXScrollUpByPage, AXScrollDownByPage
+head/02-overflow-scrolled: height=600, inset=11, footer=945, 602, 169, 13
+head/03-recovered: height=600, inset=75, footer=945, 546, 148, 13
+fixed/00-partial-tool: height=521, inset=20, footer=945, 522, 148, 13
+fixed/01-overflow-top: height=600, inset=20, footer=945, 610, 170, 13
+scroll actions: AXScrollLeftByPage, AXScrollRightByPage, AXScrollUpByPage, AXScrollDownByPage
+fixed/02-overflow-scrolled: height=600, inset=11, footer=945, 602, 170, 13
+fixed/03-recovered: height=489, inset=20, footer=945, 490, 148, 13

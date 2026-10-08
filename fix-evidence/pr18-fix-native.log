@@ -1,0 +1,22 @@
+fixed-missing/00-initial: pid=95004 height=351 header_inset=20 partial=false
+fixed-missing/01-ready: pid=95004 height=489 header_inset=20 partial=false
+fixed-missing/02-partial: pid=95004 height=508 header_inset=20 partial=true
+fixed-missing/03-ready: pid=95004 height=489 header_inset=20 partial=false
+fixed-missing/04-missing: pid=95004 height=351 header_inset=20 partial=false
+fixed-ready/00-initial: pid=95121 height=489 header_inset=20 partial=false
+fixed-ready/week: pid=95121 height=489 header_inset=20 partial=false
+fixed-ready/month: pid=95121 height=489 header_inset=20 partial=false
+fixed-ready/month-reopened: pid=95121 height=489 header_inset=20 partial=false
+fixed-partial/00-initial: pid=95191 height=508 header_inset=20 partial=true
+fixed-partial/01-ready: pid=95191 height=489 header_inset=20 partial=false
+fixed-partial/02-partial: pid=95191 height=508 header_inset=20 partial=true
+fixed-partial/03-ready: pid=95191 height=489 header_inset=20 partial=false
+fixed-partial/04-missing: pid=95191 height=351 header_inset=20 partial=false
+fixed-partial/05-ready: pid=95191 height=489 header_inset=20 partial=false
+fixed-unsupported/00-initial: pid=95304 height=365 header_inset=20 partial=false
+fixed-zero/00-initial: pid=95322 height=489 header_inset=20 partial=false
+fixed-partial-manual/00-initial: pid=95341 height=508 header_inset=20 partial=true
+fixed-partial-manual/01-ready: pid=95341 height=489 header_inset=20 partial=false
+fixed-partial-manual/02-partial: pid=95341 height=508 header_inset=20 partial=true
+fixed-partial-manual/03-ready: pid=95341 height=489 header_inset=20 partial=false
+All retained native sizes and header insets match fresh equivalents.

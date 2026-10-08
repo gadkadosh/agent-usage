@@ -1,0 +1,8 @@
+head-loading/00-loading: pid=95517 height=328 header_inset=20 partial=false
+head-loading/01-ready: pid=95517 height=489 header_inset=20 partial=false
+head-loading/02-partial: pid=95517 height=508 header_inset=20 partial=true
+head-loading/03-ready-recovered: pid=95517 height=508 header_inset=29 partial=false
+fixed-loading/00-loading: pid=95588 height=328 header_inset=20 partial=false
+fixed-loading/01-ready: pid=95588 height=489 header_inset=20 partial=false
+fixed-loading/02-partial: pid=95588 height=508 header_inset=20 partial=true
+fixed-loading/03-ready-recovered: pid=95588 height=489 header_inset=20 partial=false

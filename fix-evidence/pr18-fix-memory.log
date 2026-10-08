@@ -1,0 +1,12 @@
+Test Suite 'Selected tests' started at 2026-10-08 16:50:39.817.
+Test Suite 'AgentUsageTests.xctest' started at 2026-10-08 16:50:39.818.
+Test Suite 'PiHistoryMemoryTests' started at 2026-10-08 16:50:39.818.
+Test Case '-[AgentUsageTests.PiHistoryMemoryTests testReadBuffersDoNotAccumulateAcrossA64MiBFile]' started.
+Test Case '-[AgentUsageTests.PiHistoryMemoryTests testReadBuffersDoNotAccumulateAcrossA64MiBFile]' passed (0.685 seconds).
+Test Suite 'PiHistoryMemoryTests' passed at 2026-10-08 16:50:40.503.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.685 (0.685) seconds
+Test Suite 'AgentUsageTests.xctest' passed at 2026-10-08 16:50:40.503.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.685 (0.685) seconds
+Test Suite 'Selected tests' passed at 2026-10-08 16:50:40.503.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.685 (0.686) seconds
+MEMORY REGRESSION: extra footprint at read completion = 884736 bytes
