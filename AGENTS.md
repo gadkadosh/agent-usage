@@ -2,7 +2,7 @@
 
 - Command line tools are supported for building the app.
 - Full Xcode is required for tests in this environment.
-- Validate a clean Command Line Tools release build separately from Xcode tests.
+- Run `make check-clt-build` separately from Xcode tests. It must pass without SDK overrides.
 
 ## UI verification
 
