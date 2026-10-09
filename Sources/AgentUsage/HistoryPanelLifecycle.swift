@@ -13,7 +13,6 @@ struct HistoryPanelLifecycle: NSViewRepresentable {
     final class TrackingView: NSView {
         private let history: HistoryStore
         private var visible = false
-        private var scan: Task<Void, Never>?
 
         init(history: HistoryStore) {
             self.history = history
@@ -43,13 +42,12 @@ struct HistoryPanelLifecycle: NSViewRepresentable {
         func setVisible(_ value: Bool) {
             guard value != visible else { return }
             visible = value
-            scan?.cancel()
+            guard value else { return }
             let history = self.history
-            scan = value ? Task { await history.refreshWhenIdle() } : nil
+            Task { await history.refresh() }
         }
 
         deinit {
-            scan?.cancel()
             NotificationCenter.default.removeObserver(self)
         }
     }

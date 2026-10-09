@@ -12,40 +12,51 @@ final class HistoryStore: ObservableObject {
     var summary: PeriodSummary? { snapshot?.summaries[period] }
 
     private let fetch: @Sendable () async throws -> HistorySnapshot
-    private var refreshWaiters: [CheckedContinuation<Void, Never>] = []
+    private var scan: Task<Void, Never>?
+    private var started = false
 
     init(fetch: @escaping @Sendable () async throws -> HistorySnapshot) {
         self.fetch = fetch
     }
 
-    /// Panel reopen waits for a cancelled/in-flight scan before fetching.
-    func refreshWhenIdle() async {
-        while isRefreshing, !Task.isCancelled {
-            await withCheckedContinuation { refreshWaiters.append($0) }
-        }
-        await refresh()
+    /// Launch once without awaiting IO. The store, not the panel, owns the scan.
+    func start() {
+        guard !started else { return }
+        started = true
+        _ = beginRefresh()
     }
 
+    /// Join existing work. Closing a panel or cancelling a caller does not cancel indexing.
     func refresh() async {
-        guard !isRefreshing, !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return }
+        await beginRefresh().value
+    }
+
+    private func beginRefresh() -> Task<Void, Never> {
+        if let scan { return scan }
         isRefreshing = true
+        let task = Task(priority: .background) { await readHistory() }
+        scan = task
+        return task
+    }
+
+    private func readHistory() async {
         defer {
             isRefreshing = false
-            let waiters = refreshWaiters
-            refreshWaiters.removeAll()
-            for waiter in waiters { waiter.resume() }
+            scan = nil
         }
         do {
-            let result = try await fetch()
-            try Task.checkCancellation()
-            snapshot = result
-            error = nil
-        } catch is CancellationError {
-            // Cancellation is not a source failure; keep the previous snapshot and error.
+            while true {
+                let result = try await fetch()
+                snapshot = result
+                error = nil
+                guard result.hasMoreFiles else { return }
+                // Pace catch-up and let the UI present each batch before continuing.
+                try await Task.sleep(for: .milliseconds(100))
+            }
         } catch {
-            guard !Task.isCancelled else { return }
             // Never forward IO/decoder errors containing sensitive paths or payloads.
-            // In particular, failed enumeration must not replace the last reading with zero.
+            // Failed enumeration must not replace the last reading with zero.
             self.error = HistoryReadError.unavailable.localizedDescription
         }
     }

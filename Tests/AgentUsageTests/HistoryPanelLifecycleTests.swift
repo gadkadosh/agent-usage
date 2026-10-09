@@ -63,35 +63,34 @@ final class HistoryPanelLifecycleTests: XCTestCase {
         XCTAssertEqual(counts, [0, 1])
     }
 
-    func testRapidCloseReopenWaitsForCancelledScanThenFetches() async {
-        let started = expectation(description: "First scan pauses")
-        let resumed = expectation(description: "Reopen fetches")
+    func testStartupScanSurvivesCloseAndRapidReopenWithoutDuplicateFetch() async {
+        let started = expectation(description: "Startup scan pauses while hidden")
         let gate = PanelScanGate()
         let readings = DashboardReadings()
         let history = HistoryStore(fetch: {
             let value = try await readings.history()
-            let counts = await readings.counts
-            if counts[1] == 1 { await gate.pause(started: started) } else { resumed.fulfill() }
+            await gate.pause(started: started)
+            try Task.checkCancellation()
             return value
         })
         let view = HistoryPanelLifecycle.TrackingView(history: history)
-        defer {
-            view.setVisible(false)
-            Task { await gate.release() }
-        }
-        view.setVisible(true)
+        defer { Task { await gate.release() } }
+        history.start()
         let start = await XCTWaiter.fulfillment(of: [started], timeout: 5)
         XCTAssertEqual(start, .completed)
         guard start == .completed else { return }
+        view.setVisible(true)
         view.setVisible(false)
         view.setVisible(true)
-        XCTAssertNil(history.snapshot)
+        view.setVisible(false)
+        let joined = Task { await history.refresh() }
         await gate.release()
-        let reopen = await XCTWaiter.fulfillment(of: [resumed], timeout: 5)
-        XCTAssertEqual(reopen, .completed)
+        await joined.value
         let counts = await readings.counts
-        XCTAssertEqual(counts, [0, 2])
+        XCTAssertEqual(counts, [0, 1])
+        XCTAssertEqual(history.summary?.tokens, 18_420)
         XCTAssertNil(history.error)
+        XCTAssertFalse(history.isRefreshing)
     }
 }
 

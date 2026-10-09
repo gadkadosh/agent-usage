@@ -1,7 +1,7 @@
 import Foundation
 
 extension HistoryStore {
-    /// Keep one source actor (and its file index) alive across explicitly requested refreshes.
+    /// Keep one source actor (and its file index) alive across background batches and refreshes.
     /// Passing a root bypasses default discovery, so integration tests never inspect real histories.
     static func live(
         root: URL = PiHistorySource.defaultRoot(),

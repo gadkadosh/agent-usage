@@ -198,6 +198,7 @@ final class PiHistorySourceTests: XCTestCase {
             let limited = PiHistorySource(root: fixture.root, limits: limits)
             let snapshot = try await limited.refresh(now: F.now, calendar: F.calendar)
             XCTAssertTrue(snapshot.coverage.issues.contains(.scanLimit))
+            XCTAssertFalse(snapshot.hasMoreFiles)
             XCTAssertFalse(snapshot.coverage.hasReadings)
         }
     }
@@ -301,6 +302,7 @@ final class PiHistorySourceTests: XCTestCase {
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
         XCTAssertTrue(snapshot.coverage.issues.contains(.scanLimit))
+        XCTAssertFalse(snapshot.hasMoreFiles)
         _ = try await source.refresh(now: F.now, calendar: F.calendar)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
@@ -319,13 +321,76 @@ final class PiHistorySourceTests: XCTestCase {
         let source = PiHistorySource(root: fixture.root, limits: .init(refreshBytes: size))
         let limited = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(limited.summaries[.today]?.tokens, 190)
-        XCTAssertTrue(limited.coverage.issues.contains(.scanLimit))
+        XCTAssertTrue(limited.hasMoreFiles)
+        XCTAssertEqual(limited.coverage.issues, [])
         let recovered = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertFalse(recovered.hasMoreFiles)
         XCTAssertEqual(recovered.summaries[.today]?.tokens, 380)
         XCTAssertEqual(recovered.coverage.state, .ready)
         _ = try await source.refresh(now: F.now, calendar: F.calendar)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
+    }
+
+    func testByteCatchUpConvergesDespitePermanentFileLimit() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        var size = 0
+        for index in 0..<5 {
+            let file = try fixture.write(
+                "\(index).jsonl",
+                lines: [
+                    F.header(), F.message(id: "operation-\(index)"),
+                ]
+            )
+            size = try Data(contentsOf: file).count
+        }
+        try fixture.write("oversized.jsonl", lines: [String(repeating: "x", count: size * 3)])
+        let source = PiHistorySource(
+            root: fixture.root,
+            limits: .init(fileBytes: size, refreshBytes: size * 2)
+        )
+        for batch in 1...3 {
+            let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+            XCTAssertEqual(snapshot.summaries[.today]?.tokens, Int64(min(batch * 2, 5) * 190))
+            XCTAssertEqual(snapshot.hasMoreFiles, batch < 3)
+            XCTAssertEqual(snapshot.coverage.issues, [.scanLimit])
+        }
+        let parsed = await source.filesParsed
+        XCTAssertEqual(parsed, 5, "Catch-up must reuse already indexed files.")
+    }
+
+    func testFailedReadsDoNotCauseEndlessByteCatchUpWithoutIndexProgress() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        let file = try fixture.write("a.jsonl", lines: [F.header(), F.message()])
+        try fixture.write("b.jsonl", lines: [F.header(), F.message(id: "operation-b")])
+        let size = try Data(contentsOf: file).count
+        let source = PiHistorySource(
+            root: fixture.root,
+            limits: .init(refreshBytes: size),
+            didReadFile: { throw HistoryReadError.unavailable }
+        )
+        let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertEqual(snapshot.coverage.issues, [.unreadableFile])
+        XCTAssertFalse(snapshot.coverage.hasReadings)
+    }
+
+    func testOperationCapStopsAutomaticCatchUpWithByteDeferrals() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        let file = try fixture.write("a.jsonl", lines: [F.header(), F.message()])
+        try fixture.write("b.jsonl", lines: [F.header(), F.message(id: "operation-b")])
+        let size = try Data(contentsOf: file).count
+        let source = PiHistorySource(
+            root: fixture.root,
+            limits: .init(refreshBytes: size, operations: 1)
+        )
+        let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
+        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertEqual(snapshot.coverage.issues, [.scanLimit])
     }
 
     func testSymlinksAreNotFollowedAndRootFilesMayBeFlat() async throws {
@@ -406,7 +471,7 @@ final class PiHistorySourceTests: XCTestCase {
         XCTAssertEqual(recovered.coverage.state, .ready)
     }
 
-    func testChangingReadsAreExcludedAndCancelledReadsDoNotCommitCache() async throws {
+    func testChangingReadsAreExcludedAndRetriedWithoutCommittingCache() async throws {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write(lines: [F.header(), F.message()])
@@ -415,25 +480,23 @@ final class PiHistorySourceTests: XCTestCase {
         _ = try await source.refresh(now: F.now, calendar: F.calendar)
         try fixture.write(lines: [F.header(), F.message(), F.message(id: "new")])
         action.arm {
-            try fixture.write(lines: [F.header(), F.message(id: "replacement")])
+            try fixture.write(lines: [
+                F.header(),
+                F.message(
+                    id: "replacement",
+                    usage: #"{"input":200,"output":20,"cacheRead":30,"cacheWrite":40}"#
+                ),
+            ])
         }
         let changing = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(changing.summaries[.today]?.tokens, 190)
         XCTAssertTrue(changing.coverage.issues.contains(.changingFile))
         XCTAssertTrue(changing.coverage.issues.contains(.staleFile))
         let consistent = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(consistent.summaries[.today]?.tokens, 290)
         XCTAssertEqual(consistent.coverage.state, .ready)
-        try fixture.write(lines: [F.header(), F.message(), F.message(id: "new")])
-        action.arm { withUnsafeCurrentTask { $0?.cancel() } }
-        let cancelled = Task { try await source.refresh(now: F.now, calendar: F.calendar) }
-        do {
-            _ = try await cancelled.value
-            XCTFail("Expected cancellation")
-        } catch { XCTAssertTrue(error is CancellationError) }
-        let recovered = try await source.refresh(now: F.now, calendar: F.calendar)
-        XCTAssertEqual(recovered.summaries[.today]?.tokens, 380)
         let parsed = await source.filesParsed
-        XCTAssertEqual(parsed, 5)  // Cancelled parsing was retried, not committed.
+        XCTAssertEqual(parsed, 3, "A changing file must be retried, not cached.")
 
         let fresh = PiHistorySource(
             root: fixture.root,
@@ -445,20 +508,5 @@ final class PiHistorySourceTests: XCTestCase {
         XCTAssertFalse(excluded.coverage.hasReadings)
         XCTAssertEqual(excluded.summaries[.today]?.tokens, 0)
         XCTAssertTrue(excluded.coverage.issues.contains(.changingFile))
-    }
-
-    func testCancellationDoesNotPublishPartialScan() async throws {
-        let fixture = try PiHistoryFixtureRoot()
-        defer { fixture.remove() }
-        try fixture.write(lines: [F.header(), F.message()])
-        let source = PiHistorySource(root: fixture.root)
-        let task = Task {
-            withUnsafeCurrentTask { $0?.cancel() }
-            return try await source.refresh(now: F.now, calendar: F.calendar)
-        }
-        do {
-            _ = try await task.value
-            XCTFail("Expected cancellation")
-        } catch { XCTAssertTrue(error is CancellationError) }
     }
 }

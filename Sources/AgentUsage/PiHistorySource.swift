@@ -13,7 +13,7 @@ actor PiHistorySource {
 
     private let root: URL
     private let limits: Limits
-    // A narrow injected IO boundary for deterministic concurrent-write/cancellation tests.
+    // A narrow injected IO boundary for deterministic concurrent-write and read-failure tests.
     private let didReadFile: @Sendable () throws -> Void
     private var cache: [URL: IndexedFile] = [:]
     private var cacheStart: Date?
@@ -49,7 +49,6 @@ actor PiHistorySource {
     func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws
         -> HistorySnapshot
     {
-        try Task.checkCancellation()
         let manager = FileManager.default
         do {
             let values = try root.resourceValues(forKeys: [.isDirectoryKey])
@@ -97,11 +96,12 @@ actor PiHistorySource {
         var filesRead = 0
         var visited = 0
         var remainingBytes = limits.refreshBytes
+        var hasMoreFiles = false
+        var madeProgress = false
         let since = HistoryPeriod.month.start(at: now, calendar: calendar)
         // A clock/timezone change can move the range backwards; cached files may then lack records.
         let previousCache = (cacheStart.map { since >= $0 } ?? true) ? cache : [:]
         for case let url as URL in enumerator {
-            try Task.checkCancellation()
             visited += 1
             guard visited <= limits.visitedEntries else {
                 issues.insert(.scanLimit)
@@ -167,7 +167,6 @@ actor PiHistorySource {
                     )
                     filesParsed += 1
                     try didReadFile()
-                    try Task.checkCancellation()
                     let current = try openFile(relative, rootDescriptor: rootDescriptor)
                     defer { try? current.close() }
                     guard before == (try signature(handle)),
@@ -181,12 +180,13 @@ actor PiHistorySource {
                     )
                     if !file.issues.contains(.scanLimit) {
                         indexed[url] = file
+                        madeProgress = true
                     }
                 }
-            } catch is CancellationError {
-                throw CancellationError()
             } catch {
-                if error is ChangingFileError {
+                if error is BatchLimitError {
+                    hasMoreFiles = true
+                } else if error is ChangingFileError {
                     issues.insert(.changingFile)
                 } else {
                     issues.insert(error is FileLimitError ? .scanLimit : .unreadableFile)
@@ -194,7 +194,7 @@ actor PiHistorySource {
                 if let previous = previousCache[url] {
                     file = previous
                     indexed[url] = previous
-                    issues.insert(.staleFile)
+                    if !(error is BatchLimitError) { issues.insert(.staleFile) }
                 } else {
                     continue
                 }
@@ -220,10 +220,13 @@ actor PiHistorySource {
         // An inaccessible subtree is unknown, not deleted. Reject the refresh before replacing
         // the index, so cached files we could not enumerate remain available for the next attempt.
         if scanFailed { throw HistoryReadError.unavailable }
+        if hasMoreFiles && observations.count >= limits.operations {
+            issues.insert(.scanLimit)
+            hasMoreFiles = false
+        }
         var canonical: [String: UsageObservation] = [:]
         var conflicting: Set<String> = []
         for observation in observations {
-            try Task.checkCancellation()
             if let prior = canonical[observation.operationID], prior != observation {
                 conflicting.insert(observation.operationID)
                 issues.insert(.conflictingOperation)
@@ -240,7 +243,7 @@ actor PiHistorySource {
         } else {
             state = issues.isEmpty ? .missing : .unavailable
         }
-        let result = snapshot(
+        var result = snapshot(
             Array(canonical.values),
             filesRead: filesRead,
             issues: issues,
@@ -248,7 +251,9 @@ actor PiHistorySource {
             now: now,
             calendar: calendar
         )
-        try Task.checkCancellation()
+        // Continue byte-budget deferrals only while the index advances. Failed reads and
+        // permanent safety limits must not cause an endless background retry loop.
+        result.hasMoreFiles = hasMoreFiles && madeProgress
         // Commit only a completed refresh. Deleted files disappear; retain 30 calendar days.
         cache = indexed
         cacheStart = since
@@ -336,7 +341,8 @@ actor PiHistorySource {
         maxOperations: Int,
         remainingBytes: inout Int
     ) throws -> (observations: [UsageObservation], issues: Set<HistoryIssue>, isSupported: Bool) {
-        guard size <= min(limits.fileBytes, remainingBytes) else { throw FileLimitError() }
+        guard size <= min(limits.fileBytes, limits.refreshBytes) else { throw FileLimitError() }
+        guard size <= remainingBytes else { throw BatchLimitError() }
         var parser = PiHistoryParser(since: since, maxOperations: maxOperations)
         var line = Data()
         var bytesRead = 0
@@ -348,13 +354,11 @@ actor PiHistorySource {
         while let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: 64 * 1_024) }),
             !chunk.isEmpty
         {
-            try Task.checkCancellation()
             bytesRead += chunk.count
             remainingBytes -= chunk.count
             guard bytesRead <= limits.fileBytes, remainingBytes >= 0 else { throw FileLimitError() }
             let pieces = chunk.split(separator: 10, omittingEmptySubsequences: false)
             for (index, piece) in pieces.enumerated() {
-                try Task.checkCancellation()
                 if !skippingLine {
                     if line.count + piece.count > limits.lineBytes {
                         skippingLine = true
@@ -397,6 +401,7 @@ actor PiHistorySource {
     }
 
     private struct FileLimitError: Error {}
+    private struct BatchLimitError: Error {}
     private struct ChangingFileError: Error {}
 }
 
