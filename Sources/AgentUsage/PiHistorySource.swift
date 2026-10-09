@@ -297,7 +297,8 @@ actor PiHistorySource {
                 issues: issues,
                 filesSkipped: filesSkipped
             ),
-            fetchedAt: now
+            fetchedAt: now,
+            observations: observations
         )
     }
 
@@ -428,6 +429,6 @@ actor PiHistorySource {
 enum HistoryReadError: LocalizedError {
     case unavailable
     var errorDescription: String? {
-        "Pi history could not be read. Check access to the session directory, then refresh."
+        "Local history could not be read. Check access to the history locations, then refresh."
     }
 }

@@ -6,7 +6,7 @@ umask 077
 usage() {
     cat <<'HELP'
 Usage:
-  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS]
+  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS] [--opencode-db SYNTHETIC_DB]
   ui-review.sh status SESSION
   ui-review.sh capture SESSION NAME
   ui-review.sh cleanup SESSION
@@ -32,6 +32,7 @@ case "$command" in launch|status|capture|cleanup) ;; *) fail "Unknown command: $
 
 app=
 fixtures=
+opencode_fixtures=
 name=
 if [[ $command == launch ]]; then
     while [[ $# -gt 0 ]]; do
@@ -39,6 +40,7 @@ if [[ $command == launch ]]; then
         case "$1" in
             --app) app=$2 ;;
             --sessions) fixtures=$2 ;;
+            --opencode-db) opencode_fixtures=$2 ;;
             *) fail "Unknown option: $1" ;;
         esac
         shift 2
@@ -49,6 +51,11 @@ if [[ $command == launch ]]; then
         [[ -d $fixtures ]] || fail 'Synthetic sessions directory does not exist.'
         fixtures=$(cd "$fixtures" && pwd -P)
         [[ -z $(find "$fixtures" -type l -print -quit) ]] || fail 'Synthetic sessions must not contain symlinks.'
+    fi
+    if [[ -n $opencode_fixtures ]]; then
+        [[ -f $opencode_fixtures && ! -L $opencode_fixtures ]] || fail 'Synthetic OpenCode database must be a regular file, not a symlink.'
+        opencode_fixtures="$(cd "$(dirname "$opencode_fixtures")" && pwd -P)/$(basename "$opencode_fixtures")"
+        [[ ! -s $opencode_fixtures-wal ]] || fail 'Checkpoint and close the synthetic database before copying it.'
     fi
 elif [[ $command == capture ]]; then
     [[ $# == 1 && $1 =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || fail 'Capture needs a simple name (letters, digits, underscores, hyphens).'
@@ -67,6 +74,7 @@ if [[ ! -e $session && $command == launch ]]; then
     put version 1
     put source "$app"
     put fixtures "$fixtures"
+    put opencodeFixtures "$opencode_fixtures"
     # The unique executable name also makes direct System Events interaction easy.
     token=$(/usr/bin/uuidgen | tr -d '-' | cut -c1-12)
     process="UsageReview$token"
@@ -91,6 +99,9 @@ if [[ ! -e $session && $command == launch ]]; then
     if [[ -n $fixtures ]]; then
         /usr/bin/ditto "$fixtures" "$session/agent/sessions"
     fi
+    if [[ -n $opencode_fixtures ]]; then
+        /usr/bin/ditto "$opencode_fixtures" "$session/opencode.db"
+    fi
     {
         printf 'Source app: %s\nSource executable SHA-256: %s\n' "$app" "$source_hash"
         printf 'Isolated executable SHA-256: '
@@ -100,6 +111,8 @@ if [[ ! -e $session && $command == launch ]]; then
         printf 'Synthetic sessions source: %s\n' "${fixtures:-empty}"
         printf 'Snapshot hashes (relative to agent/sessions):\n'
         (cd "$session/agent/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
+        printf 'Synthetic OpenCode database source: %s\n' "${opencode_fixtures:-missing}"
+        [[ ! -f $session/opencode.db ]] || (cd "$session" && /usr/bin/shasum -a 256 opencode.db)
     } > "$session/provenance.txt"
     put ready yes
 else
@@ -147,11 +160,12 @@ APPLESCRIPT
 
 case "$command" in
     launch)
-        [[ $(get source) == "$app" && $(get fixtures) == "$fixtures" ]] || fail 'Session inputs differ; use a new session directory.'
+        [[ $(get source) == "$app" && $(get fixtures) == "$fixtures" && $(get opencodeFixtures 2>/dev/null || true) == "$opencode_fixtures" ]] || fail 'Session inputs differ; use a new session directory.'
         if ! owned_process; then
             # Launch the real bundle executable to retain an exact PID, not open's PID.
             PI_CODING_AGENT_DIR="$session/agent" \
                 PI_CODING_AGENT_SESSION_DIR="$session/agent/sessions" \
+                OPENCODE_DB="$session/opencode.db" \
                 "$executable" > "$session/app.log" 2>&1 < /dev/null &
             pid=$!
             started=$(/bin/ps -p "$pid" -o lstart=)
