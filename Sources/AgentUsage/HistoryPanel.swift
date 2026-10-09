@@ -3,6 +3,7 @@ import SwiftUI
 
 struct HistoryPanel: View {
     @ObservedObject var history: HistoryStore
+    @State private var hoveredBucketID: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -40,11 +41,23 @@ struct HistoryPanel: View {
                         Text("tokens processed").font(.caption).foregroundStyle(.secondary)
                     }
                     historyChart(summary)
+                    let hoveredBucket = summary.buckets.first { $0.id == hoveredBucketID }
                     HStack {
                         Text("π").font(.title3).accessibilityHidden(true)
-                        Text("pi").fontWeight(.medium)
+                        if let bucket = hoveredBucket {
+                            Text(
+                                bucket.start.formatted(
+                                    date: history.period == .today ? .omitted : .abbreviated,
+                                    time: history.period == .today ? .shortened : .omitted
+                                )
+                            )
+                            .fontWeight(.medium)
+                        } else {
+                            Text("pi").fontWeight(.medium)
+                        }
                         Spacer()
-                        Text("\(summary.tokens.formatted()) tokens").monospacedDigit()
+                        Text("\((hoveredBucket?.tokens ?? summary.tokens).formatted()) tokens")
+                            .monospacedDigit()
                     }
                     .font(.subheadline)
                 } else if snapshot.hasMoreFiles {
@@ -61,6 +74,8 @@ struct HistoryPanel: View {
                 }
             }
         }
+        .onChange(of: history.period) { _ in hoveredBucketID = nil }
+        .onDisappear { hoveredBucketID = nil }
     }
 
     @ViewBuilder
@@ -68,6 +83,7 @@ struct HistoryPanel: View {
         // Aggregated snapshots have buckets, but injected/empty snapshots must also be safe.
         if let first = summary.buckets.first, let last = summary.buckets.last {
             let labels = summary.chartLabelBuckets
+            let hoveredBucket = summary.buckets.first { $0.id == hoveredBucketID }
             Chart(summary.buckets) { bucket in
                 RectangleMark(
                     xStart: .value("Start", bucket.start),
@@ -76,6 +92,7 @@ struct HistoryPanel: View {
                     yEnd: .value("Observed tokens", bucket.tokens)
                 )
                 .foregroundStyle(Color.accentColor.opacity(0.65))
+                .opacity(hoveredBucket == nil || bucket.id == hoveredBucketID ? 1 : 0.25)
                 .accessibilityLabel(
                     bucket.start.formatted(
                         date: history.period == .today ? .omitted : .abbreviated,
@@ -111,7 +128,29 @@ struct HistoryPanel: View {
                     }
                 }
             }
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                let plot = geometry[proxy.plotAreaFrame]
+                                guard plot.contains(location),
+                                    let date: Date = proxy.value(atX: location.x - plot.minX)
+                                else {
+                                    hoveredBucketID = nil
+                                    return
+                                }
+                                hoveredBucketID = summary.bucket(at: date)?.id
+                            case .ended:
+                                hoveredBucketID = nil
+                            }
+                        }
+                }
+            }
             .frame(height: 76)
+            .onDisappear { hoveredBucketID = nil }
         }
     }
 
@@ -149,6 +188,11 @@ extension HistoryBucket {
 }
 
 extension PeriodSummary {
+    // Use the whole interval, including its gutter, so narrow and zero-token bars are readable.
+    func bucket(at date: Date) -> HistoryBucket? {
+        buckets.first { $0.start <= date && date < $0.end }
+    }
+
     var chartGridlines: [Date] {
         guard let first = buckets.first, let last = buckets.last else { return [] }
         // The fixed 320-point plot has room for individual separators up to seven bars.
