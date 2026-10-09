@@ -39,4 +39,7 @@ jobs:
       - name: Build and verify the local app bundle with Command Line Tools
         env:
           DEVELOPER_DIR: /Library/Developer/CommandLineTools
-        run: make app
+        run: |
+          swift --version
+          xcrun --show-sdk-version
+          make app

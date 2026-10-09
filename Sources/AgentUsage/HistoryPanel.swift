@@ -3,7 +3,9 @@ import SwiftUI
 
 struct HistoryPanel: View {
     @ObservedObject var history: HistoryStore
-    @State private var hoveredBucketID: Date?
+    // Use the property wrapper, not the macOS 27 macro absent from Command Line Tools.
+    private typealias HoverState = SwiftUI.State<Date?>
+    @HoverState private var hoveredBucketID: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
