@@ -36,30 +36,31 @@ struct HistoryPanel: View {
 
             if let snapshot = history.snapshot {
                 if snapshot.coverage.hasReadings, let summary = history.summary {
+                    let hoveredBucket = summary.buckets.first { $0.id == hoveredBucketID }
                     HStack(alignment: .firstTextBaseline) {
-                        Text(summary.tokens.formatted(.number.notation(.compactName)))
-                            .font(.system(size: 28, weight: .medium)).monospacedDigit()
-                            .accessibilityLabel("\(summary.tokens) observed tokens")
-                        Text("tokens processed").font(.caption).foregroundStyle(.secondary)
+                        Text(
+                            hoveredBucket?.tokens.formatted()
+                                ?? summary.tokens.formatted(.number.notation(.compactName))
+                        )
+                        .font(.system(size: 28, weight: .medium)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                        .accessibilityLabel(
+                            "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
+                        )
+                        Text(
+                            hoveredBucket == nil
+                                ? "tokens processed"
+                                : history.period == .today ? "tokens this hour" : "tokens this day"
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize()
                     }
                     historyChart(summary)
-                    let hoveredBucket = summary.buckets.first { $0.id == hoveredBucketID }
                     HStack {
                         Text("π").font(.title3).accessibilityHidden(true)
-                        if let bucket = hoveredBucket {
-                            Text(
-                                bucket.start.formatted(
-                                    date: history.period == .today ? .omitted : .abbreviated,
-                                    time: history.period == .today ? .shortened : .omitted
-                                )
-                            )
-                            .fontWeight(.medium)
-                        } else {
-                            Text("pi").fontWeight(.medium)
-                        }
+                        Text("pi").fontWeight(.medium)
                         Spacer()
-                        Text("\((hoveredBucket?.tokens ?? summary.tokens).formatted()) tokens")
-                            .monospacedDigit()
+                        Text("\(summary.tokens.formatted()) tokens").monospacedDigit()
                     }
                     .font(.subheadline)
                 } else if snapshot.hasMoreFiles {
@@ -126,18 +127,39 @@ struct HistoryPanel: View {
                                 format: history.period == .today
                                     ? .dateTime.hour() : .dateTime.month(.abbreviated).day()
                             )
+                            .opacity(hoveredBucket == nil ? 1 : 0)
+                            .accessibilityHidden(hoveredBucket != nil)
                         }
                     }
                 }
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
+                    let plot = geometry[proxy.plotAreaFrame]
+                    if let bucket = hoveredBucket, let x = proxy.position(forX: bucket.barCenter) {
+                        // Keep the axis's existing space and clamp edge labels inside the plot.
+                        Text(
+                            bucket.start,
+                            format: history.period == .today
+                                ? .dateTime.hour() : .dateTime.month(.abbreviated).day()
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize()
+                        .alignmentGuide(.leading) { dimensions in
+                            -min(
+                                max(x - dimensions.width / 2, 0),
+                                max(plot.width - dimensions.width, 0)
+                            )
+                        }
+                        .frame(width: plot.width, height: 18, alignment: .leading)
+                        .offset(x: plot.minX, y: plot.maxY)
+                        .allowsHitTesting(false)
+                    }
                     Color.clear
                         .contentShape(Rectangle())
                         .onContinuousHover { phase in
                             switch phase {
                             case .active(let location):
-                                let plot = geometry[proxy.plotAreaFrame]
                                 guard plot.contains(location),
                                     let date: Date = proxy.value(atX: location.x - plot.minX)
                                 else {
