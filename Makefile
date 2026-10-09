@@ -1,10 +1,17 @@
-.PHONY: app test format format-check
+.PHONY: app check-clt-build test format format-check
 
 SWIFT ?= swift
 SWIFT_FILES := Package.swift Sources Tests
 
 app:
 	SWIFT="$(SWIFT)" /bin/bash scripts/build-app.sh
+
+check-clt-build:
+	@set -eu; \
+	scratch=$$(mktemp -d); \
+	trap 'rm -rf "$$scratch"' EXIT; \
+	DEVELOPER_DIR=/Library/Developer/CommandLineTools \
+		xcrun swift build --configuration release --product AgentUsage --scratch-path "$$scratch"
 
 test:
 	$(SWIFT) test
