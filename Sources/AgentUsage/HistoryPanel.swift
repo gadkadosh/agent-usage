@@ -39,8 +39,8 @@ struct HistoryPanel: View {
                     let hoveredBucket = summary.buckets.first { $0.id == hoveredBucketID }
                     HStack(alignment: .firstTextBaseline) {
                         Text(
-                            hoveredBucket?.tokens.formatted()
-                                ?? summary.tokens.formatted(.number.notation(.compactName))
+                            (hoveredBucket?.tokens ?? summary.tokens)
+                                .formatted(.number.notation(.compactName))
                         )
                         .font(.system(size: 28, weight: .medium)).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.5)
