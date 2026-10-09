@@ -10,7 +10,7 @@ struct HistoryPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("PI HISTORY").font(.caption.weight(.semibold)).tracking(1)
+                Text("LOCAL HISTORY").font(.caption.weight(.semibold)).tracking(1)
                 Spacer()
                 Text("On this Mac").font(.caption)
             }
@@ -25,7 +25,7 @@ struct HistoryPanel: View {
             .labelsHidden()
 
             if let error = history.error {
-                Label("Couldn't refresh pi history", systemImage: "exclamationmark.triangle")
+                Label("Couldn't refresh local history", systemImage: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
                 Text(error).font(.caption)
                 if history.snapshot != nil {
@@ -56,26 +56,20 @@ struct HistoryPanel: View {
                         .fixedSize()
                     }
                     historyChart(summary)
-                    HStack {
-                        Text("π").font(.title3).accessibilityHidden(true)
-                        Text("pi").fontWeight(.medium)
-                        Spacer()
-                        Text("\(summary.tokens.formatted(.number.notation(.compactName))) tokens")
-                            .monospacedDigit()
-                            .accessibilityLabel("\(summary.tokens) tokens")
-                    }
-                    .font(.subheadline)
                 } else if snapshot.hasMoreFiles {
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading local history…").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(snapshot.coverage.emptyDescription)
                         .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(snapshot.agents) { reading in
+                    agentRow(reading)
                 }
                 historyFooter(snapshot)
             } else if history.error == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading local history…").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -180,6 +174,36 @@ struct HistoryPanel: View {
         }
     }
 
+    private func agentRow(_ reading: AgentHistory) -> some View {
+        HStack {
+            Text(reading.agent.symbol).font(.title3).accessibilityHidden(true)
+            Text(reading.agent.title).fontWeight(.medium)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                if reading.coverage.hasReadings, let summary = reading.summaries[history.period] {
+                    Text("\(summary.tokens.formatted(.number.notation(.compactName))) tokens")
+                        .monospacedDigit()
+                        .accessibilityLabel("\(summary.tokens) tokens")
+                } else {
+                    Text(reading.coverage.sourceStatus).foregroundStyle(.secondary)
+                }
+                if reading.refreshFailed {
+                    Text(
+                        reading.coverage.hasReadings
+                            ? "Refresh failed · older reading" : "Couldn't refresh"
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                    .help(
+                        "Last read: \(reading.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                    )
+                } else if reading.coverage.state == .partial {
+                    Text("Partial history").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .font(.subheadline)
+    }
+
     private func historyFooter(_ snapshot: HistorySnapshot) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             if let warning = snapshot.coverage.warning {
@@ -250,15 +274,28 @@ extension HistoryCoverage {
         if state == .partial { messages.append("Partial history. Totals may be incomplete.") }
         if issues.contains(.staleFile) { messages.append("Includes older readings.") }
         if issues.contains(.toolAggregate) { messages.append("Tool usage may be counted twice.") }
+        if issues.contains(.unresolvedFork) {
+            messages.append("Forked usage may be counted twice.")
+        }
         return messages.isEmpty ? nil : messages.joined(separator: " ")
     }
 
     var emptyDescription: String {
         switch state {
-        case .missing: "No pi history found. Missing history isn't zero usage."
-        case .unsupported: "Pi history was found, but its session format isn't supported yet."
-        case .unavailable, .partial: "Pi history was found, but no supported files could be read."
-        case .ready: "No recorded pi usage for this period."
+        case .missing: "No local history found. Missing history isn't zero usage."
+        case .unsupported: "Local history was found, but its format isn't supported yet."
+        case .unavailable, .partial:
+            "Local history was found, but no supported history could be read."
+        case .ready: "No recorded usage for this period."
+        }
+    }
+
+    var sourceStatus: String {
+        switch state {
+        case .missing: "Not found"
+        case .unsupported: "Unsupported format"
+        case .unavailable, .partial: "Unavailable"
+        case .ready: "No recorded usage"
         }
     }
 }
