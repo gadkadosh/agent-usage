@@ -11,6 +11,10 @@ actor LocalHistorySource {
     }
 
     func refresh(now: Date, calendar: Calendar) async -> HistorySnapshot {
+        // Freeze autoupdating calendars so all asynchronous readers share one set of boundaries.
+        var fixedCalendar = calendar
+        fixedCalendar.timeZone = calendar.timeZone
+        let calendar = fixedCalendar
         let readings = await withTaskGroup(of: (HistoryAgent, HistorySnapshot?).self) { group in
             for (agent, fetch) in fetchers {
                 group.addTask { (agent, try? await fetch(now, calendar)) }
@@ -40,24 +44,27 @@ actor LocalHistorySource {
                     ),
                     fetchedAt: now
                 )
-            // Align stale buckets to today's range too; yesterday's Today is not today's usage.
-            let aligned = HistorySnapshot(
-                summaries: Dictionary(
-                    uniqueKeysWithValues: HistoryPeriod.allCases.map {
-                        (
-                            $0,
-                            PeriodSummary.combine(
-                                [snapshot.summaries[$0]].compactMap { $0 },
-                                period: $0,
-                                now: now,
-                                calendar: calendar
+            // Fresh readings already use this calendar. Rebuild stale readings from request
+            // timestamps: daily totals cannot be re-sliced exactly after time-zone changes.
+            let aligned =
+                failed
+                ? HistorySnapshot(
+                    summaries: Dictionary(
+                        uniqueKeysWithValues: HistoryPeriod.allCases.map {
+                            (
+                                $0,
+                                PeriodSummary.aggregate(
+                                    snapshot.observations,
+                                    period: $0,
+                                    now: now,
+                                    calendar: calendar
+                                )
                             )
-                        )
-                    }
-                ),
-                coverage: snapshot.coverage,
-                fetchedAt: snapshot.fetchedAt
-            )
+                        }
+                    ),
+                    coverage: snapshot.coverage,
+                    fetchedAt: snapshot.fetchedAt
+                ) : snapshot
             agents.append(AgentHistory(agent: agent, snapshot: aligned, refreshFailed: failed))
         }
         let hasReadings = agents.contains { $0.coverage.hasReadings }

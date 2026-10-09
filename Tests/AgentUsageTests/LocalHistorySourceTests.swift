@@ -166,9 +166,55 @@ final class LocalHistorySourceTests: XCTestCase {
         XCTAssertFalse(snapshot.hasMoreFiles)
     }
 
-    func testFailedTodayReadingDoesNotLeakYesterdayIntoTodayAndPeriodSwitchDoesNotFetch()
-        async throws
-    {
+    func testFailedReadRebucketsRetainedRequestsAcrossTimeZoneAndPeriodBoundaries() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let recent = F.now.addingTimeInterval(-12 * 3600 - 15 * 60)
+        let oldest = HistoryPeriod.month.start(at: F.now, calendar: F.calendar).addingTimeInterval(
+            2 * 3600
+        )
+        try fixture.message(at: recent)
+        try fixture.message(id: "msg_oldest", seq: 2, at: oldest)
+        let reader = OpenCodeHistorySource(database: fixture.database)
+        let source = LocalHistorySource(fetchers: [
+            .opencode: { try await reader.refresh(now: $0, calendar: $1) }
+        ])
+        let first = await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(first.summaries[.today]?.tokens, 0)
+        XCTAssertEqual(first.summaries[.week]?.tokens, 200)
+        XCTAssertEqual(first.summaries[.month]?.tokens, 400)
+        try Data("invented corruption".utf8).write(to: fixture.database)
+        let retained = [
+            UsageObservation(operationID: "recent", timestamp: recent, tokens: 200),
+            UsageObservation(operationID: "oldest", timestamp: oldest, tokens: 200),
+        ]
+        for offset in [2 * 3600, 19_800, -7 * 3600] {
+            var calendar = F.calendar
+            calendar.timeZone = TimeZone(secondsFromGMT: offset)!
+            let failed = await source.refresh(now: F.now, calendar: calendar)
+            XCTAssertTrue(failed.agents[0].refreshFailed)
+            XCTAssertEqual(failed.agents[0].fetchedAt, first.fetchedAt)
+            XCTAssertEqual(failed.coverage.state, .partial)
+            for period in HistoryPeriod.allCases {
+                let expected = PeriodSummary.aggregate(
+                    retained,
+                    period: period,
+                    now: F.now,
+                    calendar: calendar
+                )
+                XCTAssertEqual(
+                    failed.summaries[period],
+                    expected,
+                    "Offset \(offset), period \(period)"
+                )
+                XCTAssertEqual(failed.agents[0].summaries[period], expected)
+            }
+            XCTAssertEqual(failed.summaries[.week]?.tokens, 200)
+            XCTAssertEqual(failed.summaries[.month]?.tokens, offset < 0 ? 200 : 400)
+        }
+    }
+
+    func testFailedTodayReadingDoesNotLeakYesterdayIntoToday() async throws {
         let readings = ScriptedHistoryReadings()
         let source = LocalHistorySource(fetchers: [
             .pi: { now, calendar in await readings.pi(now: now, calendar: calendar) },
@@ -184,11 +230,29 @@ final class LocalHistorySourceTests: XCTestCase {
         XCTAssertEqual(second.agents[1].summaries[.today]?.tokens, 0)
         XCTAssertEqual(second.summaries[.week]?.tokens, 390)
         XCTAssertTrue(second.agents[1].refreshFailed)
-        let store = HistoryStore(fetch: { second })
+    }
+
+    func testPeriodSwitchChangesSummaryWithoutCallingTheStoresFetchAgain() async throws {
+        let unexpectedFetch = expectation(description: "Period switching must not fetch history")
+        unexpectedFetch.isInverted = true
+        let fetch = PeriodSwitchFetch(
+            snapshot: DashboardFixtures.history(),
+            unexpectedFetch: unexpectedFetch
+        )
+        let store = HistoryStore(fetch: { await fetch.read() })
         await store.refresh()
-        for period in HistoryPeriod.allCases { store.period = period }
-        let counts = await readings.counts
-        XCTAssertEqual(counts, [2, 2])
+        XCTAssertEqual(store.summary?.tokens, 18_420)
+        store.period = .week
+        XCTAssertEqual(store.summary?.tokens, 331_560)
+        store.period = .month
+        XCTAssertEqual(store.summary?.tokens, 1_657_800)
+        store.period = .today
+        XCTAssertEqual(store.summary?.tokens, 18_420)
+        let result = await XCTWaiter.fulfillment(of: [unexpectedFetch], timeout: 0.2)
+        XCTAssertEqual(result, .completed)
+        let calls = await fetch.calls
+        XCTAssertEqual(calls, 1)
+        XCTAssertFalse(store.isRefreshing)
     }
 
     func testPiCatchUpDoesNotDisappearWhenOtherSourceFails() async throws {
@@ -209,6 +273,23 @@ final class LocalHistorySourceTests: XCTestCase {
         XCTAssertFalse(store.snapshot?.hasMoreFiles == true)
         XCTAssertEqual(store.snapshot?.coverage.state, .partial)
         XCTAssertFalse(store.isRefreshing)
+    }
+}
+
+private actor PeriodSwitchFetch {
+    let snapshot: HistorySnapshot
+    let unexpectedFetch: XCTestExpectation
+    private(set) var calls = 0
+
+    init(snapshot: HistorySnapshot, unexpectedFetch: XCTestExpectation) {
+        self.snapshot = snapshot
+        self.unexpectedFetch = unexpectedFetch
+    }
+
+    func read() -> HistorySnapshot {
+        calls += 1
+        if calls > 1 { unexpectedFetch.fulfill() }
+        return snapshot
     }
 }
 
@@ -245,7 +326,8 @@ private actor ScriptedHistoryReadings {
                 }
             ),
             coverage: HistoryCoverage(state: .ready, filesRead: 1, issues: []),
-            fetchedAt: now
+            fetchedAt: now,
+            observations: [observation]
         )
     }
 }

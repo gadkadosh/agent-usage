@@ -16,6 +16,9 @@ struct HistorySnapshot: Sendable {
     let summaries: [HistoryPeriod: PeriodSummary]
     let coverage: HistoryCoverage
     let fetchedAt: Date
+    /// Source snapshots retain normalized requests for exact re-aggregation after calendar changes.
+    /// Combined/presentation-only snapshots need only summaries. No transcripts or credentials.
+    var observations: [UsageObservation] = []
     /// Files deferred by this batch's byte budget, not a permanent coverage gap.
     var hasMoreFiles = false
     var agents: [AgentHistory] = []

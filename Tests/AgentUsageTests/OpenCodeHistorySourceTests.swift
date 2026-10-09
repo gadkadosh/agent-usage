@@ -199,6 +199,35 @@ final class OpenCodeHistorySourceTests: XCTestCase {
         XCTAssertEqual(second.summaries[.today]?.tokens, 400)
     }
 
+    func testDeepForkAndCycleSkipOnlyUnresolvableCopiesAndKeepUnrelatedRequests() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let original = try fixture.message()
+        var parent = "original"
+        for level in 1...65 {
+            let session = "fork-\(level)"
+            try fixture.session(session, fork: parent)
+            try fixture.message(id: "msg_fork\(level)_1", session: session, data: original)
+            parent = session
+        }
+        try fixture.session("unrelated")
+        try fixture.message(id: "msg_independent", session: "unrelated")
+        let deep = try await read(fixture)
+        XCTAssertEqual(deep.summaries[.today]?.tokens, 400)
+        XCTAssertEqual(deep.coverage.state, .partial)
+        XCTAssertTrue(deep.coverage.issues.contains(.scanLimit))
+        XCTAssertFalse(deep.hasMoreFiles)
+        try fixture.session("cycle-a", fork: "cycle-b")
+        try fixture.session("cycle-b", fork: "cycle-a")
+        try fixture.message(id: "msg_cyclea_1", session: "cycle-a", data: original)
+        try fixture.message(id: "msg_cycleb_1", session: "cycle-b", data: original)
+        let cyclic = try await read(fixture)
+        XCTAssertEqual(cyclic.summaries[.today]?.tokens, 400)
+        XCTAssertEqual(cyclic.coverage.state, .partial)
+        XCTAssertTrue(cyclic.coverage.issues.contains(.scanLimit))
+        XCTAssertFalse(cyclic.hasMoreFiles)
+    }
+
     func testSafetyLimitsExposePartialCoverageWithoutRetryLoop() async throws {
         let fixture = try OpenCodeHistoryFixture()
         defer { fixture.remove() }

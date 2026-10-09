@@ -297,7 +297,8 @@ actor PiHistorySource {
                 issues: issues,
                 filesSkipped: filesSkipped
             ),
-            fetchedAt: now
+            fetchedAt: now,
+            observations: observations
         )
     }
 

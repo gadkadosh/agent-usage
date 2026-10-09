@@ -173,13 +173,15 @@ actor OpenCodeHistorySource {
                 continue
             }
             let seq = sqlite3_column_int64(query, 2)
-            let key = try identity(
-                id: id,
-                session: session,
-                seq: seq,
-                on: connection,
-                issues: &issues
-            )
+            guard
+                let key = try identity(
+                    id: id,
+                    session: session,
+                    seq: seq,
+                    on: connection,
+                    issues: &issues
+                )
+            else { continue }
             let observation = UsageObservation(
                 operationID: key,
                 timestamp: timestamp,
@@ -212,13 +214,15 @@ actor OpenCodeHistorySource {
         seq: Int64,
         on db: OpaquePointer,
         issues: inout Set<HistoryIssue>
-    ) throws -> String {
+    ) throws -> String? {
         var id = id
         var session = session
         var seen: Set<String> = []
         while id.hasPrefix("msg_"), id.hasSuffix("_\(seq)") {
             guard seen.count < 64, seen.insert(session).inserted else {
-                throw HistoryReadError.unavailable
+                // This copy cannot be attributed safely. Exclude it, not unrelated requests.
+                issues.insert(.scanLimit)
+                return nil
             }
             let query = try prepare(
                 """
@@ -302,7 +306,8 @@ actor OpenCodeHistorySource {
                 filesRead: state == .ready || state == .partial ? 1 : 0,
                 issues: issues
             ),
-            fetchedAt: now
+            fetchedAt: now,
+            observations: observations
         )
     }
 
