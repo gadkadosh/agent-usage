@@ -6,8 +6,10 @@ struct HistoryCoverage: Equatable, Sendable {
     let state: State
     let filesRead: Int
     let issues: Set<HistoryIssue>
+    /// Readable session files excluded by age, without validating their contents.
+    var filesSkipped = 0
 
-    var hasReadings: Bool { filesRead > 0 }
+    var hasReadings: Bool { filesRead > 0 || filesSkipped > 0 }
 }
 
 struct HistorySnapshot: Sendable {
