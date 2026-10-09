@@ -94,6 +94,7 @@ actor PiHistorySource {
         var indexed: [URL: IndexedFile] = [:]
         var observations: [UsageObservation] = []
         var filesRead = 0
+        var filesSkipped = 0
         var visited = 0
         var remainingBytes = limits.refreshBytes
         var hasMoreFiles = false
@@ -153,6 +154,12 @@ actor PiHistorySource {
                 let handle = try openFile(relative, rootDescriptor: rootDescriptor)
                 defer { try? handle.close() }
                 let before = try signature(handle)
+                // Normal pi writes update mtime. Ctime also catches imports/edits that preserve it.
+                // Keep checking metadata on every refresh so resumed sessions become eligible again.
+                if before.predates(since) {
+                    filesSkipped += 1
+                    continue
+                }
                 if let cached = previousCache[url], cached.signature == before {
                     file = cached
                     indexed[url] = cached
@@ -236,7 +243,7 @@ actor PiHistorySource {
         }
         for id in conflicting { canonical.removeValue(forKey: id) }
         let state: HistoryCoverage.State
-        if filesRead > 0 {
+        if filesRead > 0 || filesSkipped > 0 {
             state = issues.isEmpty ? .ready : .partial
         } else if issues.contains(.unsupportedVersion) {
             state = .unsupported
@@ -246,6 +253,7 @@ actor PiHistorySource {
         var result = snapshot(
             Array(canonical.values),
             filesRead: filesRead,
+            filesSkipped: filesSkipped,
             issues: issues,
             state: state,
             now: now,
@@ -263,6 +271,7 @@ actor PiHistorySource {
     private func snapshot(
         _ observations: [UsageObservation],
         filesRead: Int,
+        filesSkipped: Int = 0,
         issues: Set<HistoryIssue>,
         state: HistoryCoverage.State,
         now: Date,
@@ -282,7 +291,12 @@ actor PiHistorySource {
                     )
                 }
             ),
-            coverage: HistoryCoverage(state: state, filesRead: filesRead, issues: issues),
+            coverage: HistoryCoverage(
+                state: state,
+                filesRead: filesRead,
+                issues: issues,
+                filesSkipped: filesSkipped
+            ),
             fetchedAt: now
         )
     }
@@ -391,6 +405,12 @@ actor PiHistorySource {
         let modifiedNanos: Int
         let changedSeconds: Int
         let changedNanos: Int
+
+        func predates(_ cutoff: Date) -> Bool {
+            let seconds = cutoff.timeIntervalSince1970
+            return Double(modifiedSeconds) + Double(modifiedNanos) / 1_000_000_000 < seconds
+                && Double(changedSeconds) + Double(changedNanos) / 1_000_000_000 < seconds
+        }
     }
 
     private struct IndexedFile {
