@@ -13,7 +13,7 @@ actor PiHistorySource {
 
     private let root: URL
     private let limits: Limits
-    // A narrow injected IO boundary for deterministic concurrent-write/cancellation tests.
+    // A narrow injected IO boundary for deterministic concurrent-write and read-failure tests.
     private let didReadFile: @Sendable () throws -> Void
     private var cache: [URL: IndexedFile] = [:]
     private var cacheStart: Date?
@@ -49,7 +49,6 @@ actor PiHistorySource {
     func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws
         -> HistorySnapshot
     {
-        try Task.checkCancellation()
         let manager = FileManager.default
         do {
             let values = try root.resourceValues(forKeys: [.isDirectoryKey])
@@ -103,7 +102,6 @@ actor PiHistorySource {
         // A clock/timezone change can move the range backwards; cached files may then lack records.
         let previousCache = (cacheStart.map { since >= $0 } ?? true) ? cache : [:]
         for case let url as URL in enumerator {
-            try Task.checkCancellation()
             visited += 1
             guard visited <= limits.visitedEntries else {
                 issues.insert(.scanLimit)
@@ -169,7 +167,6 @@ actor PiHistorySource {
                     )
                     filesParsed += 1
                     try didReadFile()
-                    try Task.checkCancellation()
                     let current = try openFile(relative, rootDescriptor: rootDescriptor)
                     defer { try? current.close() }
                     guard before == (try signature(handle)),
@@ -186,8 +183,6 @@ actor PiHistorySource {
                         madeProgress = true
                     }
                 }
-            } catch is CancellationError {
-                throw CancellationError()
             } catch {
                 if error is BatchLimitError {
                     hasMoreFiles = true
@@ -232,7 +227,6 @@ actor PiHistorySource {
         var canonical: [String: UsageObservation] = [:]
         var conflicting: Set<String> = []
         for observation in observations {
-            try Task.checkCancellation()
             if let prior = canonical[observation.operationID], prior != observation {
                 conflicting.insert(observation.operationID)
                 issues.insert(.conflictingOperation)
@@ -260,7 +254,6 @@ actor PiHistorySource {
         // Continue byte-budget deferrals only while the index advances. Failed reads and
         // permanent safety limits must not cause an endless background retry loop.
         result.hasMoreFiles = hasMoreFiles && madeProgress
-        try Task.checkCancellation()
         // Commit only a completed refresh. Deleted files disappear; retain 30 calendar days.
         cache = indexed
         cacheStart = since
@@ -361,13 +354,11 @@ actor PiHistorySource {
         while let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: 64 * 1_024) }),
             !chunk.isEmpty
         {
-            try Task.checkCancellation()
             bytesRead += chunk.count
             remainingBytes -= chunk.count
             guard bytesRead <= limits.fileBytes, remainingBytes >= 0 else { throw FileLimitError() }
             let pieces = chunk.split(separator: 10, omittingEmptySubsequences: false)
             for (index, piece) in pieces.enumerated() {
-                try Task.checkCancellation()
                 if !skippingLine {
                     if line.count + piece.count > limits.lineBytes {
                         skippingLine = true

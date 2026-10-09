@@ -471,7 +471,7 @@ final class PiHistorySourceTests: XCTestCase {
         XCTAssertEqual(recovered.coverage.state, .ready)
     }
 
-    func testChangingReadsAreExcludedAndCancelledReadsDoNotCommitCache() async throws {
+    func testChangingReadsAreExcludedAndRetriedWithoutCommittingCache() async throws {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write(lines: [F.header(), F.message()])
@@ -480,25 +480,23 @@ final class PiHistorySourceTests: XCTestCase {
         _ = try await source.refresh(now: F.now, calendar: F.calendar)
         try fixture.write(lines: [F.header(), F.message(), F.message(id: "new")])
         action.arm {
-            try fixture.write(lines: [F.header(), F.message(id: "replacement")])
+            try fixture.write(lines: [
+                F.header(),
+                F.message(
+                    id: "replacement",
+                    usage: #"{"input":200,"output":20,"cacheRead":30,"cacheWrite":40}"#
+                ),
+            ])
         }
         let changing = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(changing.summaries[.today]?.tokens, 190)
         XCTAssertTrue(changing.coverage.issues.contains(.changingFile))
         XCTAssertTrue(changing.coverage.issues.contains(.staleFile))
         let consistent = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(consistent.summaries[.today]?.tokens, 290)
         XCTAssertEqual(consistent.coverage.state, .ready)
-        try fixture.write(lines: [F.header(), F.message(), F.message(id: "new")])
-        action.arm { withUnsafeCurrentTask { $0?.cancel() } }
-        let cancelled = Task { try await source.refresh(now: F.now, calendar: F.calendar) }
-        do {
-            _ = try await cancelled.value
-            XCTFail("Expected cancellation")
-        } catch { XCTAssertTrue(error is CancellationError) }
-        let recovered = try await source.refresh(now: F.now, calendar: F.calendar)
-        XCTAssertEqual(recovered.summaries[.today]?.tokens, 380)
         let parsed = await source.filesParsed
-        XCTAssertEqual(parsed, 5)  // Cancelled parsing was retried, not committed.
+        XCTAssertEqual(parsed, 3, "A changing file must be retried, not cached.")
 
         let fresh = PiHistorySource(
             root: fixture.root,
@@ -510,20 +508,5 @@ final class PiHistorySourceTests: XCTestCase {
         XCTAssertFalse(excluded.coverage.hasReadings)
         XCTAssertEqual(excluded.summaries[.today]?.tokens, 0)
         XCTAssertTrue(excluded.coverage.issues.contains(.changingFile))
-    }
-
-    func testCancellationDoesNotPublishPartialScan() async throws {
-        let fixture = try PiHistoryFixtureRoot()
-        defer { fixture.remove() }
-        try fixture.write(lines: [F.header(), F.message()])
-        let source = PiHistorySource(root: fixture.root)
-        let task = Task {
-            withUnsafeCurrentTask { $0?.cancel() }
-            return try await source.refresh(now: F.now, calendar: F.calendar)
-        }
-        do {
-            _ = try await task.value
-            XCTFail("Expected cancellation")
-        } catch { XCTAssertTrue(error is CancellationError) }
     }
 }

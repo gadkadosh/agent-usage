@@ -48,15 +48,12 @@ final class HistoryStore: ObservableObject {
         do {
             while true {
                 let result = try await fetch()
-                try Task.checkCancellation()
                 snapshot = result
                 error = nil
                 guard result.hasMoreFiles else { return }
                 // Pace catch-up and let the UI present each batch before continuing.
                 try await Task.sleep(for: .milliseconds(100))
             }
-        } catch is CancellationError {
-            // Cancellation is not a source failure; keep the previous snapshot and error.
         } catch {
             // Never forward IO/decoder errors containing sensitive paths or payloads.
             // Failed enumeration must not replace the last reading with zero.

@@ -112,12 +112,23 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertFalse(store.isRefreshing)
     }
 
-    func testCancellationErrorDoesNotBecomeSourceFailure() async {
-        let store = HistoryStore(fetch: { throw CancellationError() })
-        await store.refresh()
+    func testAlreadyCancelledRequestDoesNotStartOrSuppressLaterRefresh() async {
+        let fetcher = ScriptedHistory()
+        let store = HistoryStore(fetch: { try await fetcher.fetch() })
+        let request = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await store.refresh()
+        }
+        await request.value
+        var count = await fetcher.count
+        XCTAssertEqual(count, 0)
         XCTAssertNil(store.snapshot)
-        XCTAssertNil(store.error)
         XCTAssertFalse(store.isRefreshing)
+        await store.refresh()
+        count = await fetcher.count
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(store.summary?.tokens, 100)
+        XCTAssertNil(store.error)
     }
 
     func testStartupReturnsBeforeIOAndIsIdempotentAfterCompletion() async {
