@@ -60,7 +60,9 @@ struct HistoryPanel: View {
                         Text("π").font(.title3).accessibilityHidden(true)
                         Text("pi").fontWeight(.medium)
                         Spacer()
-                        Text("\(summary.tokens.formatted()) tokens").monospacedDigit()
+                        Text("\(summary.tokens.formatted(.number.notation(.compactName))) tokens")
+                            .monospacedDigit()
+                            .accessibilityLabel("\(summary.tokens) tokens")
                     }
                     .font(.subheadline)
                 } else if snapshot.hasMoreFiles {
