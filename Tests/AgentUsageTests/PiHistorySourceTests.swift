@@ -187,7 +187,8 @@ final class PiHistorySourceTests: XCTestCase {
         XCTAssertFalse(empty.coverage.hasReadings)
         XCTAssertTrue(empty.coverage.issues.contains(.incompleteLine))
         try fixture.write("--cwd--/too-deep/session.jsonl", lines: [F.header(), F.message()])
-        let bounded = try await source.refresh(now: F.now, calendar: F.calendar)
+        let shallow = PiHistorySource(root: fixture.root, limits: .init(directoryDepth: 1))
+        let bounded = try await shallow.refresh(now: F.now, calendar: F.calendar)
         XCTAssertTrue(bounded.coverage.issues.contains(.scanLimit))
         XCTAssertEqual(bounded.summaries[.today]?.tokens, 0)
         try fixture.write("large.jsonl", lines: [F.header(), F.message()])
@@ -201,6 +202,98 @@ final class PiHistorySourceTests: XCTestCase {
             XCTAssertFalse(snapshot.hasMoreFiles)
             XCTAssertFalse(snapshot.coverage.hasReadings)
         }
+    }
+
+    func testNestedSessionsCountOnceAndArtifactsArePrunedBeforeConsumingTheScanBudget()
+        async throws
+    {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write("--cwd--/parent.jsonl", lines: [F.header(), F.message()])
+        try fixture.write(
+            "--cwd--/parent/run-id/run-0/session.jsonl",
+            lines: [F.header(id: "child"), F.message(), F.message(id: "child-operation")]
+        )
+        for index in 0..<20 {
+            // Even session-shaped artifact copies must not contribute usage or warnings.
+            try fixture.write(
+                "--cwd--/subagent-artifacts/outputs/run-\(index)/transcript.jsonl",
+                lines: [F.header(), F.message(id: "artifact-\(index)")]
+            )
+        }
+        let source = PiHistorySource(root: fixture.root, limits: .init(visitedEntries: 7))
+        for _ in 0..<2 {
+            let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+            XCTAssertEqual(snapshot.coverage.state, .ready)
+            XCTAssertEqual(snapshot.coverage.issues, [])
+            XCTAssertEqual(snapshot.coverage.filesRead, 2)
+            XCTAssertEqual(snapshot.summaries[.today]?.tokens, 380)
+            XCTAssertFalse(snapshot.hasMoreFiles)
+        }
+        let parsed = await source.filesParsed
+        XCTAssertEqual(parsed, 2)
+    }
+
+    func testNestedDepthBoundaryRetainsAcceptedUsageAndWarnsAboutExcludedSessions()
+        async throws
+    {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write("a/b/session.jsonl", lines: [F.header(), F.message()])
+        try fixture.write("a/b/c/session.jsonl", lines: [F.header(), F.message(id: "excluded")])
+        let source = PiHistorySource(root: fixture.root, limits: .init(directoryDepth: 2))
+        let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
+        XCTAssertEqual(snapshot.coverage.filesRead, 1)
+        XCTAssertEqual(snapshot.coverage.state, .partial)
+        XCTAssertEqual(snapshot.coverage.issues, [.scanLimit])
+        XCTAssertFalse(snapshot.hasMoreFiles)
+    }
+
+    func testNestedLinksAndArtifactNamedLinksStillProduceSafetyWarnings() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        let outside = try PiHistoryFixtureRoot()
+        defer {
+            fixture.remove()
+            outside.remove()
+        }
+        try fixture.write("a/b/session.jsonl", lines: [F.header(), F.message()])
+        let outsideFile = try outside.write(lines: [F.header(), F.message(id: "outside")])
+        try FileManager.default.createSymbolicLink(
+            at: fixture.root.appendingPathComponent("a/b/subagent-artifacts"),
+            withDestinationURL: outside.root
+        )
+        try FileManager.default.createSymbolicLink(
+            at: fixture.root.appendingPathComponent("a/b/linked.jsonl"),
+            withDestinationURL: outsideFile
+        )
+        let source = PiHistorySource(root: fixture.root)
+        let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
+        XCTAssertEqual(snapshot.coverage.state, .partial)
+        XCTAssertEqual(snapshot.coverage.issues, [.unsupportedRecord])
+    }
+
+    func testNestedAncestorSwappedToSymlinkDuringReadIsRejectedAndRecovers() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write("a/b/session.jsonl", lines: [F.header(), F.message()])
+        let action = ReadAction()
+        let source = PiHistorySource(root: fixture.root, didReadFile: { try action.run() })
+        let directory = fixture.root.appendingPathComponent("a/b")
+        let moved = fixture.root.appendingPathComponent("saved")
+        action.arm {
+            try FileManager.default.moveItem(at: directory, to: moved)
+            try FileManager.default.createSymbolicLink(at: directory, withDestinationURL: moved)
+        }
+        let changed = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(changed.summaries[.today]?.tokens, 0)
+        XCTAssertTrue(changed.coverage.issues.contains(.unreadableFile))
+        try FileManager.default.removeItem(at: directory)
+        try FileManager.default.moveItem(at: moved, to: directory)
+        let recovered = try await source.refresh(now: F.now, calendar: F.calendar)
+        XCTAssertEqual(recovered.summaries[.today]?.tokens, 190)
+        XCTAssertEqual(recovered.coverage.state, .ready)
     }
 
     func testRecordsSpanningReadChunksAndCRLFDoNotLoseUsage() async throws {
