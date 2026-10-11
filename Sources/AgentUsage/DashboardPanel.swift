@@ -9,11 +9,6 @@ struct DashboardPanel: View {
 
     var body: some View {
         content
-            .background {
-                GeometryReader { geometry in
-                    DashboardWindowSize(size: geometry.size)
-                }
-            }
             .background(HistoryPanelLifecycle(history: history).frame(width: 0, height: 0))
     }
 
@@ -51,6 +46,11 @@ struct DashboardPanel: View {
 
 private struct DashboardViewport<Content: View>: View {
     let content: Content
+    // Disambiguate the property wrapper from the macOS 27 macro unavailable in CLT.
+    private typealias HeightState = SwiftUI.State<CGFloat>
+    @HeightState private var maximumHeight = DashboardWindowSize.maximumHeight(
+        for: NSScreen.main?.visibleFrame.height ?? 800
+    )
 
     var body: some View {
         // Resolve the ideal size during layout, not after the native window has opened.
@@ -62,9 +62,12 @@ private struct DashboardViewport<Content: View>: View {
         .frame(width: 360)
         .frame(maxHeight: maximumHeight)
         .fixedSize(horizontal: true, vertical: true)
-    }
-
-    private var maximumHeight: CGFloat {
-        max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
+        .background {
+            GeometryReader { geometry in
+                DashboardWindowSize(size: geometry.size) { height in
+                    maximumHeight = DashboardWindowSize.maximumHeight(for: height)
+                }
+            }
+        }
     }
 }

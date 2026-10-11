@@ -6,6 +6,47 @@ import XCTest
 
 @MainActor
 final class DashboardSizingTests: XCTestCase {
+    func testScreenBudgetHasNoArbitraryCeilingOrMinimum() {
+        XCTAssertEqual(DashboardWindowSize.maximumHeight(for: 1_000), 960)
+        XCTAssertEqual(DashboardWindowSize.maximumHeight(for: 500), 460)
+        XCTAssertEqual(DashboardWindowSize.maximumHeight(for: 200), 160)
+        XCTAssertEqual(DashboardWindowSize.maximumHeight(for: 30), 1)
+    }
+
+    func testOverflowUsesTheHostingWindowsScreenBudget() async throws {
+        let readings = SizingReadings()
+        await readings.setError(String(repeating: "Synthetic allowance unavailable. ", count: 200))
+        let usage = UsageStore(fetch: { try await readings.allowance() })
+        let history = HistoryStore(fetch: { DashboardFixtures.history() })
+        await usage.refresh()
+        await history.refresh()
+        let host = NSHostingView(rootView: DashboardPanel(usage: usage, history: history))
+        let window = makeWindow(host)
+        defer { window.close() }
+        XCTAssertFalse(NSScreen.screens.isEmpty)
+        for screen in NSScreen.screens {
+            window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX, y: screen.visibleFrame.midY))
+            NotificationCenter.default.post(
+                name: NSWindow.didChangeScreenNotification,
+                object: window
+            )
+            NotificationCenter.default.post(
+                name: NSApplication.didChangeScreenParametersNotification,
+                object: nil
+            )
+            let size = try await fittedSize(host)
+            let actualScreen = try XCTUnwrap(window.screen)
+            XCTAssertEqual(actualScreen, screen)
+            XCTAssertEqual(size.height, screen.visibleFrame.height - 40, accuracy: 1)
+            XCTAssertEqual(window.frame.height, size.height, accuracy: 1)
+            let scroll = try XCTUnwrap(scrollView(in: host))
+            XCTAssertGreaterThan(
+                try XCTUnwrap(scroll.documentView).bounds.height,
+                scroll.contentView.bounds.height
+            )
+        }
+    }
+
     func testPanelFitsContentAndResizesAfterRefresh() async throws {
         let readings = SizingReadings()
         let usage = UsageStore(
@@ -29,7 +70,7 @@ final class DashboardSizingTests: XCTestCase {
         let ready = try await fittedSize(host)
         assertWindow(window, fits: ready, top: top)
         XCTAssertEqual(ready.width, 360, accuracy: 1)
-        let cap = max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
+        let cap = (NSScreen.main?.visibleFrame.height ?? 800) - 40
         XCTAssertGreaterThan(ready.height, 0)
         XCTAssertLessThanOrEqual(ready.height, cap + 1)
         XCTAssertLessThan(
@@ -105,7 +146,7 @@ final class DashboardSizingTests: XCTestCase {
     func testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout() async throws {
         let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
         await usage.refresh()
-        let cap = max(240, min(600, (NSScreen.main?.visibleFrame.height ?? 800) - 40))
+        let cap = (NSScreen.main?.visibleFrame.height ?? 800) - 40
         var heights: [CGFloat] = []
         for state in [HistoryCoverage.State.ready, .partial, .missing] {
             let readings = DashboardReadings(snapshot: DashboardFixtures.history(state: state))

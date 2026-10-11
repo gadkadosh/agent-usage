@@ -5,6 +5,7 @@ import Foundation
 actor PiHistorySource {
     struct Limits: Sendable {
         var visitedEntries = 20_000
+        var directoryDepth = 16
         var fileBytes = 128 * 1_024 * 1_024
         var refreshBytes = 256 * 1_024 * 1_024
         var lineBytes = 8 * 1_024 * 1_024
@@ -123,8 +124,13 @@ actor PiHistorySource {
                 continue
             }
             if values.isDirectory == true {
-                // Default pi storage: root / encoded-cwd / session.jsonl. Custom roots may be flat.
-                if enumerator.level >= 2 {
+                // Subagent output/transcript copies are artifacts, not canonical sessions.
+                if url.lastPathComponent == "subagent-artifacts" {
+                    enumerator.skipDescendants()
+                    continue
+                }
+                // Genuine child sessions live below parent-session / run-id / run-N.
+                if enumerator.level > limits.directoryDepth {
                     enumerator.skipDescendants()
                     issues.insert(.scanLimit)
                 }
@@ -142,10 +148,7 @@ actor PiHistorySource {
             }
             // Use enumeration depth rather than stripping an absolute prefix: Foundation may
             // spell the same macOS temporary root as /var/... or /private/var/....
-            let relative =
-                enumerator.level == 1
-                ? [url.lastPathComponent]
-                : [url.deletingLastPathComponent().lastPathComponent, url.lastPathComponent]
+            let relative = Array(url.pathComponents.suffix(enumerator.level))
             let file: IndexedFile
             do {
                 guard manager.isReadableFile(atPath: url.path) else {
@@ -302,19 +305,21 @@ actor PiHistorySource {
     }
 
     private func openFile(_ relative: [String], rootDescriptor: Int32) throws -> FileHandle {
-        guard (1...2).contains(relative.count),
-            relative.allSatisfy({ $0 != "." && $0 != ".." })
+        guard !relative.isEmpty, relative.count <= limits.directoryDepth + 1,
+            relative.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("/") })
         else { throw HistoryReadError.unavailable }
         var directory = rootDescriptor
-        if relative.count == 2 {
-            directory = openat(
-                rootDescriptor,
-                String(relative[0]),
+        defer { if directory != rootDescriptor { close(directory) } }
+        for component in relative.dropLast() {
+            let next = openat(
+                directory,
+                component,
                 O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
             )
-            guard directory >= 0 else { throw HistoryReadError.unavailable }
+            guard next >= 0 else { throw HistoryReadError.unavailable }
+            if directory != rootDescriptor { close(directory) }
+            directory = next
         }
-        defer { if directory != rootDescriptor { close(directory) } }
         // NONBLOCK also avoids hanging if a regular file is replaced with a FIFO.
         let descriptor = openat(
             directory,
