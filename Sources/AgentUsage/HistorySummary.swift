@@ -6,6 +6,21 @@ struct UsageObservation: Equatable, Sendable {
     let operationID: String
     let timestamp: Date
     let tokens: Int64
+
+    /// Copies are counted once; ambiguous identities are excluded rather than guessed.
+    static func resolve(_ observations: [Self]) -> (observations: [Self], hasConflicts: Bool) {
+        var canonical: [String: Self] = [:]
+        var conflicts: Set<String> = []
+        for observation in observations {
+            if let prior = canonical[observation.operationID], prior != observation {
+                conflicts.insert(observation.operationID)
+            } else {
+                canonical[observation.operationID] = observation
+            }
+        }
+        for id in conflicts { canonical.removeValue(forKey: id) }
+        return (Array(canonical.values), !conflicts.isEmpty)
+    }
 }
 
 enum HistoryPeriod: Int, CaseIterable, Sendable {

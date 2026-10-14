@@ -18,4 +18,5 @@ struct HistorySnapshot: Sendable {
     let fetchedAt: Date
     /// Files deferred by this batch's byte budget, not a permanent coverage gap.
     var hasMoreFiles = false
+    var agents: [AgentHistorySummary] = []
 }

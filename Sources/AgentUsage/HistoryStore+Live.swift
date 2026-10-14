@@ -1,14 +1,42 @@
 import Foundation
 
 extension HistoryStore {
-    /// Keep one source actor (and its file index) alive across background batches and refreshes.
-    /// Passing a root bypasses default discovery, so integration tests never inspect real histories.
     static func live(
-        root: URL = PiHistorySource.defaultRoot(),
         now: @escaping @Sendable () -> Date = Date.init,
         calendar: Calendar = .autoupdatingCurrent
     ) -> HistoryStore {
-        let source = PiHistorySource(root: root)
-        return HistoryStore(fetch: { try await source.refresh(now: now(), calendar: calendar) })
+        let pi = PiHistorySource(root: PiHistorySource.defaultRoot())
+        let opencode = OpenCodeHistorySource(database: OpenCodeHistorySource.defaultDatabase())
+        return live(
+            sources: [
+                HistorySource(agent: .pi, read: { try await pi.read($0) }),
+                HistorySource(agent: .opencode, read: { try await opencode.read($0) }),
+            ],
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    /// Explicit roots keep integration tests isolated from all installed agents.
+    static func live(
+        root: URL,
+        now: @escaping @Sendable () -> Date = Date.init,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> HistoryStore {
+        let pi = PiHistorySource(root: root)
+        return live(
+            sources: [HistorySource(agent: .pi, read: { try await pi.read($0) })],
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    static func live(
+        sources: [HistorySource],
+        now: @escaping @Sendable () -> Date = Date.init,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> HistoryStore {
+        let coordinator = HistoryCoordinator(sources: sources)
+        return HistoryStore(fetch: { await coordinator.refresh(now: now(), calendar: calendar) })
     }
 }

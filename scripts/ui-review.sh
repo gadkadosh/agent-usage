@@ -6,7 +6,7 @@ umask 077
 usage() {
     cat <<'HELP'
 Usage:
-  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS]
+  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS] [--opencode-db SYNTHETIC_DB]
   ui-review.sh status SESSION
   ui-review.sh capture SESSION NAME
   ui-review.sh cleanup SESSION
@@ -32,6 +32,7 @@ case "$command" in launch|status|capture|cleanup) ;; *) fail "Unknown command: $
 
 app=
 fixtures=
+opencode=
 name=
 if [[ $command == launch ]]; then
     while [[ $# -gt 0 ]]; do
@@ -39,6 +40,7 @@ if [[ $command == launch ]]; then
         case "$1" in
             --app) app=$2 ;;
             --sessions) fixtures=$2 ;;
+            --opencode-db) opencode=$2 ;;
             *) fail "Unknown option: $1" ;;
         esac
         shift 2
@@ -49,6 +51,13 @@ if [[ $command == launch ]]; then
         [[ -d $fixtures ]] || fail 'Synthetic sessions directory does not exist.'
         fixtures=$(cd "$fixtures" && pwd -P)
         [[ -z $(find "$fixtures" -type l -print -quit) ]] || fail 'Synthetic sessions must not contain symlinks.'
+    fi
+    if [[ -n $opencode ]]; then
+        [[ -f $opencode && ! -L $opencode ]] || fail 'Synthetic OpenCode database must be a regular file, not a symlink.'
+        opencode="$(cd "$(dirname "$opencode")" && pwd -P)/$(basename "$opencode")"
+        for suffix in -wal -shm -journal; do
+            [[ ! -e $opencode$suffix && ! -L $opencode$suffix ]] || fail 'Checkpoint and close the synthetic database before copying it.'
+        done
     fi
 elif [[ $command == capture ]]; then
     [[ $# == 1 && $1 =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || fail 'Capture needs a simple name (letters, digits, underscores, hyphens).'
@@ -67,6 +76,7 @@ if [[ ! -e $session && $command == launch ]]; then
     put version 1
     put source "$app"
     put fixtures "$fixtures"
+    put opencode "$opencode"
     # The unique executable name also makes direct System Events interaction easy.
     token=$(/usr/bin/uuidgen | tr -d '-' | cut -c1-12)
     process="UsageReview$token"
@@ -87,9 +97,12 @@ if [[ ! -e $session && $command == launch ]]; then
     /usr/bin/plutil -replace CFBundleIdentifier -string "local.agentusage.review.$token" "$plist"
     /usr/bin/codesign --force --sign - --timestamp=none "$bundle"
     /usr/bin/codesign --verify --strict "$bundle"
-    mkdir -p "$session/agent/sessions" "$session/evidence"
+    mkdir -p "$session/agent/sessions" "$session/opencode" "$session/evidence"
     if [[ -n $fixtures ]]; then
         /usr/bin/ditto "$fixtures" "$session/agent/sessions"
+    fi
+    if [[ -n $opencode ]]; then
+        cp "$opencode" "$session/opencode/opencode.db"
     fi
     {
         printf 'Source app: %s\nSource executable SHA-256: %s\n' "$app" "$source_hash"
@@ -100,6 +113,8 @@ if [[ ! -e $session && $command == launch ]]; then
         printf 'Synthetic sessions source: %s\n' "${fixtures:-empty}"
         printf 'Snapshot hashes (relative to agent/sessions):\n'
         (cd "$session/agent/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
+        printf 'Synthetic OpenCode source: %s\nSnapshot hashes (relative to opencode):\n' "${opencode:-empty}"
+        (cd "$session/opencode" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
     } > "$session/provenance.txt"
     put ready yes
 else
@@ -147,11 +162,12 @@ APPLESCRIPT
 
 case "$command" in
     launch)
-        [[ $(get source) == "$app" && $(get fixtures) == "$fixtures" ]] || fail 'Session inputs differ; use a new session directory.'
+        [[ $(get source) == "$app" && $(get fixtures) == "$fixtures" && $(get opencode 2>/dev/null || true) == "$opencode" ]] || fail 'Session inputs differ; use a new session directory.'
         if ! owned_process; then
             # Launch the real bundle executable to retain an exact PID, not open's PID.
             PI_CODING_AGENT_DIR="$session/agent" \
                 PI_CODING_AGENT_SESSION_DIR="$session/agent/sessions" \
+                OPENCODE_DB="$session/opencode/opencode.db" \
                 "$executable" > "$session/app.log" 2>&1 < /dev/null &
             pid=$!
             started=$(/bin/ps -p "$pid" -o lstart=)

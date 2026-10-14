@@ -17,7 +17,12 @@ re-signed, leaving the source bundle and existing app instances alone. It runs t
 copied bundle executable directly to retain its exact PID. Both pi directory
 variables point into the session. Credentials are empty; no provider requests can
 be authenticated. To review history, pass `--sessions /path/to/synthetic/sessions`.
-Only use invented, non-sensitive input. This directory is copied once; symlinks are
+OpenCode discovery is also isolated with `OPENCODE_DB` pointing inside the session.
+To include synthetic v2 history, pass `--opencode-db /path/to/synthetic/opencode.db`.
+Checkpoint and close that database first; database symlinks and existing WAL/shared-memory/
+journal sidecars are rejected so the copied fixture is self-contained.
+
+Only use invented, non-sensitive input. Fixtures are copied once; symlinks are
 rejected. The harness does not generate fixtures or freeze the app's clock.
 
 Launch again with the same arguments to reuse the running instance or restart the
@@ -60,7 +65,7 @@ It cannot detect every overlap or a close/reopen at identical bounds. Inspect th
 
 Evidence lives in `SESSION/evidence/NAME.png` and `NAME.txt`. The sidecar records the
 capture time, bounds, command, process, source/isolated binary hashes, macOS version,
-and fixture snapshot hashes. Binary hashes identify the artifact, not its Git revision;
+and pi/OpenCode fixture snapshot hashes. Binary hashes identify the artifact, not its Git revision;
 record the corresponding revision and UI setup separately on the PR. For matched
 before/after checks, use separate sessions with the same synthetic inputs, appearance,
 locale, selection, and pointer placement.

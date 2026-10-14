@@ -50,6 +50,13 @@ actor PiHistorySource {
     func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws
         -> HistorySnapshot
     {
+        try read(HistoryReadContext(now: now, calendar: calendar))
+            .snapshot(in: HistoryReadContext(now: now, calendar: calendar))
+    }
+
+    func read(_ context: HistoryReadContext) throws -> HistoryReadings {
+        let now = context.now
+        let calendar = context.calendar
         let manager = FileManager.default
         do {
             let values = try root.resourceValues(forKeys: [.isDirectoryKey])
@@ -60,13 +67,11 @@ actor PiHistorySource {
             where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
         {
             cache = [:]
-            return snapshot(
+            return readings(
                 [],
                 filesRead: 0,
                 issues: [],
                 state: .missing,
-                now: now,
-                calendar: calendar
             )
         } catch {
             throw HistoryReadError.unavailable
@@ -234,17 +239,8 @@ actor PiHistorySource {
             issues.insert(.scanLimit)
             hasMoreFiles = false
         }
-        var canonical: [String: UsageObservation] = [:]
-        var conflicting: Set<String> = []
-        for observation in observations {
-            if let prior = canonical[observation.operationID], prior != observation {
-                conflicting.insert(observation.operationID)
-                issues.insert(.conflictingOperation)
-            } else {
-                canonical[observation.operationID] = observation
-            }
-        }
-        for id in conflicting { canonical.removeValue(forKey: id) }
+        let canonical = UsageObservation.resolve(observations)
+        if canonical.hasConflicts { issues.insert(.conflictingOperation) }
         let state: HistoryCoverage.State
         if filesRead > 0 || filesSkipped > 0 {
             state = issues.isEmpty ? .ready : .partial
@@ -253,14 +249,12 @@ actor PiHistorySource {
         } else {
             state = issues.isEmpty ? .missing : .unavailable
         }
-        var result = snapshot(
-            Array(canonical.values),
+        var result = readings(
+            canonical.observations,
             filesRead: filesRead,
             filesSkipped: filesSkipped,
             issues: issues,
-            state: state,
-            now: now,
-            calendar: calendar
+            state: state
         )
         // Continue byte-budget deferrals only while the index advances. Failed reads and
         // permanent safety limits must not cause an endless background retry loop.
@@ -271,36 +265,21 @@ actor PiHistorySource {
         return result
     }
 
-    private func snapshot(
+    private func readings(
         _ observations: [UsageObservation],
         filesRead: Int,
         filesSkipped: Int = 0,
         issues: Set<HistoryIssue>,
-        state: HistoryCoverage.State,
-        now: Date,
-        calendar: Calendar
-    ) -> HistorySnapshot {
-        HistorySnapshot(
-            summaries: Dictionary(
-                uniqueKeysWithValues: HistoryPeriod.allCases.map {
-                    (
-                        $0,
-                        PeriodSummary.aggregate(
-                            observations,
-                            period: $0,
-                            now: now,
-                            calendar: calendar
-                        )
-                    )
-                }
-            ),
+        state: HistoryCoverage.State
+    ) -> HistoryReadings {
+        HistoryReadings(
+            observations: observations,
             coverage: HistoryCoverage(
                 state: state,
                 filesRead: filesRead,
                 issues: issues,
                 filesSkipped: filesSkipped
-            ),
-            fetchedAt: now
+            )
         )
     }
 
@@ -428,11 +407,4 @@ actor PiHistorySource {
     private struct FileLimitError: Error {}
     private struct BatchLimitError: Error {}
     private struct ChangingFileError: Error {}
-}
-
-enum HistoryReadError: LocalizedError {
-    case unavailable
-    var errorDescription: String? {
-        "Pi history could not be read. Check access to the session directory, then refresh."
-    }
 }

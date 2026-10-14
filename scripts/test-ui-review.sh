@@ -21,16 +21,21 @@ reject() {
     fi
 }
 
+first_launch() { "$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --opencode-db "$root/synthetic.db"; }
+/usr/bin/sqlite3 "$root/synthetic.db" 'CREATE TABLE synthetic (id INTEGER); INSERT INTO synthetic VALUES (1);'
 mkdir "$root/fixtures"
 printf '{"type":"session","version":3,"id":"synthetic","timestamp":"2026-01-01T00:00:00Z","cwd":"/synthetic"}\n' > "$root/fixtures/synthetic.jsonl"
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+first_launch
+cmp "$root/synthetic.db" "$first/opencode/opencode.db" || fail 'OpenCode snapshot differs.'
+/usr/bin/sqlite3 "$root/synthetic.db" 'INSERT INTO synthetic VALUES (2);'
+[[ $(/usr/bin/sqlite3 "$first/opencode/opencode.db" 'SELECT count(*) FROM synthetic') == 1 ]] || fail 'OpenCode snapshot follows source changes.'
 pid=$(value "$first" pid)
 [[ $(/bin/ps -ww -p "$pid" -o comm=) == "$(value "$first" executable)" ]] || fail 'Wrong process launched.'
 [[ ! -e $first/agent/auth.json ]] || fail 'Credentials were not isolated.'
 cmp "$root/fixtures/synthetic.jsonl" "$first/agent/sessions/synthetic.jsonl" || fail 'Fixture snapshot differs.'
 printf 'modified\n' >> "$root/fixtures/synthetic.jsonl"
 [[ $(wc -l < "$first/agent/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Snapshot follows source changes.'
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+first_launch
 [[ $(value "$first" pid) == "$pid" ]] || fail 'Repeated launch created another process.'
 "$harness" status "$first" > "$root/status.txt"
 grep -q 'State: running' "$root/status.txt" || fail 'Status missed running process.'
@@ -45,8 +50,14 @@ reject "$harness" launch "$root/unrelated" --app "$app"
 mkdir "$root/linked-fixtures"
 ln -s "$root/fixtures/synthetic.jsonl" "$root/linked-fixtures/link.jsonl"
 reject "$harness" launch "$root/linked-session" --app "$app" --sessions "$root/linked-fixtures"
+ln -s "$root/synthetic.db" "$root/linked.db"
+reject "$harness" launch "$root/linked-db-session" --app "$app" --opencode-db "$root/linked.db"
+touch "$root/synthetic.db-wal"
+reject "$harness" launch "$root/wal-session" --app "$app" --opencode-db "$root/synthetic.db"
+rm "$root/synthetic.db-wal"
 
 "$harness" launch "$second" --app "$app"
+[[ ! -e $second/opencode/opencode.db ]] || fail 'Default review should isolate OpenCode with missing history.'
 other_pid=$(value "$second" pid)
 [[ $other_pid != "$pid" ]] || fail 'Sessions share a process.'
 [[ $(value "$second" process) != "$(value "$first" process)" ]] || fail 'Sessions share an identity.'
@@ -70,7 +81,8 @@ if /bin/kill -0 "$pid" 2>/dev/null; then fail 'Cleanup did not stop the review p
 [[ $(< "$first/evidence/sentinel.txt") == 'preserve me' ]] || fail 'Cleanup deleted evidence.'
 "$harness" status "$first" > "$root/stopped.txt"
 grep -q 'State: stopped' "$root/stopped.txt" || fail 'Status missed stopped process.'
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+first_launch
+[[ $(/usr/bin/sqlite3 "$first/opencode/opencode.db" 'SELECT count(*) FROM synthetic') == 1 ]] || fail 'Relaunch replaced the OpenCode snapshot.'
 [[ $(value "$first" pid) != "$pid" ]] || fail 'Stopped session did not relaunch.'
 [[ $(wc -l < "$first/agent/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Relaunch replaced the snapshot.'
 "$harness" status "$second" > "$root/other.txt"

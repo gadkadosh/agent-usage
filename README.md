@@ -1,19 +1,19 @@
 # Agent Usage
 
-A native macOS menu-bar app showing ChatGPT account allowance and observed pi token usage on this Mac.
+A native macOS menu-bar app showing ChatGPT account allowance and observed pi and OpenCode token usage on this Mac.
 
 ## Requirements
 
 - macOS 13 or newer
 - Swift 6 / Apple Command Line Tools (or Xcode)
-- Existing [pi](https://pi.dev) histories for local token totals
+- Existing [pi](https://pi.dev) or [OpenCode](https://opencode.ai) v2 histories for local token totals
 - Optional: pi signed into OpenAI with your ChatGPT subscription (`/login` in pi) for allowance
 
 Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
 
 ## Dashboard
 
-Account-wide allowance meters and reset countdowns stay separate from **On this Mac** history. Choose **Today / 7 days / 30 days** for observed tokens, an hourly/daily chart and the pi total. Other agents and API cost estimates are not supported yet.
+Account-wide allowance meters and reset countdowns stay separate from **On this Mac** history. Choose **Today / 7 days / 30 days** for combined observed tokens, an hourly/daily chart and per-agent totals. Sources refresh independently; an unreadable agent retains its last reading without blocking the others. Missing agents have an explicit status, not a zero token total. Other agents and API cost estimates are not supported yet.
 
 Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. The history footer shows loading progress during catch-up, otherwise its update time, with a brief warning when totals may be incomplete, stale or double-counted. Technical coverage limits are documented below, not listed in the panel. Refresh and Quit remain in the header options menu; longer error content scrolls.
 
@@ -49,11 +49,17 @@ History indexing starts in the background at app launch. Opening the panel or ch
 
 The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
 
-The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes. Files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history. Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per batch. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
+The pi in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The pi source performs no history uploads or writes. Files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history. Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per batch. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
+
+OpenCode discovery uses `~/.local/share/opencode/opencode.db`, honoring `XDG_DATA_HOME` and `OPENCODE_DB` (relative database names resolve inside the OpenCode data directory). Finder-launched apps do not inherit terminal-only overrides. The adapter is validated against OpenCode 2.0.25's `session_v2` / `session_message` schema. Older v1 databases and JSON storage are unsupported, not reported as zero usage. Alternate release-channel databases require an explicit `OPENCODE_DB`; ephemeral in-memory databases are not supported.
+
+OpenCode uses a read-only SQLite transaction, including committed WAL updates, without launching an agent or accessing its credentials. Only allowlisted numeric metadata reaches Swift. Assistant and completed/failed compaction usage is counted; tool contents, session aggregates and event logs are not additional usage. Reasoning tokens are additive in OpenCode v2, unlike pi's reasoning subset. Pre-fork copied messages are excluded using the creation-time rule in OpenCode's own statistics. Deleted histories disappear on refresh. A readable empty database is recorded zero usage; missing, unsupported and failed sources remain distinct. There are no history uploads, schema migrations or database/WAL content writes. SQLite may maintain shared-memory (`-shm`) coordination metadata for a live WAL database.
+
+OpenCode scans the current 30-calendar-day range on each refresh. Safety limits are 250,000 records, 256 MiB per refresh, 8 MiB per source record, a 16 MiB SQLite row buffer and five million SQLite VM steps. Record/work exclusions mark totals partial; database read failures retain the previous source reading. In-flight compaction usage appears when its completed/failed message is recorded. Both adapters retain only normalized readings for failed-refresh recovery; stale readings are reaggregated against the current period boundaries.
 
 ## Tests
 
-Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
+Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real agent credentials or histories.
 
 ### Synthetic native screenshots (development only)
 
