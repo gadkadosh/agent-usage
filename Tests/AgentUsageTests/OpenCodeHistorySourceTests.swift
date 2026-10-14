@@ -76,10 +76,11 @@ final class OpenCodeHistorySourceTests: XCTestCase {
         let original = try fixture.message()
         try fixture.session("fork", fork: "original")
         try fixture.message(id: "msg_forkevent_1", session: "fork", data: original)
-        try fixture.message(id: "msg_newrequest", session: "fork", seq: 5)
+        let newRequestDate = F.now.addingTimeInterval(-60)
+        try fixture.message(id: "msg_newrequest", session: "fork", seq: 5, at: newRequestDate)
         try fixture.session("nested", fork: "fork")
         try fixture.message(id: "msg_nestedevent_1", session: "nested", data: original)
-        try fixture.message(id: "msg_nestedevent_5", session: "nested", seq: 5)
+        try fixture.message(id: "msg_nestedevent_5", session: "nested", seq: 5, at: newRequestDate)
         try fixture.session("subagent")
         try fixture.message(id: "msg_childrequest", session: "subagent")
         let complete = try await read(fixture)
@@ -94,7 +95,7 @@ final class OpenCodeHistorySourceTests: XCTestCase {
     }
 
     func
-        testUnrelatedRequestsWithIdenticalUsageAndTimestampsStaySeparateAndConflictingCopiesAreExcluded()
+        testUnrelatedRequestsAndCopiesWithDifferentUsageArePreserved()
         async throws
     {
         let fixture = try OpenCodeHistoryFixture()
@@ -107,8 +108,134 @@ final class OpenCodeHistorySourceTests: XCTestCase {
         try fixture.session("fork", fork: "original")
         try fixture.message(id: "msg_forkevent_1", session: "fork", data: fixture.usage(input: 101))
         let snapshot = try await read(fixture)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 601)
+        XCTAssertEqual(snapshot.coverage.issues, [.unresolvedFork])
+    }
+
+    func testReimportedParentSequencesDoNotDiscardUnrelatedUsage() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let original = try fixture.message(seq: 2)
+        try fixture.session("fork", fork: "original")
+        try fixture.message(id: "msg_forkevent_2", session: "fork", seq: 2, data: original)
+        try fixture.session("nested", fork: "fork")
+        try fixture.message(id: "msg_nestedevent_2", session: "nested", seq: 2, data: original)
+        try fixture.execute("UPDATE session_message SET seq = 1 WHERE session_id = 'original'")
+        try fixture.message(id: "msg_unrelated", seq: 2, data: fixture.usage(input: 200))
+        let before = try Data(contentsOf: fixture.database)
+
+        let reimported = try await read(fixture)
+        XCTAssertEqual(reimported.summaries[.today]?.tokens, 500)
+        XCTAssertEqual(reimported.observations.count, 2)
+        XCTAssertEqual(reimported.coverage.state, .ready)
+        XCTAssertEqual(try Data(contentsOf: fixture.database), before)
+
+        // An import may also omit the copied request while reusing its former sequence.
+        try fixture.execute("DELETE FROM session_message WHERE id = 'msg_first'")
+        let omitted = try await read(fixture)
+        XCTAssertEqual(omitted.summaries[.today]?.tokens, 500)
+        XCTAssertEqual(omitted.observations.count, 2)
+        XCTAssertEqual(omitted.coverage.issues, [.unresolvedFork])
+    }
+
+    func testReimportedForkAndIntermediateAncestorKeepCopiedIdentity() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let original = try fixture.message(seq: 2)
+        try fixture.session("fork", fork: "original")
+        try fixture.message(id: "msg_forkevent_2", session: "fork", seq: 2, data: original)
+        try fixture.session("nested", fork: "fork")
+        try fixture.message(id: "msg_nestedevent_2", session: "nested", seq: 2, data: original)
+        try fixture.execute("UPDATE session_message SET seq = 1 WHERE session_id != 'original'")
+        let snapshot = try await read(fixture)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 200)
-        XCTAssertTrue(snapshot.coverage.issues.contains(.conflictingOperation))
+        XCTAssertEqual(snapshot.observations.count, 1)
+        XCTAssertEqual(snapshot.coverage.state, .ready)
+    }
+
+    func testImportedCopyWithoutStoredAncestryRetainsUsageAndWarns() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let original = try fixture.message(seq: 2)
+        // v2.0.25 import preserves copied IDs but does not restore fork_session_id.
+        try fixture.session("imported")
+        try fixture.message(id: "msg_forkevent_2", session: "imported", seq: 1, data: original)
+        for seq in [1, 2] {
+            try fixture.execute(
+                "UPDATE session_message SET seq = \(seq) WHERE session_id = 'imported'"
+            )
+            let snapshot = try await read(fixture)
+            XCTAssertEqual(snapshot.summaries[.today]?.tokens, 400)
+            XCTAssertEqual(snapshot.observations.count, 2)
+            XCTAssertEqual(snapshot.coverage.state, .partial)
+            XCTAssertEqual(snapshot.coverage.issues, [.unresolvedFork])
+        }
+    }
+
+    func testRenumberedSiblingCopiesWithDeletedOriginAreRetainedAsAmbiguous() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        try fixture.session("fork", fork: "original")
+        try fixture.message(id: "msg_forkevent_2", session: "fork", seq: 1)
+        try fixture.session("sibling", fork: "original")
+        try fixture.message(id: "msg_siblingevent_2", session: "sibling", seq: 9)
+        try fixture.execute("DELETE FROM session_v2 WHERE id = 'original'")
+        let snapshot = try await read(fixture)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 400)
+        XCTAssertEqual(snapshot.observations.count, 2)
+        XCTAssertEqual(snapshot.coverage.issues, [.unresolvedFork])
+    }
+
+    func testReusedParentSequenceDoesNotMergeDistinctSurvivorsAfterDeletion() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let first = try fixture.message(seq: 2)
+        try fixture.session("first-fork", fork: "original")
+        try fixture.message(id: "msg_firstfork_2", session: "first-fork", seq: 2, data: first)
+        try fixture.execute("DELETE FROM session_message WHERE session_id = 'original'")
+        // A re-import can reuse the sequence for another ID, even with identical metadata.
+        let second = try fixture.message(id: "msg_distinct", seq: 2)
+        try fixture.session("second-fork", fork: "original")
+        try fixture.message(id: "msg_secondfork_2", session: "second-fork", seq: 2, data: second)
+        try fixture.execute(
+            "DELETE FROM session_message WHERE session_id = 'original'; DELETE FROM session_v2 WHERE id = 'original'"
+        )
+        let snapshot = try await read(fixture)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 400)
+        XCTAssertEqual(snapshot.observations.count, 2)
+        XCTAssertEqual(snapshot.coverage.issues, [.unresolvedFork])
+    }
+
+    func testAmbiguousParentMetadataDoesNotMergeDistinctRequests() async throws {
+        let fixture = try OpenCodeHistoryFixture()
+        defer { fixture.remove() }
+        let original = try fixture.message()
+        try fixture.message(id: "msg_identical", seq: 2, data: original)
+        try fixture.session("fork", fork: "original")
+        try fixture.message(id: "msg_forkevent_1", session: "fork", data: original)
+
+        let snapshot = try await read(fixture)
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 600)
+        XCTAssertEqual(snapshot.observations.count, 3)
+        XCTAssertEqual(snapshot.coverage.issues, [.unresolvedFork])
+    }
+
+    func testForkAncestryMustMatchRequestTypeAndTimestampNotJustTokens() async throws {
+        for changedType in [false, true] {
+            let fixture = try OpenCodeHistoryFixture()
+            defer { fixture.remove() }
+            try fixture.message()
+            try fixture.session("fork", fork: "original")
+            try fixture.message(
+                id: "msg_forkevent_1",
+                session: "fork",
+                type: changedType ? "compaction" : "assistant",
+                at: changedType ? F.now : F.now.addingTimeInterval(-60)
+            )
+            let snapshot = try await read(fixture)
+            XCTAssertEqual(snapshot.summaries[.today]?.tokens, 400)
+            XCTAssertEqual(snapshot.coverage.issues, [.unresolvedFork])
+        }
     }
 
     func testRefreshReplacesUpdatedUsageAndDropsDeletedRequestsAndDoesNotCountFutureRequests()

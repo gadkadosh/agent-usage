@@ -124,7 +124,7 @@ actor OpenCodeHistorySource {
                     'cacheRead', json_extract(m.data, '$.tokens.cache.read'),
                     'cacheWrite', json_extract(m.data, '$.tokens.cache.write'),
                     'hasTokens', json_type(m.data, '$.tokens') IS NOT NULL)
-                ELSE NULL END
+                ELSE NULL END, m.type, m.time_created
             FROM session_message m JOIN session_v2 s ON s.id = m.session_id
             WHERE m.time_created >= ? AND m.time_created <= ? AND m.type IN ('assistant', 'compaction')
             ORDER BY m.time_created, m.id LIMIT ?
@@ -154,6 +154,7 @@ actor OpenCodeHistorySource {
             guard let id = text(query, 0), let session = text(query, 1),
                 !id.isEmpty, !session.isEmpty, id.utf8.count <= 256, session.utf8.count <= 256,
                 let payload = text(query, 3), payload.utf8.count <= 4_096,
+                let type = text(query, 4),
                 let usage = try? decoder.decode(Usage.self, from: Data(payload.utf8))
             else {
                 issues.insert(.malformedRecord)
@@ -178,6 +179,9 @@ actor OpenCodeHistorySource {
                     id: id,
                     session: session,
                     seq: seq,
+                    type: type,
+                    timeCreated: sqlite3_column_int64(query, 5),
+                    usage: usage,
                     on: connection,
                     issues: &issues
                 )
@@ -207,18 +211,32 @@ actor OpenCodeHistorySource {
 
     /// projectFork preserves seq/data but assigns msg_<fork-event>_<seq> IDs.
     /// Follow only those copied rows, not new work or subagent parent_id relationships.
-    /// A deleted origin still gives sibling copies the same (session, seq) identity.
+    /// Imports renumber seq. Share an identity only with a unique parent row whose
+    /// allowlisted request metadata matches, never merely with the row at the old seq.
     private func identity(
         id: String,
         session: String,
         seq: Int64,
+        type: String,
+        timeCreated: Int64,
+        usage: Usage,
         on db: OpaquePointer,
         issues: inout Set<HistoryIssue>
     ) throws -> String? {
+        guard let timestamp = usage.timestamp, let input = usage.input, let output = usage.output,
+            let reasoning = usage.reasoning, let cacheRead = usage.cacheRead,
+            let cacheWrite = usage.cacheWrite
+        else {
+            issues.insert(.invalidUsage)
+            return nil
+        }
         var id = id
         var session = session
+        var seq = seq
         var seen: Set<String> = []
-        while id.hasPrefix("msg_"), id.hasSuffix("_\(seq)") {
+        while id.hasPrefix("msg_"), let separator = id.dropFirst(4).lastIndex(of: "_"),
+            let copiedSeq = Int64(id[id.index(after: separator)...]), copiedSeq >= 0
+        {
             guard seen.count < 64, seen.insert(session).inserted else {
                 // This copy cannot be attributed safely. Exclude it, not unrelated requests.
                 issues.insert(.scanLimit)
@@ -226,35 +244,58 @@ actor OpenCodeHistorySource {
             }
             let query = try prepare(
                 """
-                SELECT s.fork_session_id, p.id FROM session_v2 s
-                LEFT JOIN session_message p ON p.session_id = s.fork_session_id AND p.seq = ?
-                WHERE s.id = ?
+                SELECT s.fork_session_id, p.id, p.seq FROM session_v2 s
+                LEFT JOIN session_message p ON p.session_id = s.fork_session_id
+                    AND p.type = ? AND p.time_created = ?
+                    AND CASE WHEN length(CAST(p.data AS BLOB)) <= ? AND json_valid(p.data) THEN
+                        json_extract(p.data, '$.time.created') = ?
+                        AND json_extract(p.data, '$.tokens.input') = ?
+                        AND json_extract(p.data, '$.tokens.output') = ?
+                        AND json_extract(p.data, '$.tokens.reasoning') = ?
+                        AND json_extract(p.data, '$.tokens.cache.read') = ?
+                        AND json_extract(p.data, '$.tokens.cache.write') = ?
+                    ELSE 0 END
+                WHERE s.id = ? LIMIT 2
                 """,
                 on: db
             )
             defer { sqlite3_finalize(query) }
-            sqlite3_bind_int64(query, 1, seq)
-            _ = session.withCString {
-                sqlite3_bind_text(
-                    query,
-                    2,
-                    $0,
-                    -1,
-                    unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-                )
+            let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            _ = type.withCString { sqlite3_bind_text(query, 1, $0, -1, transient) }
+            sqlite3_bind_int64(query, 2, timeCreated)
+            sqlite3_bind_int64(query, 3, Int64(limits.recordBytes))
+            sqlite3_bind_double(query, 4, timestamp)
+            for (index, value) in [input, output, reasoning, cacheRead, cacheWrite].enumerated() {
+                sqlite3_bind_int64(query, Int32(index + 5), value)
             }
+            _ = session.withCString { sqlite3_bind_text(query, 10, $0, -1, transient) }
             let status = sqlite3_step(query)
             guard status == SQLITE_ROW || status == SQLITE_DONE else {
                 throw HistoryReadError.unavailable
             }
-            guard status == SQLITE_ROW, let parent = text(query, 0) else { break }
-            session = parent
-            guard let parentID = text(query, 1) else {
-                // A removed intermediate ancestor can hide an earlier origin. Retain the
-                // surviving copy, but do not claim complete deduplication of that lineage.
+            guard status == SQLITE_ROW, let parent = text(query, 0) else {
+                // Import retains copied IDs but does not restore fork_session_id.
                 issues.insert(.unresolvedFork)
                 break
             }
+            guard let parentID = text(query, 1) else {
+                // Deleted or changed ancestry cannot prove a shared origin. The old
+                // sequence may have been reused for another request before deletion.
+                issues.insert(.unresolvedFork)
+                break
+            }
+            let parentSeq = sqlite3_column_int64(query, 2)
+            let next = sqlite3_step(query)
+            guard next == SQLITE_ROW || next == SQLITE_DONE else {
+                throw HistoryReadError.unavailable
+            }
+            guard next == SQLITE_DONE else {
+                // Identical metadata is not enough to choose between distinct requests.
+                issues.insert(.unresolvedFork)
+                break
+            }
+            session = parent
+            seq = parentSeq
             id = parentID
         }
         return "opencode:\(session):\(seq)"
