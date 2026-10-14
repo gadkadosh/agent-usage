@@ -10,7 +10,7 @@ struct HistoryPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("PI HISTORY").font(.caption.weight(.semibold)).tracking(1)
+                Text("LOCAL HISTORY").font(.caption.weight(.semibold)).tracking(1)
                 Spacer()
                 Text("On this Mac").font(.caption)
             }
@@ -25,7 +25,7 @@ struct HistoryPanel: View {
             .labelsHidden()
 
             if let error = history.error {
-                Label("Couldn't refresh pi history", systemImage: "exclamationmark.triangle")
+                Label("Couldn't refresh local history", systemImage: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
                 Text(error).font(.caption)
                 if history.snapshot != nil {
@@ -56,31 +56,52 @@ struct HistoryPanel: View {
                         .fixedSize()
                     }
                     historyChart(summary)
-                    HStack {
-                        Text("π").font(.title3).accessibilityHidden(true)
-                        Text("pi").fontWeight(.medium)
-                        Spacer()
-                        Text("\(summary.tokens.formatted(.number.notation(.compactName))) tokens")
-                            .monospacedDigit()
-                            .accessibilityLabel("\(summary.tokens) tokens")
-                    }
-                    .font(.subheadline)
                 } else if snapshot.hasMoreFiles {
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading local history…").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(snapshot.coverage.emptyDescription)
                         .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(snapshot.agents) { agent in
+                    agentRow(agent)
                 }
                 historyFooter(snapshot)
             } else if history.error == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading local history…").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
         .onChange(of: history.period) { _ in hoveredBucketID = nil }
         .onDisappear { hoveredBucketID = nil }
+    }
+
+    private func agentRow(_ agent: AgentHistorySummary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(agent.agent.title).fontWeight(.medium)
+                Spacer()
+                if agent.coverage.hasReadings, let summary = agent.summaries[history.period] {
+                    Text("\(summary.tokens.formatted(.number.notation(.compactName))) tokens")
+                        .monospacedDigit()
+                        .accessibilityLabel("\(summary.tokens) tokens")
+                } else {
+                    Text(agent.status).foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline)
+            if agent.refreshFailed, let fetchedAt = agent.fetchedAt {
+                Text(
+                    "Couldn't refresh. Last read: \(fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                )
+                .font(.caption).foregroundStyle(.secondary)
+            } else if agent.isLoading {
+                Text("Loading history…").font(.caption).foregroundStyle(.secondary)
+            } else if let warning = agent.coverage.warning {
+                Text(warning).font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder
@@ -242,6 +263,19 @@ extension PeriodSummary {
     }
 }
 
+extension AgentHistorySummary {
+    var status: String {
+        if refreshFailed { return "Couldn't refresh" }
+        if isLoading { return "Loading…" }
+        switch coverage.state {
+        case .missing: return "No history found"
+        case .unsupported: return "Unsupported history"
+        case .unavailable, .partial: return "Couldn't read history"
+        case .ready: return "No recorded usage"
+        }
+    }
+}
+
 extension HistoryCoverage {
     /// Show only caveats that affect the displayed totals. Empty states explain themselves.
     var warning: String? {
@@ -255,10 +289,10 @@ extension HistoryCoverage {
 
     var emptyDescription: String {
         switch state {
-        case .missing: "No pi history found. Missing history isn't zero usage."
-        case .unsupported: "Pi history was found, but its session format isn't supported yet."
-        case .unavailable, .partial: "Pi history was found, but no supported files could be read."
-        case .ready: "No recorded pi usage for this period."
+        case .missing: "No local history found. Missing history isn't zero usage."
+        case .unsupported: "Local history was found, but its format isn't supported yet."
+        case .unavailable, .partial: "Local history could not be read. Totals are unknown."
+        case .ready: "No recorded usage for this period."
         }
     }
 }

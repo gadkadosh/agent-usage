@@ -5,7 +5,8 @@ let package = Package(
     name: "AgentUsage",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "AgentUsage"),
-        .testTarget(name: "AgentUsageTests", dependencies: ["AgentUsage"]),
+        .systemLibrary(name: "CSQLite"),
+        .executableTarget(name: "AgentUsage", dependencies: ["CSQLite"]),
+        .testTarget(name: "AgentUsageTests", dependencies: ["AgentUsage", "CSQLite"]),
     ]
 )

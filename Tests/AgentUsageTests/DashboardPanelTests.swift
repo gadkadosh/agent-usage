@@ -92,7 +92,7 @@ enum DashboardFixtures {
                 tokens: Int64((day % 5 + 1) * 18_420)
             )
         }
-        return HistorySnapshot(
+        var snapshot = HistorySnapshot(
             summaries: Dictionary(
                 uniqueKeysWithValues: HistoryPeriod.allCases.map {
                     (
@@ -113,6 +113,17 @@ enum DashboardFixtures {
             ),
             fetchedAt: now
         )
+        snapshot.agents = [
+            AgentHistorySummary(
+                agent: .pi,
+                summaries: snapshot.summaries,
+                coverage: snapshot.coverage,
+                fetchedAt: now,
+                refreshFailed: false,
+                isLoading: false
+            )
+        ]
+        return snapshot
     }
 }
 
