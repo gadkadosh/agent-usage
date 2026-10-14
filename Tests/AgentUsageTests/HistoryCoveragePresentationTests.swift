@@ -16,7 +16,8 @@ final class HistoryCoveragePresentationTests: XCTestCase {
     }
 
     func testExclusionsShareOneWarningInsteadOfListingParserDetails() {
-        for issue in HistoryIssue.allCases where issue != .staleFile && issue != .toolAggregate {
+        for issue in HistoryIssue.allCases
+        where issue != .staleFile && issue != .toolAggregate && issue != .unresolvedFork {
             XCTAssertEqual(
                 HistoryCoverage(state: .partial, filesRead: 1, issues: [issue]).warning,
                 "Partial history. Totals may be incomplete."
@@ -35,7 +36,7 @@ final class HistoryCoveragePresentationTests: XCTestCase {
                 filesRead: 1,
                 issues: Set(HistoryIssue.allCases)
             ).warning,
-            "Partial history. Totals may be incomplete. Includes older readings. Tool usage may be counted twice."
+            "Partial history. Totals may be incomplete. Includes older readings. Tool usage may be counted twice. Forked usage may be counted twice."
         )
     }
 

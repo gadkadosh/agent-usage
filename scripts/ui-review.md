@@ -15,10 +15,11 @@ scripts/ui-review.sh status .scratch/review-after
 Launch prints a unique process name and PID. The copied `.app` is renamed and ad-hoc
 re-signed, leaving the source bundle and existing app instances alone. It runs the
 copied bundle executable directly to retain its exact PID. Both pi directory
-variables point into the session. Credentials are empty; no provider requests can
-be authenticated. To review history, pass `--sessions /path/to/synthetic/sessions`.
-Only use invented, non-sensitive input. This directory is copied once; symlinks are
-rejected. The harness does not generate fixtures or freeze the app's clock.
+variables and `OPENCODE_DB` point into the session. Credentials are empty; no provider
+requests can be authenticated. To review history, pass `--sessions /path/to/synthetic/sessions`
+and/or `--opencode-db /path/to/synthetic/opencode.db`. Only use invented, non-sensitive
+input. Inputs are copied once; symlinks are rejected. Checkpoint and close the synthetic
+SQLite database before supplying it; non-empty WAL sidecars are rejected. The harness does not generate fixtures or freeze the app's clock.
 
 Launch again with the same arguments to reuse the running instance or restart the
 same prepared copy. Changes to the source app or fixture directory are **not**

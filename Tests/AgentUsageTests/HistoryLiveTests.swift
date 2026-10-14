@@ -83,8 +83,10 @@ final class HistoryLiveTests: XCTestCase {
         }
         try XCTSkipIf(FileManager.default.isReadableFile(atPath: fixture.root.path))
         await history.refresh()
-        XCTAssertEqual(history.error, HistoryReadError.unavailable.localizedDescription)
-        XCTAssertEqual(history.snapshot?.fetchedAt, previous.fetchedAt)
+        XCTAssertNil(history.error)
+        XCTAssertTrue(history.snapshot?.agents.first?.refreshFailed == true)
+        XCTAssertEqual(history.snapshot?.agents.first?.fetchedAt, previous.fetchedAt)
+        XCTAssertEqual(history.snapshot?.coverage.state, .partial)
         XCTAssertEqual(history.snapshot?.summaries[.month]?.tokens, 190)
 
         try FileManager.default.setAttributes(
@@ -110,7 +112,7 @@ final class HistoryLiveTests: XCTestCase {
     }
 
     private func liveStore(root: URL) -> HistoryStore {
-        HistoryStore.live(root: root, now: { F.now }, calendar: F.calendar)
+        HistoryStore.live(root: root, openCodeDatabase: nil, now: { F.now }, calendar: F.calendar)
     }
 
     private func message(id: String = "first", at date: Date = F.now) -> String {

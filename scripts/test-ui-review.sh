@@ -22,15 +22,19 @@ reject() {
 }
 
 mkdir "$root/fixtures"
+/usr/bin/sqlite3 "$root/opencode.db" 'CREATE TABLE synthetic (tokens INTEGER); INSERT INTO synthetic VALUES (200);'
 printf '{"type":"session","version":3,"id":"synthetic","timestamp":"2026-01-01T00:00:00Z","cwd":"/synthetic"}\n' > "$root/fixtures/synthetic.jsonl"
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+"$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --opencode-db "$root/opencode.db"
 pid=$(value "$first" pid)
 [[ $(/bin/ps -ww -p "$pid" -o comm=) == "$(value "$first" executable)" ]] || fail 'Wrong process launched.'
 [[ ! -e $first/agent/auth.json ]] || fail 'Credentials were not isolated.'
 cmp "$root/fixtures/synthetic.jsonl" "$first/agent/sessions/synthetic.jsonl" || fail 'Fixture snapshot differs.'
+cmp "$root/opencode.db" "$first/opencode.db" || fail 'OpenCode snapshot differs.'
+/usr/bin/sqlite3 "$root/opencode.db" 'UPDATE synthetic SET tokens = 400;'
+[[ $(/usr/bin/sqlite3 "$first/opencode.db" 'SELECT tokens FROM synthetic;') == 200 ]] || fail 'OpenCode snapshot follows source changes.'
 printf 'modified\n' >> "$root/fixtures/synthetic.jsonl"
 [[ $(wc -l < "$first/agent/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Snapshot follows source changes.'
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+"$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --opencode-db "$root/opencode.db"
 [[ $(value "$first" pid) == "$pid" ]] || fail 'Repeated launch created another process.'
 "$harness" status "$first" > "$root/status.txt"
 grep -q 'State: running' "$root/status.txt" || fail 'Status missed running process.'
@@ -45,8 +49,14 @@ reject "$harness" launch "$root/unrelated" --app "$app"
 mkdir "$root/linked-fixtures"
 ln -s "$root/fixtures/synthetic.jsonl" "$root/linked-fixtures/link.jsonl"
 reject "$harness" launch "$root/linked-session" --app "$app" --sessions "$root/linked-fixtures"
+ln -s "$root/opencode.db" "$root/linked.db"
+reject "$harness" launch "$root/linked-db-session" --app "$app" --opencode-db "$root/linked.db"
+printf 'invented WAL content\n' > "$root/opencode.db-wal"
+reject "$harness" launch "$root/wal-session" --app "$app" --opencode-db "$root/opencode.db"
+rm "$root/opencode.db-wal"
 
 "$harness" launch "$second" --app "$app"
+[[ ! -e $second/opencode.db ]] || fail 'Missing OpenCode input must not be created.'
 other_pid=$(value "$second" pid)
 [[ $other_pid != "$pid" ]] || fail 'Sessions share a process.'
 [[ $(value "$second" process) != "$(value "$first" process)" ]] || fail 'Sessions share an identity.'
@@ -70,9 +80,10 @@ if /bin/kill -0 "$pid" 2>/dev/null; then fail 'Cleanup did not stop the review p
 [[ $(< "$first/evidence/sentinel.txt") == 'preserve me' ]] || fail 'Cleanup deleted evidence.'
 "$harness" status "$first" > "$root/stopped.txt"
 grep -q 'State: stopped' "$root/stopped.txt" || fail 'Status missed stopped process.'
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+"$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --opencode-db "$root/opencode.db"
 [[ $(value "$first" pid) != "$pid" ]] || fail 'Stopped session did not relaunch.'
 [[ $(wc -l < "$first/agent/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Relaunch replaced the snapshot.'
+[[ $(/usr/bin/sqlite3 "$first/opencode.db" 'SELECT tokens FROM synthetic;') == 200 ]] || fail 'Relaunch replaced the OpenCode snapshot.'
 "$harness" status "$second" > "$root/other.txt"
 grep -q 'State: running' "$root/other.txt" || fail 'Other session stopped.'
 printf 'PASS: real-app lifecycle, isolation, snapshot reuse, capture guards, and cleanup ownership.\nArtifacts: %s\n' "$root"
