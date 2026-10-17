@@ -2,85 +2,52 @@
 
 Your ChatGPT limits and local [pi](https://pi.dev) token usage, right in your macOS menu bar.
 
-See when your ChatGPT limits reset, and explore token usage on this Mac over today, the last 7 days, or the last 30 days.
-
 <img src="docs/images/dashboard.png" alt="Agent Usage dashboard showing remaining ChatGPT limits, reset countdowns, and a 7-day pi token usage chart" width="360">
 
 *Example dashboard with synthetic data.*
 
-## Build and install
+## Install / run
+
+Requires macOS 13 or newer and Swift 6 / Apple Command Line Tools (or Xcode) to build. Local token totals require existing pi histories.
 
 ```sh
 make app
 ```
 
-This builds a release executable for the current Mac's architecture and creates `.build/Agent Usage.app`. Open it in Finder, or copy it to `/Applications` and double-click it there. The app runs in the menu bar without a Dock icon. Use its options menu to Refresh or Quit.
+Open `.build/Agent Usage.app`, or copy it to `/Applications` and open it there. It runs in the menu bar without a Dock icon; use its options menu to Refresh or Quit. The copied app doesn't need Swift or a terminal to run.
 
-The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Downloaded or quarantined copies may be blocked by Gatekeeper. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions.
+For ChatGPT limits, sign into OpenAI with your ChatGPT subscription using `/login` in pi, then refresh Agent Usage.
 
-### Requirements
-
-- macOS 13 or newer
-- Swift 6 / Apple Command Line Tools (or Xcode) to build
-- Existing pi histories for local token totals
-- Optional: pi signed into OpenAI with your ChatGPT subscription (`/login` in pi) for allowance
-
-## Run from source
-
-Run without bundling:
+To run from source without creating an app bundle:
 
 ```sh
 swift run
 ```
 
-`swift run` builds and launches an executable; use `make app` for an installable `.app` bundle.
+## Privacy and limitations
 
-## ChatGPT allowance
+- **History stays local.** The app reads pi histories without uploading or modifying them. Its in-memory index keeps timestamps and token counts, not transcripts.
+- **ChatGPT access uses pi's login.** Allowance requests use pi's existing OpenAI credentials. The app never modifies credentials or refreshes tokens; if access expires, use OpenAI in pi or sign in again, then refresh.
+- **Limits and tokens measure different things.** ChatGPT limits are account-wide. Token totals cover only pi history on this Mac for today, the last 7 days, or the last 30 days. Other agents and API cost estimates aren't supported yet.
+- **History isn't a live counter.** Reopen the panel or choose Refresh to update it. Missing or unreadable history isn't shown as zero usage; incomplete or stale totals carry a warning.
+- **The ChatGPT integration is unofficial.** Its endpoint and pi's credential format may change without notice.
+- **The app isn't notarized.** Bundles are signed ad hoc for local use, not Developer ID signed. Downloaded or quarantined copies may be blocked by Gatekeeper.
 
-No access-token environment variable is required. Agent Usage reads only pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json` before each request, including its account ID when available. API keys and other agents' credentials are not used. The allowance is account-wide, not usage attributable only to pi.
+## Detailed technical notes
 
-The app never modifies pi's credentials or refreshes tokens itself. If the token expires or is rejected, use OpenAI in pi so pi can refresh it, or sign in again with `/login`, then refresh. No app restart is needed. Pi's credential storage format is an unofficial integration point and may change.
+See [Technical notes](docs/technical-notes.md) for credential handling, refresh behavior, history paths and environment overrides, supported formats, indexing limits, and screenshot generation.
 
-If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is honored (including `~/` paths). A Finder-launched app uses the default location unless the override is present in its own environment; it does not inherit terminal-only variables.
+## Development
 
-Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
-
-## Local history
-
-Choose **Today / 7 days / 30 days** for pi token totals and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Other agents and API cost estimates are not supported yet.
-
-Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable totals. The history footer shows loading progress during catch-up, otherwise its update time, with a brief warning when totals may be incomplete, stale or double-counted.
-
-History indexing starts in the background at app launch. Opening the panel or choosing Refresh starts a refresh or joins one already running. Closing the panel does not cancel indexing. There is no periodic history refresh timer. Changing periods uses the existing snapshot without rescanning. Periods end at the last history refresh, not a live counter; reopen or Refresh to update them. History works even when allowance access fails.
-
-The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
-
-The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes. Files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history. Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per batch. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
-
-## Tests
-
-Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
-
-### Synthetic native screenshots (development only)
-
-The opt-in rendering test uses injected synthetic snapshots only, with no live history discovery, credential access or networking:
+Tests require full Xcode; Command Line Tools alone don't provide XCTest in this environment.
 
 ```sh
-AGENT_USAGE_RENDER_DIR=/tmp/agent-usage-captures \
-  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-  swift test --filter DashboardRenderingTests
-```
-
-It captures all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode.
-
-## Formatting
-
-```sh
+make test          # Tests, then the isolated memory regression
 make format        # Format Swift files in place
 make format-check  # Check formatting without changing files
 ```
 
-Use Xcode 26.3 to match CI's formatter; formatting can differ between toolchain versions.
+See the [testing and formatting notes](docs/technical-notes.md#development) for Xcode selection and the formatter version used by CI.
 
 ## License
 
