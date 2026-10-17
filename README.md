@@ -1,21 +1,12 @@
 # Agent Usage
 
-A native macOS menu-bar app showing ChatGPT account allowance and observed pi token usage on this Mac.
+Your ChatGPT limits and local [pi](https://pi.dev) token usage, right in your macOS menu bar.
 
-## Requirements
+See when your ChatGPT limits reset, and explore token usage on this Mac over today, the last 7 days, or the last 30 days.
 
-- macOS 13 or newer
-- Swift 6 / Apple Command Line Tools (or Xcode)
-- Existing [pi](https://pi.dev) histories for local token totals
-- Optional: pi signed into OpenAI with your ChatGPT subscription (`/login` in pi) for allowance
+<img src="docs/images/dashboard.png" alt="Agent Usage dashboard showing remaining ChatGPT limits, reset countdowns, and a 7-day pi token usage chart" width="360">
 
-Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
-
-## Dashboard
-
-Account-wide allowance meters and reset countdowns stay separate from **On this Mac** history. Choose **Today / 7 days / 30 days** for observed tokens, an hourly/daily chart and the pi total. Other agents and API cost estimates are not supported yet.
-
-Missing or unreadable histories are not presented as zero usage. Partial coverage and failed refreshes are visible; failed refreshes preserve the last readable totals. The history footer shows loading progress during catch-up, otherwise its update time, with a brief warning when totals may be incomplete, stale or double-counted. Technical coverage limits are documented below, not listed in the panel. Refresh and Quit remain in the header options menu; longer error content scrolls.
+*Example dashboard with synthetic data.*
 
 ## Build and install
 
@@ -27,23 +18,38 @@ This builds a release executable for the current Mac's architecture and creates 
 
 The bundle is signed ad hoc for local use, not Developer ID signed or notarized. Downloaded or quarantined copies may be blocked by Gatekeeper. Building needs Swift; running the copied bundle does not need a terminal, Swift, Node/Bun or agent extensions.
 
+### Requirements
+
+- macOS 13 or newer
+- Swift 6 / Apple Command Line Tools (or Xcode) to build
+- Existing pi histories for local token totals
+- Optional: pi signed into OpenAI with your ChatGPT subscription (`/login` in pi) for allowance
+
 ## Run from source
 
-Run without bundling (optionally sign into OpenAI in pi first for allowance):
+Run without bundling:
 
 ```sh
 swift run
 ```
 
+`swift run` builds and launches an executable; use `make app` for an installable `.app` bundle.
+
+## ChatGPT allowance
+
 No access-token environment variable is required. Agent Usage reads only pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json` before each request, including its account ID when available. API keys and other agents' credentials are not used. The allowance is account-wide, not usage attributable only to pi.
 
-The app never modifies pi's credentials or refreshes tokens itself. If the token expires or is rejected, use OpenAI in pi so pi can refresh it, or sign in again with `/login`, then refresh. No app restart is needed. Pi's credential storage format and the usage endpoint are unofficial integration points and may change.
+The app never modifies pi's credentials or refreshes tokens itself. If the token expires or is rejected, use OpenAI in pi so pi can refresh it, or sign in again with `/login`, then refresh. No app restart is needed. Pi's credential storage format is an unofficial integration point and may change.
 
 If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is honored (including `~/` paths). A Finder-launched app uses the default location unless the override is present in its own environment; it does not inherit terminal-only variables.
 
-`swift run` builds and launches an executable; use `make app` for an installable `.app` bundle. Additional usage sources are future steps.
+Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
 
 ## Local history
+
+Choose **Today / 7 days / 30 days** for pi token totals and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Other agents and API cost estimates are not supported yet.
+
+Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable totals. The history footer shows loading progress during catch-up, otherwise its update time, with a brief warning when totals may be incomplete, stale or double-counted.
 
 History indexing starts in the background at app launch. Opening the panel or choosing Refresh starts a refresh or joins one already running. Closing the panel does not cancel indexing. There is no periodic history refresh timer. Changing periods uses the existing snapshot without rescanning. Periods end at the last history refresh, not a live counter; reopen or Refresh to update them. History works even when allowance access fails.
 
