@@ -22,6 +22,12 @@ Missing or unreadable histories are not presented as zero usage. Failed refreshe
 
 History indexing starts in the background at app launch. Opening the panel or choosing Refresh starts a refresh or joins one already running. Closing the panel does not cancel indexing. There is no periodic history refresh timer. Changing periods uses the existing snapshot without rescanning. Periods end at the last history refresh, not a live counter; reopen or Refresh to update them. History works even when allowance access fails.
 
+### Adapter boundary
+
+Pi is currently the only live history adapter. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Each result replaces that source's accepted set; continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
+
+`HistoryService` retains accepted source results and builds period summaries away from the UI actor. A failed read retains timestamped observations, so a refresh after midnight filters yesterday's activity out of Today even when the source remains unavailable. Observation identities are scoped to each source during aggregation. The current Pi panel and refresh triggers remain in place. See the [two-PR implementation plan](multi-agent-history-plan.md) for Codex and the later multi-agent presentation.
+
 ### Discovery and supported formats
 
 The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.

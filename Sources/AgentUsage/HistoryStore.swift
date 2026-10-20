@@ -49,7 +49,7 @@ final class HistoryStore: ObservableObject {
             while true {
                 let result = try await fetch()
                 snapshot = result
-                error = nil
+                error = result.refreshError
                 guard result.hasMoreFiles else { return }
                 // Pace catch-up and let the UI present each batch before continuing.
                 try await Task.sleep(for: .milliseconds(100))

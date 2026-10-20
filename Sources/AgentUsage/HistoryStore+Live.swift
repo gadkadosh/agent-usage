@@ -9,6 +9,9 @@ extension HistoryStore {
         calendar: Calendar = .autoupdatingCurrent
     ) -> HistoryStore {
         let source = PiHistorySource(root: root)
-        return HistoryStore(fetch: { try await source.refresh(now: now(), calendar: calendar) })
+        let service = HistoryService(adapters: [source])
+        return HistoryStore(fetch: {
+            try await service.refresh(now: now(), calendar: calendar)
+        })
     }
 }

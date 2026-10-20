@@ -164,9 +164,10 @@ final class HistoryStoreTests: XCTestCase {
         )
         let size = try Data(contentsOf: first).count
         let source = PiHistorySource(root: fixture.root, limits: .init(refreshBytes: size))
+        let service = HistoryService(adapters: [source])
         let gate = HistoryGate()
         let store = HistoryStore(fetch: {
-            let result = try await source.refresh(
+            let result = try await service.refresh(
                 now: PiHistoryFixtures.now,
                 calendar: PiHistoryFixtures.calendar
             )
