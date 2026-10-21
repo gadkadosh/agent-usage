@@ -23,14 +23,20 @@ reject() {
 
 mkdir "$root/fixtures"
 printf '{"type":"session","version":3,"id":"synthetic","timestamp":"2026-01-01T00:00:00Z","cwd":"/synthetic"}\n' > "$root/fixtures/synthetic.jsonl"
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+mkdir -p "$root/codex-fixtures/sessions" "$root/codex-fixtures/archived_sessions"
+printf '{"type":"session_meta","payload":{"id":"synthetic-codex"}}\n' > "$root/codex-fixtures/sessions/rollout-synthetic.jsonl"
+printf '{"invented":"must not copy credentials"}\n' > "$root/codex-fixtures/auth.json"
+"$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --codex-history "$root/codex-fixtures"
 pid=$(value "$first" pid)
 [[ $(/bin/ps -ww -p "$pid" -o comm=) == "$(value "$first" executable)" ]] || fail 'Wrong process launched.'
-[[ ! -e $first/agent/auth.json ]] || fail 'Credentials were not isolated.'
+[[ ! -e $first/agent/auth.json && ! -e $first/codex/auth.json ]] || fail 'Credentials were not isolated.'
+cmp "$root/codex-fixtures/sessions/rollout-synthetic.jsonl" "$first/codex/sessions/rollout-synthetic.jsonl" || fail 'Codex snapshot differs.'
+printf 'changed\n' >> "$root/codex-fixtures/sessions/rollout-synthetic.jsonl"
+[[ $(wc -l < "$first/codex/sessions/rollout-synthetic.jsonl") -eq 1 ]] || fail 'Codex snapshot follows source changes.'
 cmp "$root/fixtures/synthetic.jsonl" "$first/agent/sessions/synthetic.jsonl" || fail 'Fixture snapshot differs.'
 printf 'modified\n' >> "$root/fixtures/synthetic.jsonl"
 [[ $(wc -l < "$first/agent/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Snapshot follows source changes.'
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+"$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --codex-history "$root/codex-fixtures"
 [[ $(value "$first" pid) == "$pid" ]] || fail 'Repeated launch created another process.'
 "$harness" status "$first" > "$root/status.txt"
 grep -q 'State: running' "$root/status.txt" || fail 'Status missed running process.'
@@ -42,10 +48,12 @@ reject "$harness" launch "$first" --app "$app"
 mkdir "$root/unrelated"
 reject "$harness" launch "$root/unrelated" --app "$app"
 [[ ! -e $root/unrelated/session.plist ]] || fail 'Adopted an unrelated directory.'
+reject "$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
 mkdir "$root/linked-fixtures"
 ln -s "$root/fixtures/synthetic.jsonl" "$root/linked-fixtures/link.jsonl"
 reject "$harness" launch "$root/linked-session" --app "$app" --sessions "$root/linked-fixtures"
 
+reject "$harness" launch "$root/linked-codex-session" --app "$app" --codex-history "$root/linked-fixtures"
 "$harness" launch "$second" --app "$app"
 other_pid=$(value "$second" pid)
 [[ $other_pid != "$pid" ]] || fail 'Sessions share a process.'
@@ -70,7 +78,7 @@ if /bin/kill -0 "$pid" 2>/dev/null; then fail 'Cleanup did not stop the review p
 [[ $(< "$first/evidence/sentinel.txt") == 'preserve me' ]] || fail 'Cleanup deleted evidence.'
 "$harness" status "$first" > "$root/stopped.txt"
 grep -q 'State: stopped' "$root/stopped.txt" || fail 'Status missed stopped process.'
-"$harness" launch "$first" --app "$app" --sessions "$root/fixtures"
+"$harness" launch "$first" --app "$app" --sessions "$root/fixtures" --codex-history "$root/codex-fixtures"
 [[ $(value "$first" pid) != "$pid" ]] || fail 'Stopped session did not relaunch.'
 [[ $(wc -l < "$first/agent/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Relaunch replaced the snapshot.'
 "$harness" status "$second" > "$root/other.txt"

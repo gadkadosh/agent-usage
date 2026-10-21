@@ -10,7 +10,7 @@ import Foundation
 /// Canonical sources: message.usage, usage.usage, compaction.usage, branch_summary.usage.
 /// Never decode transcript fields. Tool nestedCalls/details are not additional usage.
 /// Returns candidates: the index must deduplicate IDs and exclude conflicting copies.
-struct PiHistoryParser {
+struct PiHistoryParser: HistoryLineParser {
     private(set) var observations: [UsageObservation] = []
     private(set) var issues: Set<HistoryIssue> = []
     private(set) var isSupported = false
@@ -118,7 +118,16 @@ struct PiHistoryParser {
         encoder.outputFormatting = .sortedKeys
         guard let encoded = try? encoder.encode(identity) else { return }
         let key = SHA256.hash(data: encoded).map { String(format: "%02x", $0) }.joined()
-        observations.append(UsageObservation(operationID: key, timestamp: timestamp, tokens: total))
+        observations.append(
+            UsageObservation(
+                operationID: key,
+                timestamp: timestamp,
+                tokens: total,
+                detail: usage.detail,
+                model: historyMetadata(entry.message?.model),
+                provider: historyMetadata(entry.message?.provider)
+            )
+        )
     }
 
     mutating func finish() {
@@ -153,6 +162,8 @@ struct PiHistoryParser {
         let role: String
         let timestamp: Double?
         let stopReason: String?
+        let model: String?
+        let provider: String?
         let usage: Tokens?
     }
 
@@ -164,6 +175,17 @@ struct PiHistoryParser {
         // These are subsets, not additional tokens. totalTokens/cost are deliberately ignored.
         let reasoning: Int64?
         let cacheWrite1h: Int64?
+
+        var detail: TokenDetail? {
+            guard let input, let output, let cacheRead, let cacheWrite else { return nil }
+            return TokenDetail(
+                input: input + cacheRead + cacheWrite,
+                output: output,
+                cachedInput: cacheRead,
+                cacheWriteInput: cacheWrite,
+                reasoningOutput: reasoning
+            )
+        }
 
         var normalizedTotal: Int64? {
             guard let input, let output, let cacheRead, let cacheWrite else { return nil }

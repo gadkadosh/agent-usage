@@ -34,10 +34,10 @@ struct PiHistoryFixtureRoot {
 
 // Keep source-focused assertions on presentation summaries without putting aggregation in Pi.
 extension PiHistorySource {
-    func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws
+    func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) async throws
         -> HistorySnapshot
     {
-        try read(HistoryRequest(now: now, calendar: calendar)).summarized(
+        try await read(HistoryRequest(now: now, calendar: calendar)).summarized(
             now: now,
             calendar: calendar
         )

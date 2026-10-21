@@ -10,7 +10,7 @@ struct HistoryPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("PI HISTORY").font(.caption.weight(.semibold)).tracking(1)
+                Text("HISTORY").font(.caption.weight(.semibold)).tracking(1)
                 Spacer()
                 Text("On this Mac").font(.caption)
             }
@@ -24,17 +24,11 @@ struct HistoryPanel: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            if history.error != nil {
-                Label("Couldn't refresh pi history", systemImage: "exclamationmark.triangle")
+            if history.error != nil, history.snapshot == nil {
+                Label("Couldn't refresh history", systemImage: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
-                Text(
-                    "Pi history could not be read. Check access to the session directory, then refresh."
-                )
-                .font(.caption)
-                if history.snapshot != nil {
-                    Text("Showing the last readable history. Totals may have changed.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                Text("Local history could not be read. Check directory access, then refresh.")
+                    .font(.caption)
             }
 
             if let snapshot = history.snapshot {
@@ -59,26 +53,45 @@ struct HistoryPanel: View {
                         .fixedSize()
                     }
                     historyChart(summary)
-                    HStack {
-                        Text("π").font(.title3).accessibilityHidden(true)
-                        Text("pi").fontWeight(.medium)
-                        Spacer()
-                        Text("\(summary.tokens.formatted(.number.notation(.compactName))) tokens")
-                            .monospacedDigit()
-                            .accessibilityLabel("\(summary.tokens) tokens")
-                    }
-                    .font(.subheadline)
                 } else if snapshot.hasMore {
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading history…").font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text(snapshot.coverage.emptyDescription)
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(
+                        snapshot.coverage.hasReadings
+                            ? "No recorded usage for this period."
+                            : "No readable local history found."
+                    )
+                    .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(snapshot.visibleSources, id: \.id) { source in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(source.id.symbol).font(.title3).accessibilityHidden(true)
+                            Text(source.id.name).fontWeight(.medium)
+                            Spacer()
+                            if source.coverage?.hasReadings == true {
+                                let tokens = source.summaries[history.period]?.tokens ?? 0
+                                Text("\(tokens.formatted(.number.notation(.compactName))) tokens")
+                                    .monospacedDigit()
+                                    .accessibilityLabel("\(tokens) tokens")
+                            } else {
+                                Text(source.failed ? "Failed" : "Unavailable")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .font(.subheadline)
+                        if let status = source.status {
+                            Label(status, systemImage: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 historyFooter(snapshot)
             } else if history.error == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading history…").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -185,17 +198,12 @@ struct HistoryPanel: View {
 
     private func historyFooter(_ snapshot: HistorySnapshot) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let warning = snapshot.coverage.warning {
-                Label(warning, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             HStack(spacing: 6) {
                 if snapshot.hasMore && history.isRefreshing {
                     Text("Loading history… Totals are still updating.")
                 } else {
                     Text(
-                        "\(history.error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
+                        "Updated: \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
                     )
                 }
                 if history.isRefreshing { ProgressView().controlSize(.mini) }

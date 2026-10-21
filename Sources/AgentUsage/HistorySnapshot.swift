@@ -47,4 +47,43 @@ struct HistorySnapshot: Sendable {
     /// Pending source reads or continuation batches, not permanent coverage gaps.
     var hasMore = false
     var sources: [HistorySourceSnapshot] = []
+
+    var visibleSources: [HistorySourceSnapshot] {
+        // Injected single-source snapshots still describe Pi without requiring source rows.
+        let candidates =
+            sources.isEmpty
+            ? [
+                HistorySourceSnapshot(
+                    id: .pi,
+                    summaries: summaries,
+                    coverage: coverage,
+                    fetchedAt: fetchedAt,
+                    failed: false
+                )
+            ] : sources
+        return candidates.filter { source in
+            source.failed
+                || (source.coverage.map {
+                    $0.state != .missing
+                        && ((source.summaries[.month]?.tokens ?? 0) > 0
+                            || $0.state != .ready || source.isLoading)
+                } ?? false)
+        }.sorted { $0.id.name.localizedCaseInsensitiveCompare($1.id.name) == .orderedAscending }
+    }
+}
+
+extension HistorySourceSnapshot {
+    var status: String? {
+        if failed {
+            return coverage?.hasReadings == true
+                ? "Couldn't refresh. Showing older readings." : "History could not be read."
+        }
+        guard let coverage else { return nil }
+        if coverage.state == .unsupported { return "Unsupported history format." }
+        if coverage.state == .unavailable { return "History could not be read." }
+        if coverage.issues.contains(.staleFile) {
+            return "Incomplete history. Includes older readings."
+        }
+        return coverage.warning
+    }
 }

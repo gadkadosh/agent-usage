@@ -4,11 +4,19 @@ extension HistoryStore {
     /// Keep one source actor (and its file index) alive across background batches and refreshes.
     /// Passing a root bypasses default discovery, so integration tests never inspect real histories.
     static func live(
-        root: URL = PiHistorySource.defaultRoot(),
+        root: URL? = nil,
+        codexHome: URL? = nil,
         now: @escaping @Sendable () -> Date = Date.init,
         calendar: Calendar = .autoupdatingCurrent
     ) -> HistoryStore {
-        live(adapters: [PiHistorySource(root: root)], now: now, calendar: calendar)
+        var adapters: [any HistoryAdapter] = [
+            PiHistorySource(root: root ?? PiHistorySource.defaultRoot())
+        ]
+        // Injecting a Pi root must never discover personal Codex histories in tests/reviews.
+        if let home = codexHome ?? (root == nil ? CodexHistorySource.defaultHome() : nil) {
+            adapters.append(CodexHistorySource(home: home))
+        }
+        return live(adapters: adapters, now: now, calendar: calendar)
     }
 
     /// The same live pipeline with explicitly supplied adapters, without implicit discovery.

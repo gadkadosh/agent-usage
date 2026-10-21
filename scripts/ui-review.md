@@ -18,6 +18,10 @@ re-signed, leaving the source bundle and existing app instances alone. It runs t
 copied bundle executable directly to retain its exact PID. Both pi directory
 variables point into the session. Credentials are empty; no provider requests can
 be authenticated. To review history, pass `--sessions /path/to/synthetic/sessions`.
+`CODEX_HOME` also points into the session, even when no Codex fixtures are supplied.
+Pass `--codex-history /path/to/synthetic/codex-home` to copy its `sessions` and
+`archived_sessions` subdirectories. Other Codex files, including credentials and
+SQLite state, are not copied. Provenance records both agents' fixture hashes.
 Only use invented, non-sensitive input. This directory is copied once; symlinks are
 rejected. The harness does not generate fixtures or freeze the app's clock.
 

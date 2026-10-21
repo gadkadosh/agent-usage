@@ -1,6 +1,6 @@
 # Agent Usage
 
-Your ChatGPT limits and local [pi](https://pi.dev) token usage, right in your macOS menu bar.
+Your ChatGPT limits and local [pi](https://pi.dev) and Codex token usage, right in your macOS menu bar.
 
 <img src="docs/images/dashboard.png" alt="Agent Usage dashboard showing remaining ChatGPT limits, reset countdowns, and a 7-day pi token usage chart" width="360">
 
@@ -8,7 +8,7 @@ Your ChatGPT limits and local [pi](https://pi.dev) token usage, right in your ma
 
 ## Install / run
 
-Requires macOS 13 or newer and Swift 6 / Apple Command Line Tools (or Xcode) to build. Local token totals require existing pi histories.
+Requires macOS 13 or newer and Swift 6 / Apple Command Line Tools (or Xcode) to build. Local token totals require existing Pi or Codex histories.
 
 ```sh
 make app
@@ -26,10 +26,10 @@ swift run
 
 ## Privacy and limitations
 
-- **History stays local.** The app reads pi histories without uploading or modifying them. Its in-memory index keeps timestamps and token counts, not transcripts.
+- **History stays local.** The app reads Pi and Codex histories without uploading or modifying them. Its in-memory index keeps usage metadata, not transcripts.
 - **ChatGPT access uses pi's login.** Allowance requests use pi's existing OpenAI credentials. The app never modifies credentials or refreshes tokens; if access expires, use OpenAI in pi or sign in again, then refresh.
-- **Limits and tokens measure different things.** ChatGPT limits are account-wide. Token totals cover only pi history on this Mac for today, the last 7 days, or the last 30 days. Other agents and API cost estimates aren't supported yet.
-- **History isn't a live counter.** Reopen the panel or choose Refresh to update it. Missing or unreadable history isn't shown as zero usage; incomplete or stale totals carry a warning.
+- **Limits and tokens measure different things.** ChatGPT limits are account-wide. The chart combines recorded Pi and Codex activity on this Mac for today, the last 7 days, or the last 30 days, with a separate total for each agent below it. API cost estimates aren't supported yet.
+- **History isn't a live counter.** Reopen the panel or choose Refresh to update it. Unused agents stay hidden. Missing or unreadable history isn't shown as zero usage; incomplete or stale readings carry a warning on the affected agent's row.
 - **The ChatGPT integration is unofficial.** Its endpoint and pi's credential format may change without notice.
 - **The app isn't notarized.** Bundles are signed ad hoc for local use, not Developer ID signed. Downloaded or quarantined copies may be blocked by Gatekeeper.
 

@@ -14,9 +14,9 @@ Allowance refreshes about once a minute, independently of local history. The Cha
 
 ## Local history
 
-Choose **Today / 7 days / 30 days** for pi token totals and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Other agents and API cost estimates are not supported yet.
+Choose **Today / 7 days / 30 days** for combined Pi and Codex token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket changes only the large number, not the period totals in the rows. API cost estimates are outside scope.
 
-Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable totals. The history footer shows loading progress during catch-up, otherwise its update time, with a brief warning when totals may be incomplete, stale or double-counted.
+Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable observations. An unreadable agent with no accepted readings shows Unavailable/Failed, rather than a numeric zero. Warnings belong to the affected agent row; the combined chart shows available contributions. Healthy agents with no recorded activity in the last 30 days stay hidden. An agent remains visible with zero usage for a shorter selected period when it has activity in the 30-day window. The footer shows loading progress during catch-up, otherwise its update time.
 
 ### Refresh behavior
 
@@ -24,23 +24,35 @@ History indexing starts in the background at app launch. Opening the panel or ch
 
 ### Adapter boundary
 
-Pi is currently the only live history adapter. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
+Pi and Codex are the live history adapters. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
 
 `HistoryService` owns the complete refresh. Each source reads and catches up independently under one fixed clock, calendar and retention cutoff, publishing accepted results as they arrive. Completed or failed adapters wait for the next refresh. The presentation store publishes updates and awaits completion.
 
-Failed or unsupported reads retain the previous timestamped observations. Reaggregation filters yesterday's activity out of Today after midnight, even if the source stays unavailable. Operation identities are scoped to each source. Coverage and failures use typed source status; Pi's panel chooses its error wording, and file-count diagnostics stay inside its reader. Missing optional sources do not make healthy contributions incomplete.
+Failed or unsupported reads retain the previous timestamped observations. Reaggregation filters yesterday's activity out of Today after midnight, even if the source stays unavailable. Operation identities are scoped to each source. Coverage and failures use typed source status; the panel chooses agent-specific error wording, and file-count diagnostics stay inside the reader. Missing optional sources do not make healthy contributions incomplete.
 
 ### Discovery and supported formats
 
 The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
 
+### Codex discovery and accounting
+
+Codex reads `~/.codex/sessions` and `~/.codex/archived_sessions`, honoring `CODEX_HOME` (including `~/` paths). It does not read Codex credentials or SQLite state. This covers local CLI, app, extension, child, and background threads when their usage is persisted in those roots; remote/cloud-only, temporary, deleted, compressed, or otherwise unpersisted histories are outside coverage.
+
+The JSONL contract is verified against [OpenAI Codex 0.163.0](https://github.com/openai/codex/tree/83086188ae0614bd882818ff1aa23f3194962012):
+
+- [Protocol types](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/protocol/src/protocol.rs) define response usage, cumulative counters, cache/reasoning subsets, and thread ownership.
+- [Session accounting](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/session/mod.rs) and [compaction accounting](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/compact.rs) persist a durable response record before the paired token-count report. The parser uses the response record once and suppresses its paired counter. Legacy reports, including incomplete responses without durable records, count only when last-operation usage agrees with cumulative input/output advances. Repeated reports and counter resets are not additional spending; inconsistent reports mark coverage partial.
+- [Rollout recording](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/rollout/src/recorder.rs) writes a fork's header before inherited records and may rewrite envelope timestamps. Durable records belonging to ancestors are excluded. Legacy inherited reports are excluded until a settings marker identifies the actual child thread. Earlier formats without enough ownership/counter metadata may be partial; ambiguous copied legacy usage is omitted rather than guessed.
+
+Totals are input plus output tokens. Cached input/cache-write categories and reasoning output are subsets, counted once. Response IDs are scoped to their spending thread. Active/archive copies deduplicate together; conflicting copies are excluded and marked partial. Matching copies with different envelope timestamps use the earliest available timestamp. Child and background threads contribute to the Codex row. Compaction/replay snapshots are not new spending.
+
 ### Indexing and safety limits
 
-The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes.
+The in-memory index stores operation identity, timestamps, token counts, and available token categories/model/provider metadata (names bounded to 256 bytes), not transcripts or credentials. The source performs no history uploads or writes.
 
 Files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
 
-Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per batch. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
+Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per root per batch. Pi has one root and Codex has independent active/archive roots, each with its own bounded index. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
 
 ## Development
 

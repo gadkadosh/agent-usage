@@ -6,7 +6,7 @@ umask 077
 usage() {
     cat <<'HELP'
 Usage:
-  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS]
+  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME]
   ui-review.sh status SESSION
   ui-review.sh capture SESSION NAME
   ui-review.sh cleanup SESSION
@@ -32,6 +32,7 @@ case "$command" in launch|status|capture|cleanup) ;; *) fail "Unknown command: $
 
 app=
 fixtures=
+codex_fixtures=
 name=
 if [[ $command == launch ]]; then
     while [[ $# -gt 0 ]]; do
@@ -39,6 +40,7 @@ if [[ $command == launch ]]; then
         case "$1" in
             --app) app=$2 ;;
             --sessions) fixtures=$2 ;;
+            --codex-history) codex_fixtures=$2 ;;
             *) fail "Unknown option: $1" ;;
         esac
         shift 2
@@ -49,6 +51,11 @@ if [[ $command == launch ]]; then
         [[ -d $fixtures ]] || fail 'Synthetic sessions directory does not exist.'
         fixtures=$(cd "$fixtures" && pwd -P)
         [[ -z $(find "$fixtures" -type l -print -quit) ]] || fail 'Synthetic sessions must not contain symlinks.'
+    fi
+    if [[ -n $codex_fixtures ]]; then
+        [[ -d $codex_fixtures ]] || fail 'Synthetic Codex history directory does not exist.'
+        codex_fixtures=$(cd "$codex_fixtures" && pwd -P)
+        [[ -z $(find "$codex_fixtures" -type l -print -quit) ]] || fail 'Synthetic Codex history must not contain symlinks.'
     fi
 elif [[ $command == capture ]]; then
     [[ $# == 1 && $1 =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || fail 'Capture needs a simple name (letters, digits, underscores, hyphens).'
@@ -67,6 +74,7 @@ if [[ ! -e $session && $command == launch ]]; then
     put version 1
     put source "$app"
     put fixtures "$fixtures"
+    put codex_fixtures "$codex_fixtures"
     # The unique executable name also makes direct System Events interaction easy.
     token=$(/usr/bin/uuidgen | tr -d '-' | cut -c1-12)
     process="UsageReview$token"
@@ -87,9 +95,16 @@ if [[ ! -e $session && $command == launch ]]; then
     /usr/bin/plutil -replace CFBundleIdentifier -string "local.agentusage.review.$token" "$plist"
     /usr/bin/codesign --force --sign - --timestamp=none "$bundle"
     /usr/bin/codesign --verify --strict "$bundle"
-    mkdir -p "$session/agent/sessions" "$session/evidence"
+    mkdir -p "$session/agent/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/evidence"
     if [[ -n $fixtures ]]; then
         /usr/bin/ditto "$fixtures" "$session/agent/sessions"
+    fi
+    if [[ -n $codex_fixtures ]]; then
+        for history_dir in sessions archived_sessions; do
+            if [[ -d $codex_fixtures/$history_dir ]]; then
+                /usr/bin/ditto "$codex_fixtures/$history_dir" "$session/codex/$history_dir"
+            fi
+        done
     fi
     {
         printf 'Source app: %s\nSource executable SHA-256: %s\n' "$app" "$source_hash"
@@ -100,6 +115,8 @@ if [[ ! -e $session && $command == launch ]]; then
         printf 'Synthetic sessions source: %s\n' "${fixtures:-empty}"
         printf 'Snapshot hashes (relative to agent/sessions):\n'
         (cd "$session/agent/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
+        printf 'Synthetic Codex history source: %s\nSnapshot hashes (relative to codex):\n' "${codex_fixtures:-empty}"
+        (cd "$session/codex" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
     } > "$session/provenance.txt"
     put ready yes
 else
@@ -148,9 +165,11 @@ APPLESCRIPT
 case "$command" in
     launch)
         [[ $(get source) == "$app" && $(get fixtures) == "$fixtures" ]] || fail 'Session inputs differ; use a new session directory.'
+        [[ $(get codex_fixtures 2>/dev/null || true) == "$codex_fixtures" ]] || fail 'Codex session inputs differ; use a new session directory.'
         if ! owned_process; then
             # Launch the real bundle executable to retain an exact PID, not open's PID.
-            PI_CODING_AGENT_DIR="$session/agent" \
+            CODEX_HOME="$session/codex" \
+                PI_CODING_AGENT_DIR="$session/agent" \
                 PI_CODING_AGENT_SESSION_DIR="$session/agent/sessions" \
                 "$executable" > "$session/app.log" 2>&1 < /dev/null &
             pid=$!
