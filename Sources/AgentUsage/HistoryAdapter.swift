@@ -12,8 +12,11 @@ struct HistoryRequest: Sendable {
 
     init(now: Date, calendar: Calendar) {
         self.now = now
-        self.calendar = calendar
-        since = HistoryPeriod.month.start(at: now, calendar: calendar)
+        // Freeze an autoupdating calendar for the entire refresh, including catch-up.
+        var fixedCalendar = calendar
+        fixedCalendar.timeZone = calendar.timeZone
+        self.calendar = fixedCalendar
+        since = HistoryPeriod.month.start(at: now, calendar: fixedCalendar)
     }
 }
 
@@ -27,6 +30,9 @@ struct HistoryAdapterResult: Sendable {
 }
 
 /// Implementations own discovery, IO, indexing, normalization and duplicate/conflict resolution.
+/// Ready and usable partial results replace all accepted observations, including deletions.
+/// Missing clears the contribution. Unsupported/unavailable results (or thrown failures)
+/// retain the previous contribution. Only accepted results may request continuation.
 /// No transcript content, credentials or raw IO errors cross this boundary.
 protocol HistoryAdapter: Sendable {
     var id: HistoryAgentID { get }
@@ -39,6 +45,7 @@ struct HistorySourceSnapshot: Sendable {
     let coverage: HistoryCoverage?
     let fetchedAt: Date?
     let failed: Bool
+    var isLoading = false
 }
 
 func historySummaries(

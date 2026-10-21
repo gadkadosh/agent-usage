@@ -171,21 +171,21 @@ final class HistoryStoreTests: XCTestCase {
                 now: PiHistoryFixtures.now,
                 calendar: PiHistoryFixtures.calendar
             )
-            if !result.hasMoreFiles { await gate.pause() }
+            if !result.hasMore { await gate.pause() }
             return result
         })
         store.start()
         defer { Task { await gate.resume() } }
         guard await gate.waitUntilPaused() else { return }
         XCTAssertEqual(store.summary?.tokens, 190)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, true)
+        XCTAssertEqual(store.snapshot?.hasMore, true)
         XCTAssertEqual(store.snapshot?.coverage.issues, [])
         XCTAssertTrue(store.isRefreshing)
         let joined = Task { await store.refresh() }
         await gate.resume()
         await joined.value
         XCTAssertEqual(store.summary?.tokens, 380)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, false)
+        XCTAssertEqual(store.snapshot?.hasMore, false)
         XCTAssertFalse(store.isRefreshing)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
@@ -195,17 +195,17 @@ final class HistoryStoreTests: XCTestCase {
         let fetcher = ScriptedHistory()
         let store = HistoryStore(fetch: {
             var snapshot = try await fetcher.fetch()
-            snapshot.hasMoreFiles = snapshot.fetchedAt == historySnapshot().fetchedAt
+            snapshot.hasMore = snapshot.fetchedAt == historySnapshot().fetchedAt
             return snapshot
         })
         await store.refresh()
         XCTAssertEqual(store.summary?.tokens, 100)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, true)
+        XCTAssertEqual(store.snapshot?.hasMore, true)
         XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
         XCTAssertFalse(store.isRefreshing)
         await store.refresh()
         XCTAssertEqual(store.summary?.tokens, 300)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, false)
+        XCTAssertEqual(store.snapshot?.hasMore, false)
         XCTAssertNil(store.error)
     }
 }
@@ -238,7 +238,7 @@ private func historySnapshot(read: Int = 1, state: HistoryCoverage.State = .read
         ),
         coverage: HistoryCoverage(
             state: state,
-            filesRead: readable ? 1 : 0,
+            hasReadings: readable,
             issues: state == .partial ? [.unreadableFile] : []
         ),
         fetchedAt: now
@@ -259,7 +259,7 @@ private actor ScriptedHistory {
 }
 
 /// Non-cooperative suspension for late-result tests, with bounded failures instead of hangs.
-private actor HistoryGate {
+actor HistoryGate {
     private(set) var count = 0
     private let name: String
     private var pending: CheckedContinuation<Void, Never>?

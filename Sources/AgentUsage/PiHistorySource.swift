@@ -20,6 +20,9 @@ actor PiHistorySource: HistoryAdapter {
     private var cache: [URL: IndexedFile] = [:]
     private var cacheStart: Date?
     private(set) var filesParsed = 0
+    // Diagnostics belong to this file reader, not the shared coverage contract.
+    private(set) var filesRead = 0
+    private(set) var filesSkipped = 0
 
     init(
         root: URL,
@@ -277,13 +280,14 @@ actor PiHistorySource: HistoryAdapter {
         state: HistoryCoverage.State,
         now: Date
     ) -> HistoryAdapterResult {
-        HistoryAdapterResult(
+        self.filesRead = filesRead
+        self.filesSkipped = filesSkipped
+        return HistoryAdapterResult(
             observations: observations,
             coverage: HistoryCoverage(
                 state: state,
-                filesRead: filesRead,
-                issues: issues,
-                filesSkipped: filesSkipped
+                hasReadings: filesRead > 0 || filesSkipped > 0,
+                issues: issues
             ),
             fetchedAt: now
         )

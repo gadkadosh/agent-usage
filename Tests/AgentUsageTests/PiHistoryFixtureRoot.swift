@@ -50,7 +50,7 @@ extension HistoryAdapterResult {
             summaries: historySummaries(observations, now: now, calendar: calendar),
             coverage: coverage,
             fetchedAt: fetchedAt,
-            hasMoreFiles: hasMore
+            hasMore: hasMore
         )
     }
 }

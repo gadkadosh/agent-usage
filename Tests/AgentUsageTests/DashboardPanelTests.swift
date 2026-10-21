@@ -47,16 +47,16 @@ final class DashboardPanelTests: XCTestCase {
 
     func testCoverageMessagesDoNotPresentUnreadableSourcesAsZero() {
         for state in [HistoryCoverage.State.missing, .partial, .unavailable, .unsupported] {
-            let coverage = HistoryCoverage(state: state, filesRead: 0, issues: [])
+            let coverage = HistoryCoverage(state: state, hasReadings: false, issues: [])
             XCTAssertFalse(coverage.hasReadings)
             XCTAssertFalse(coverage.emptyDescription.contains("No recorded"))
         }
         XCTAssertEqual(
-            HistoryCoverage(state: .partial, filesRead: 1, issues: [.staleFile]).warning,
+            HistoryCoverage(state: .partial, hasReadings: true, issues: [.staleFile]).warning,
             "Partial history. Totals may be incomplete. Includes older readings."
         )
         XCTAssertTrue(
-            HistoryCoverage(state: .missing, filesRead: 0, issues: []).emptyDescription
+            HistoryCoverage(state: .missing, hasReadings: false, issues: []).emptyDescription
                 .contains("isn't zero usage")
         )
     }
@@ -108,7 +108,7 @@ enum DashboardFixtures {
             ),
             coverage: HistoryCoverage(
                 state: state,
-                filesRead: readable ? 12 : 0,
+                hasReadings: readable,
                 issues: state == .partial ? [.unsupportedVersion, .staleFile] : []
             ),
             fetchedAt: now

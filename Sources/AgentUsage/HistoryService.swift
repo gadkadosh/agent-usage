@@ -1,105 +1,157 @@
 import Foundation
 
-/// Retains accepted source data independently of adapter index caches and UI lifetime.
+/// Owns accepted contributions, refresh scheduling and aggregation, independently of UI lifetime.
 actor HistoryService {
     private let adapters: [any HistoryAdapter]
-    private var accepted: [HistoryAgentID: HistoryAdapterResult] = [:]
+    private var readings: [HistoryAgentID: SourceReading] = [:]
     private var refreshTask: Task<HistorySnapshot, Error>?
+    private var request: HistoryRequest?
+    private var pending: Set<HistoryAgentID> = []
 
     init(adapters: [any HistoryAdapter]) {
         precondition(Set(adapters.map(\.id)).count == adapters.count)
         self.adapters = adapters
     }
 
-    func refresh(now: Date, calendar: Calendar) async throws -> HistorySnapshot {
+    /// Overlapping callers join the current batch. The initiating caller receives updates;
+    /// joiners receive its final snapshot without starting another read or replacing its observer.
+    func refresh(
+        now: Date,
+        calendar: Calendar,
+        onUpdate: @escaping @Sendable (HistorySnapshot) async -> Void = { _ in }
+    ) async throws -> HistorySnapshot {
         if let refreshTask { return try await refreshTask.value }
-        let task = Task { try await performRefresh(now: now, calendar: calendar) }
+        let request: HistoryRequest
+        if let previous = self.request, !pending.isEmpty {
+            request = previous
+        } else {
+            request = HistoryRequest(now: now, calendar: calendar)
+            pending = Set(adapters.map(\.id))
+        }
+        self.request = request
+        let task = Task { try await performBatch(request, onUpdate: onUpdate) }
         refreshTask = task
         defer { refreshTask = nil }
         return try await task.value
     }
 
-    private func performRefresh(now: Date, calendar: Calendar) async throws -> HistorySnapshot {
-        let request = HistoryRequest(now: now, calendar: calendar)
-        let outcomes = await withTaskGroup(of: Outcome.self) { group in
-            for adapter in adapters {
+    private func performBatch(
+        _ request: HistoryRequest,
+        onUpdate: @escaping @Sendable (HistorySnapshot) async -> Void
+    ) async throws -> HistorySnapshot {
+        let batch = adapters.filter { pending.contains($0.id) }
+        pending.removeAll()
+        await withTaskGroup(of: Outcome.self) { group in
+            for adapter in batch {
                 group.addTask {
-                    do {
-                        return Outcome(id: adapter.id, result: try await adapter.read(request))
-                    } catch {
-                        return Outcome(id: adapter.id, result: nil)
-                    }
+                    Outcome(id: adapter.id, result: try? await adapter.read(request))
                 }
             }
-            var outcomes: [Outcome] = []
-            for await outcome in group { outcomes.append(outcome) }
-            return outcomes
+            var running = Set(batch.map(\.id))
+            for await outcome in group {
+                running.remove(outcome.id)
+                if readings[outcome.id, default: SourceReading()].accept(outcome.result) {
+                    pending.insert(outcome.id)
+                }
+                // Publish each completed source even while other adapters are still reading.
+                // An initial all-source IO failure keeps the existing unavailable presentation.
+                if canPublish {
+                    await onUpdate(snapshot(request, loading: running.union(pending)))
+                }
+            }
         }
-        let failed = Set(outcomes.filter { $0.result == nil }.map(\.id))
-        for outcome in outcomes {
-            if let result = outcome.result { accepted[outcome.id] = result }
-        }
-        // Preserve the existing Pi-only initial failure presentation.
-        guard !accepted.isEmpty else { throw HistoryReadError.unavailable }
+        guard canPublish else { throw HistoryReadError.unavailable }
+        return snapshot(request, loading: pending)
+    }
 
+    private var canPublish: Bool {
+        readings.values.contains { $0.accepted != nil || $0.latest != nil }
+    }
+
+    private func snapshot(_ request: HistoryRequest, loading: Set<HistoryAgentID>)
+        -> HistorySnapshot
+    {
         let sources = adapters.map { adapter in
-            let result = accepted[adapter.id]
+            let reading = readings[adapter.id, default: SourceReading()]
             return HistorySourceSnapshot(
                 id: adapter.id,
                 summaries: historySummaries(
-                    result?.observations ?? [],
-                    now: now,
-                    calendar: calendar
+                    reading.accepted?.observations ?? [],
+                    now: request.now,
+                    calendar: request.calendar
                 ),
-                coverage: result?.coverage,
-                fetchedAt: result?.fetchedAt,
-                failed: failed.contains(adapter.id)
+                coverage: reading.coverage,
+                fetchedAt: reading.accepted?.fetchedAt,
+                failed: reading.failed,
+                isLoading: loading.contains(adapter.id)
             )
         }
-        // Aggregate each source separately so equal operation IDs from different agents survive.
+        // Aggregate separately so equal operation IDs from different agents survive.
         let summaries = Dictionary(
             uniqueKeysWithValues: HistoryPeriod.allCases.map { period in
-                var combined = PeriodSummary.aggregate(
+                var buckets = PeriodSummary.aggregate(
                     [],
                     period: period,
-                    now: now,
-                    calendar: calendar
-                )
+                    now: request.now,
+                    calendar: request.calendar
+                ).buckets
                 for source in sources {
                     guard let summary = source.summaries[period] else { continue }
-                    combined = PeriodSummary(
-                        tokens: combined.tokens + summary.tokens,
-                        buckets: zip(combined.buckets, summary.buckets).map { left, right in
-                            var bucket = left
-                            bucket.tokens += right.tokens
-                            return bucket
-                        }
-                    )
+                    for index in buckets.indices {
+                        buckets[index].tokens += summary.buckets[index].tokens
+                    }
                 }
-                return (period, combined)
+                return (
+                    period,
+                    PeriodSummary(tokens: buckets.reduce(0) { $0 + $1.tokens }, buckets: buckets)
+                )
             }
         )
-        let results = adapters.compactMap { accepted[$0.id] }
-        // Pi-only composition preserves its existing detailed coverage and footer timestamp.
-        let coverage =
-            results.count == 1
-            ? results[0].coverage
-            : HistoryCoverage(
-                state: failed.isEmpty && results.allSatisfy { $0.coverage.state == .ready }
-                    ? .ready : .partial,
-                issues: results.reduce(into: Set<HistoryIssue>()) {
-                    $0.formUnion($1.coverage.issues)
-                },
-                observedReadings: results.contains { $0.coverage.hasReadings }
-            )
         return HistorySnapshot(
             summaries: summaries,
-            coverage: coverage,
-            fetchedAt: results.map(\.fetchedAt).min() ?? now,
-            hasMoreFiles: outcomes.contains { $0.result?.hasMore == true },
+            coverage: .combined(sources.compactMap(\.coverage)),
+            fetchedAt: sources.compactMap(\.fetchedAt).min() ?? request.now,
+            hasMore: !loading.isEmpty,
             sources: sources,
-            refreshError: failed.isEmpty ? nil : HistoryReadError.unavailable.localizedDescription
+            refreshError: sources.contains { $0.failed }
+                ? HistoryReadError.unavailable.localizedDescription : nil
         )
+    }
+
+    /// Keep the latest attempt's status separate from its last usable measurement.
+    private struct SourceReading {
+        var accepted: HistoryAdapterResult?
+        var latest: HistoryCoverage?
+        var failed = false
+
+        /// Returns true only when an accepted result requests another batch.
+        mutating func accept(_ result: HistoryAdapterResult?) -> Bool {
+            latest = result?.coverage
+            guard let result else {
+                failed = true
+                return false
+            }
+            guard result.coverage.replacesReadings else {
+                failed = accepted?.coverage.hasReadings == true
+                return false
+            }
+            accepted = result
+            failed = false
+            return result.hasMore
+        }
+
+        var coverage: HistoryCoverage? {
+            guard latest != nil || failed else { return nil }
+            var issues = latest?.issues ?? []
+            if failed, accepted?.coverage.hasReadings == true {
+                issues.formUnion(accepted?.coverage.issues ?? [])
+            }
+            return HistoryCoverage(
+                state: latest?.state ?? .unavailable,
+                hasReadings: accepted?.coverage.hasReadings == true,
+                issues: issues
+            )
+        }
     }
 
     private struct Outcome: Sendable {

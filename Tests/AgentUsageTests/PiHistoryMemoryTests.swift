@@ -48,7 +48,8 @@ final class PiHistoryMemoryTests: XCTestCase {
             calendar: PiHistoryFixtures.calendar
         )
         XCTAssertEqual(snapshot.coverage.state, .ready)
-        XCTAssertEqual(snapshot.coverage.filesRead, 1)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 1)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
         XCTAssertTrue(snapshot.coverage.issues.isEmpty)
     }

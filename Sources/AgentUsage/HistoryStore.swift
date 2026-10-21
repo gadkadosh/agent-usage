@@ -11,12 +11,27 @@ final class HistoryStore: ObservableObject {
 
     var summary: PeriodSummary? { snapshot?.summaries[period] }
 
-    private let fetch: @Sendable () async throws -> HistorySnapshot
+    private let fetch:
+        @Sendable (@escaping @Sendable (HistorySnapshot) async -> Void) async throws ->
+            HistorySnapshot
     private var scan: Task<Void, Never>?
     private var started = false
 
     init(fetch: @escaping @Sendable () async throws -> HistorySnapshot) {
-        self.fetch = fetch
+        self.fetch = { _ in try await fetch() }
+    }
+
+    init(
+        fetchUpdates:
+            @escaping @Sendable (@escaping @Sendable (HistorySnapshot) async -> Void)
+            async throws -> HistorySnapshot
+    ) {
+        self.fetch = fetchUpdates
+    }
+
+    private func publish(_ result: HistorySnapshot) {
+        snapshot = result
+        error = result.refreshError
     }
 
     /// Launch once without awaiting IO. The store, not the panel, owns the scan.
@@ -47,10 +62,11 @@ final class HistoryStore: ObservableObject {
         }
         do {
             while true {
-                let result = try await fetch()
-                snapshot = result
-                error = result.refreshError
-                guard result.hasMoreFiles else { return }
+                let result = try await fetch { [weak self] result in
+                    await self?.publish(result)
+                }
+                publish(result)
+                guard result.hasMore else { return }
                 // Pace catch-up and let the UI present each batch before continuing.
                 try await Task.sleep(for: .milliseconds(100))
             }

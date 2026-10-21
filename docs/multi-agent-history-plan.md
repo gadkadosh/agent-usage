@@ -26,7 +26,7 @@ Investigate Codex's format before committing to the first interface; local schem
 - Keep the last successful data from an agent whose refresh fails. Mark its row stale; the combined total/chart show available data without a separate combined warning.
 - If history is found but the first read fails, show that agent's row as failed/unavailable without a numeric contribution. Show partial/incomplete status on its row when only some usage can be read. Missing history directories stay hidden.
 - The shared history service owns retained source results and failure state. Adapters own their internal parsing/index caches.
-- Each accepted adapter refresh returns a complete replacement set of normalized observations for the requested history window, not an additive delta. Internal scanning may be incremental. Successful replacement allows corrected/deleted records to disappear; a failed refresh preserves the previous accepted set.
+- Each accepted adapter refresh returns a complete replacement set of normalized observations for the requested history window, not an additive delta. Internal scanning may be incremental. Successful replacement allows corrected/deleted records to disappear; a failed or unsupported read preserves the previous accepted set. Readable empty results establish zero, confirmed missing history clears the contribution, and usable partial results replace it with incomplete coverage.
 
 ## Proposed architecture
 
@@ -62,11 +62,10 @@ This establishes feasibility, not a stable format contract. Implementation must 
 
 ## Remaining technical questions
 
-- Publication of independently completing source results.
 - Codex-specific continuation behavior and resource budgets.
 - Supported Codex format/version evidence and normalization rules.
 
-PR 1 establishes Swift types, retained source results, refresh coalescing, and complete replacement batches for Pi. Proposed publication behavior is to show each source as it completes, recomputing combined summaries from all currently accepted source results. No product decision should depend on undocumented assumptions about Codex counters.
+PR 1 establishes Swift types, retained source results, refresh coalescing, storage-independent coverage, and complete replacement batches for Pi. Each source publishes as it completes, recomputing combined summaries from all currently accepted source results. Catch-up reads only pending adapters and reuses one clock, calendar and retention cutoff; completed or failed adapters are not retried until the next explicit refresh. No product decision should depend on undocumented assumptions about Codex counters.
 
 ## Validation for implementation
 

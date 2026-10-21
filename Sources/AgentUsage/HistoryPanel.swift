@@ -65,7 +65,7 @@ struct HistoryPanel: View {
                             .accessibilityLabel("\(summary.tokens) tokens")
                     }
                     .font(.subheadline)
-                } else if snapshot.hasMoreFiles {
+                } else if snapshot.hasMore {
                     Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(snapshot.coverage.emptyDescription)
@@ -188,7 +188,7 @@ struct HistoryPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
-                if snapshot.hasMoreFiles && history.isRefreshing {
+                if snapshot.hasMore && history.isRefreshing {
                     Text("Loading history… Totals are still updating.")
                 } else {
                     Text(

@@ -41,15 +41,17 @@ final class PiHistoryBenchmarkTests: XCTestCase {
             )
             let source = PiHistorySource(root: fixture.root)
             let cold = try await scan(source, label: "\(name) cold")
-            XCTAssertTrue(cold.hasMoreFiles)
+            XCTAssertTrue(cold.hasMore)
             XCTAssertEqual(cold.coverage.issues, [])
-            XCTAssertLessThan(cold.coverage.filesRead, files)
+            let coldFilesRead = await source.filesRead
+            XCTAssertLessThan(coldFilesRead, files)
 
             let catchUp = try await scan(source, label: "\(name) catch-up")
             let total = Int64(files * operationsPerFile * 190)
-            XCTAssertFalse(catchUp.hasMoreFiles)
+            XCTAssertFalse(catchUp.hasMore)
             XCTAssertEqual(catchUp.coverage.state, .ready)
-            XCTAssertEqual(catchUp.coverage.filesRead, files)
+            let catchUpFilesRead = await source.filesRead
+            XCTAssertEqual(catchUpFilesRead, files)
             XCTAssertEqual(catchUp.summaries[.today]?.tokens, total)
             var parsed = await source.filesParsed
             XCTAssertEqual(parsed, files, "Catch-up must not reread cached files.")

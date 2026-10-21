@@ -25,11 +25,13 @@ final class PiHistoryAgeTests: XCTestCase {
         let snapshot = try await source.refresh(now: future, calendar: F.calendar)
         XCTAssertEqual(snapshot.coverage.state, .ready)
         XCTAssertTrue(snapshot.coverage.hasReadings)
-        XCTAssertEqual(snapshot.coverage.filesRead, 0)
-        XCTAssertEqual(snapshot.coverage.filesSkipped, 1)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 0)
+        let snapshotFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(snapshotFilesSkipped, 1)
         XCTAssertEqual(snapshot.coverage.issues, [])
         XCTAssertNil(snapshot.coverage.warning)
-        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertFalse(snapshot.hasMore)
         for period in HistoryPeriod.allCases {
             XCTAssertEqual(snapshot.summaries[period]?.tokens, 0)
             XCTAssertTrue(snapshot.summaries[period]!.buckets.allSatisfy { $0.tokens == 0 })
@@ -42,7 +44,8 @@ final class PiHistoryAgeTests: XCTestCase {
         let deleted = try await source.refresh(now: future, calendar: F.calendar)
         XCTAssertEqual(deleted.coverage.state, .missing)
         XCTAssertFalse(deleted.coverage.hasReadings)
-        XCTAssertEqual(deleted.coverage.filesSkipped, 0)
+        let deletedFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(deletedFilesSkipped, 0)
     }
 
     func testOldFilesLeaveTheReadBudgetAvailableForRecentUsage() async throws {
@@ -71,11 +74,13 @@ final class PiHistoryAgeTests: XCTestCase {
 
         let snapshot = try await source.refresh(now: now, calendar: F.calendar)
         XCTAssertEqual(snapshot.coverage.state, .ready)
-        XCTAssertEqual(snapshot.coverage.filesRead, 1)
-        XCTAssertEqual(snapshot.coverage.filesSkipped, 1)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 1)
+        let snapshotFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(snapshotFilesSkipped, 1)
         XCTAssertEqual(snapshot.coverage.issues, [])
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
-        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertFalse(snapshot.hasMore)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 1)
     }
@@ -90,8 +95,10 @@ final class PiHistoryAgeTests: XCTestCase {
         let snapshot = try await source.refresh(now: future, calendar: F.calendar)
         XCTAssertEqual(snapshot.coverage.state, .partial)
         XCTAssertTrue(snapshot.coverage.hasReadings)
-        XCTAssertEqual(snapshot.coverage.filesRead, 0)
-        XCTAssertEqual(snapshot.coverage.filesSkipped, 1)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 0)
+        let snapshotFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(snapshotFilesSkipped, 1)
         XCTAssertEqual(snapshot.summaries[.month]?.tokens, 0)
         XCTAssertEqual(snapshot.coverage.issues, [.unsupportedRecord])
         XCTAssertEqual(snapshot.coverage.warning, "Partial history. Totals may be incomplete.")
@@ -113,8 +120,10 @@ final class PiHistoryAgeTests: XCTestCase {
 
         let snapshot = try await source.refresh(now: now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
-        XCTAssertEqual(snapshot.coverage.filesRead, 1)
-        XCTAssertEqual(snapshot.coverage.filesSkipped, 0)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 1)
+        let snapshotFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(snapshotFilesSkipped, 0)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 1)
     }
@@ -139,8 +148,10 @@ final class PiHistoryAgeTests: XCTestCase {
             let snapshot = try await source.refresh(now: now, calendar: calendar)
             let included = offset >= 0
             XCTAssertEqual(snapshot.summaries[.month]?.tokens, included ? 190 : 0)
-            XCTAssertEqual(snapshot.coverage.filesRead, included ? 1 : 0)
-            XCTAssertEqual(snapshot.coverage.filesSkipped, included ? 0 : 1)
+            let snapshotFilesRead = await source.filesRead
+            XCTAssertEqual(snapshotFilesRead, included ? 1 : 0)
+            let snapshotFilesSkipped = await source.filesSkipped
+            XCTAssertEqual(snapshotFilesSkipped, included ? 0 : 1)
             let parsed = await source.filesParsed
             XCTAssertEqual(parsed, included ? 1 : 0)
         }
@@ -153,7 +164,8 @@ final class PiHistoryAgeTests: XCTestCase {
         let source = PiHistorySource(root: fixture.root)
         let now = future
         let old = try await source.refresh(now: now, calendar: F.calendar)
-        XCTAssertEqual(old.coverage.filesSkipped, 1)
+        let oldFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(oldFilesSkipped, 1)
         XCTAssertEqual(old.summaries[.today]?.tokens, 0)
 
         let writer = try FileHandle(forWritingTo: file)
@@ -171,8 +183,10 @@ final class PiHistoryAgeTests: XCTestCase {
         try FileManager.default.setAttributes([.modificationDate: now], ofItemAtPath: file.path)
         let resumed = try await source.refresh(now: now, calendar: F.calendar)
         XCTAssertEqual(resumed.summaries[.today]?.tokens, 190)
-        XCTAssertEqual(resumed.coverage.filesRead, 1)
-        XCTAssertEqual(resumed.coverage.filesSkipped, 0)
+        let resumedFilesRead = await source.filesRead
+        XCTAssertEqual(resumedFilesRead, 1)
+        let resumedFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(resumedFilesSkipped, 0)
         XCTAssertEqual(resumed.coverage.issues, [])
         let warm = try await source.refresh(now: now, calendar: F.calendar)
         XCTAssertEqual(warm.summaries, resumed.summaries)
@@ -193,15 +207,19 @@ final class PiHistoryAgeTests: XCTestCase {
 
         let aged = try await source.refresh(now: future, calendar: F.calendar)
         XCTAssertEqual(aged.summaries[.month]?.tokens, 0)
-        XCTAssertEqual(aged.coverage.filesRead, 0)
-        XCTAssertEqual(aged.coverage.filesSkipped, 1)
+        let agedFilesRead = await source.filesRead
+        XCTAssertEqual(agedFilesRead, 0)
+        let agedFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(agedFilesSkipped, 1)
         var parsed = await source.filesParsed
         XCTAssertEqual(parsed, 1)
 
         let restored = try await source.refresh(now: now, calendar: F.calendar)
         XCTAssertEqual(restored.summaries, initial.summaries)
-        XCTAssertEqual(restored.coverage.filesRead, 1)
-        XCTAssertEqual(restored.coverage.filesSkipped, 0)
+        let restoredFilesRead = await source.filesRead
+        XCTAssertEqual(restoredFilesRead, 1)
+        let restoredFilesSkipped = await source.filesSkipped
+        XCTAssertEqual(restoredFilesSkipped, 0)
         parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
     }
