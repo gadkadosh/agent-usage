@@ -291,6 +291,58 @@ final class HistoryServiceTests: XCTestCase {
         XCTAssertFalse(recovered.sources.contains { $0.failed })
     }
 
+    @MainActor
+    func testUnsupportedSourcesFailingTogetherPublishCompletionAndRecover() async throws {
+        let unsupported = HistoryAdapterResult(
+            observations: [],
+            coverage: HistoryCoverage(
+                state: .unsupported,
+                hasReadings: false,
+                issues: [.unsupportedVersion]
+            ),
+            fetchedAt: now
+        )
+        let service = HistoryService(adapters: [
+            ScriptedAdapter(id: .pi, results: [unsupported, nil, result([observation("a", 100)])]),
+            ScriptedAdapter(
+                id: .init(rawValue: "other"),
+                results: [unsupported, nil, result([observation("a", 200)])]
+            ),
+        ])
+        let updates = HistorySnapshotRecorder()
+        let now = self.now
+        let calendar = self.calendar
+        let store = HistoryStore(fetchUpdates: { publish in
+            try await service.refresh(now: now, calendar: calendar) { snapshot in
+                await updates.append(snapshot)
+                await publish(snapshot)
+            }
+        })
+        await store.refresh()
+        XCTAssertEqual(store.snapshot?.coverage.state, .unsupported)
+        XCTAssertEqual(store.snapshot?.hasMore, false)
+
+        await store.refresh()
+        let failed = try XCTUnwrap(store.snapshot)
+        XCTAssertFalse(store.isRefreshing)
+        XCTAssertFalse(failed.hasMore)
+        XCTAssertTrue(failed.sources.allSatisfy { $0.failed && !$0.isLoading })
+        XCTAssertEqual(failed.coverage.state, .unavailable)
+        XCTAssertFalse(failed.coverage.hasReadings)
+        XCTAssertEqual(store.error, .unavailable)
+        let published = await updates.values
+        XCTAssertEqual(published.map(\.hasMore), [true, false, true, false])
+        let last = try XCTUnwrap(published.last)
+        XCTAssertTrue(last.sources.allSatisfy { $0.failed && !$0.isLoading })
+        XCTAssertFalse(last.hasMore)
+
+        await store.refresh()
+        XCTAssertEqual(store.summary?.tokens, 300)
+        XCTAssertEqual(store.snapshot?.coverage.state, .ready)
+        XCTAssertEqual(store.snapshot?.hasMore, false)
+        XCTAssertNil(store.error)
+    }
+
     private func observation(_ id: String, _ tokens: Int64) -> UsageObservation {
         UsageObservation(operationID: id, timestamp: now, tokens: tokens)
     }

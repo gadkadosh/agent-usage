@@ -47,7 +47,9 @@ actor HistoryService {
                 } else {
                     loading.remove(adapter.id)
                 }
-                if canPublish {
+                // Once progress is published, keep its status current through completion,
+                // even when later failures leave no source results available.
+                if latest != nil || hasSourceResult {
                     let result = snapshot(request, loading: loading)
                     latest = result
                     await onUpdate(result)
@@ -65,7 +67,7 @@ actor HistoryService {
         Outcome(adapter: adapter, result: try? await adapter.read(request))
     }
 
-    private var canPublish: Bool {
+    private var hasSourceResult: Bool {
         readings.values.contains { $0.accepted != nil || $0.latest != nil }
     }
 
