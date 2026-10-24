@@ -17,15 +17,18 @@ final class HistoryServiceTests: XCTestCase {
             ]
         )
         let service = HistoryService(adapters: [adapter])
-        let first = try await service.refresh(now: now, calendar: calendar)
-        XCTAssertEqual(first.summaries[.today]?.tokens, 300)
-        XCTAssertTrue(first.hasMore)
-        let second = try await service.refresh(now: now, calendar: calendar)
-        XCTAssertEqual(second.summaries[.today]?.tokens, 150)
-        XCTAssertFalse(second.hasMore)
-        let third = try await service.refresh(now: now, calendar: calendar)
-        XCTAssertEqual(third.summaries[.today]?.tokens, 0)
-        XCTAssertTrue(third.coverage.hasReadings)
+        let updates = HistorySnapshotRecorder()
+        let first = try await service.refresh(now: now, calendar: calendar) {
+            await updates.append($0)
+        }
+        XCTAssertEqual(first.summaries[.today]?.tokens, 150)
+        XCTAssertFalse(first.hasMore)
+        let published = await updates.values
+        XCTAssertEqual(published.map { $0.summaries[.today]?.tokens }, [300, 150])
+        XCTAssertEqual(published.map(\.hasMore), [true, false])
+        let empty = try await service.refresh(now: now, calendar: calendar)
+        XCTAssertEqual(empty.summaries[.today]?.tokens, 0)
+        XCTAssertTrue(empty.coverage.hasReadings)
     }
 
     func testFailureRetainsObservationsButRebucketsThemAcrossMidnightAndRecovers() async throws {
@@ -43,11 +46,9 @@ final class HistoryServiceTests: XCTestCase {
         XCTAssertEqual(stale.summaries[.week]?.tokens, 100)
         XCTAssertEqual(stale.fetchedAt, now)
         XCTAssertTrue(stale.sources[0].failed)
-        XCTAssertNotNil(stale.refreshError)
         let recovered = try await service.refresh(now: now, calendar: calendar)
         XCTAssertEqual(recovered.summaries[.today]?.tokens, 200)
         XCTAssertFalse(recovered.sources[0].failed)
-        XCTAssertNil(recovered.refreshError)
     }
 
     func testSourcesWithSameOperationIdentityStayIndependentDuringFailureAndRecovery() async throws
@@ -86,7 +87,7 @@ final class HistoryServiceTests: XCTestCase {
         }
         let third = try await service.refresh(now: now, calendar: calendar)
         XCTAssertEqual(third.summaries[.today]?.tokens, 450)
-        XCTAssertNil(third.refreshError)
+        XCTAssertFalse(third.sources.contains { $0.failed })
     }
 
     func testInitialFailureDoesNotInventZeroAndRecoveryUsesRequestedWindow() async throws {
@@ -97,8 +98,8 @@ final class HistoryServiceTests: XCTestCase {
             XCTFail("Initial failure should not return an observed zero")
         } catch {
             XCTAssertEqual(
-                error.localizedDescription,
-                HistoryReadError.unavailable.localizedDescription
+                error as? HistoryReadError,
+                .unavailable
             )
         }
         let snapshot = try await service.refresh(now: now, calendar: calendar)
@@ -150,14 +151,14 @@ final class HistoryServiceTests: XCTestCase {
             XCTAssertTrue(empty.coverage.hasReadings)
             XCTAssertEqual(empty.coverage.state, .ready)
             XCTAssertFalse(empty.sources[0].failed)
-            XCTAssertNil(empty.refreshError)
+            XCTAssertFalse(empty.sources.contains { $0.failed })
             let recovered = try await service.refresh(now: now, calendar: calendar)
             XCTAssertEqual(recovered.summaries[.today]?.tokens, 300)
             let deleted = try await service.refresh(now: now, calendar: calendar)
             XCTAssertEqual(deleted.summaries[.week]?.tokens, 0)
             XCTAssertEqual(deleted.coverage.state, .missing)
             XCTAssertFalse(deleted.coverage.hasReadings)
-            XCTAssertNil(deleted.refreshError)
+            XCTAssertFalse(deleted.sources.contains { $0.failed })
         }
     }
 
@@ -181,7 +182,6 @@ final class HistoryServiceTests: XCTestCase {
         XCTAssertEqual(snapshot.coverage.state, .partial)
         XCTAssertEqual(snapshot.coverage.issues, [.invalidUsage])
         XCTAssertFalse(snapshot.sources[0].failed)
-        XCTAssertNil(snapshot.refreshError)
     }
 
     func testCoverageDistinguishesMissingSourcesFromZeroAndUnavailableMeasurements() async throws {
@@ -239,17 +239,19 @@ final class HistoryServiceTests: XCTestCase {
         )
         let failing = ScriptedAdapter(id: .init(rawValue: "failed"), results: [nil, result([])])
         let service = HistoryService(adapters: [advancing, completed, failing])
-        let first = try await service.refresh(now: now, calendar: calendar)
-        XCTAssertEqual(first.summaries[.today]?.tokens, 300)
-        XCTAssertTrue(first.hasMore)
-        XCTAssertEqual(first.sources.map(\.isLoading), [true, false, false])
-        var changedCalendar = calendar
-        changedCalendar.timeZone = TimeZone(secondsFromGMT: 12 * 3600)!
-        let later = now.addingTimeInterval(86_400)
-        let final = try await service.refresh(now: later, calendar: changedCalendar)
+        let updates = HistorySnapshotRecorder()
+        let final = try await service.refresh(now: now, calendar: calendar) {
+            await updates.append($0)
+        }
         XCTAssertEqual(final.summaries[.today]?.tokens, 350)
         XCTAssertFalse(final.hasMore)
         XCTAssertTrue(final.sources[2].failed)
+        let published = await updates.values
+        XCTAssertTrue(published.contains { $0.sources[0].isLoading })
+        XCTAssertEqual(published.last?.summaries, final.summaries)
+        var changedCalendar = calendar
+        changedCalendar.timeZone = TimeZone(secondsFromGMT: 12 * 3600)!
+        let later = now.addingTimeInterval(86_400)
         let requests = await advancing.requests
         let completedRequests = await completed.requests
         let failedRequests = await failing.requests
@@ -266,7 +268,7 @@ final class HistoryServiceTests: XCTestCase {
         XCTAssertEqual(failedRequests.count, 1)
         let next = try await service.refresh(now: later, calendar: changedCalendar)
         XCTAssertFalse(next.hasMore)
-        XCTAssertNil(next.refreshError)
+        XCTAssertFalse(next.sources.contains { $0.failed })
         let nextRequests = await advancing.requests
         XCTAssertEqual(nextRequests.last?.now, later)
         XCTAssertEqual(nextRequests.last?.calendar, changedCalendar)
@@ -280,14 +282,13 @@ final class HistoryServiceTests: XCTestCase {
             ]
         )
         let service = HistoryService(adapters: [adapter])
-        _ = try await service.refresh(now: now, calendar: calendar)
         let stopped = try await service.refresh(now: now, calendar: calendar)
         XCTAssertFalse(stopped.hasMore)
         XCTAssertEqual(stopped.summaries[.today]?.tokens, 100)
         XCTAssertTrue(stopped.sources[0].failed)
         let recovered = try await service.refresh(now: now, calendar: calendar)
         XCTAssertEqual(recovered.summaries[.today]?.tokens, 200)
-        XCTAssertNil(recovered.refreshError)
+        XCTAssertFalse(recovered.sources.contains { $0.failed })
     }
 
     private func observation(_ id: String, _ tokens: Int64) -> UsageObservation {
@@ -323,4 +324,9 @@ private actor ScriptedAdapter: HistoryAdapter {
         }
         return result
     }
+}
+
+actor HistorySnapshotRecorder {
+    private(set) var values: [HistorySnapshot] = []
+    func append(_ snapshot: HistorySnapshot) { values.append(snapshot) }
 }

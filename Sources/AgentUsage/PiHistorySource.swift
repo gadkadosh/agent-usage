@@ -418,10 +418,3 @@ actor PiHistorySource: HistoryAdapter {
     private struct BatchLimitError: Error {}
     private struct ChangingFileError: Error {}
 }
-
-enum HistoryReadError: LocalizedError {
-    case unavailable
-    var errorDescription: String? {
-        "Pi history could not be read. Check access to the session directory, then refresh."
-    }
-}

@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class HistoryStore: ObservableObject {
     @Published private(set) var snapshot: HistorySnapshot?
-    @Published private(set) var error: String?
+    @Published private(set) var error: HistoryReadError?
     @Published private(set) var isRefreshing = false
     @Published var period: HistoryPeriod = .today
 
@@ -31,10 +31,10 @@ final class HistoryStore: ObservableObject {
 
     private func publish(_ result: HistorySnapshot) {
         snapshot = result
-        error = result.refreshError
+        error = result.sources.contains { $0.failed } ? .unavailable : nil
     }
 
-    /// Launch once without awaiting IO. The store, not the panel, owns the scan.
+    /// Launch once without awaiting IO. Closing the panel does not cancel the refresh.
     func start() {
         guard !started else { return }
         started = true
@@ -61,19 +61,14 @@ final class HistoryStore: ObservableObject {
             scan = nil
         }
         do {
-            while true {
-                let result = try await fetch { [weak self] result in
-                    await self?.publish(result)
-                }
-                publish(result)
-                guard result.hasMore else { return }
-                // Pace catch-up and let the UI present each batch before continuing.
-                try await Task.sleep(for: .milliseconds(100))
+            let result = try await fetch { [weak self] result in
+                await self?.publish(result)
             }
+            publish(result)
         } catch {
             // Never forward IO/decoder errors containing sensitive paths or payloads.
             // Failed enumeration must not replace the last reading with zero.
-            self.error = HistoryReadError.unavailable.localizedDescription
+            self.error = .unavailable
         }
     }
 }

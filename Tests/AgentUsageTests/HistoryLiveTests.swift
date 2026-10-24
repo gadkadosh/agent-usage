@@ -83,7 +83,7 @@ final class HistoryLiveTests: XCTestCase {
         }
         try XCTSkipIf(FileManager.default.isReadableFile(atPath: fixture.root.path))
         await history.refresh()
-        XCTAssertEqual(history.error, HistoryReadError.unavailable.localizedDescription)
+        XCTAssertEqual(history.error, HistoryReadError.unavailable)
         XCTAssertEqual(history.snapshot?.fetchedAt, previous.fetchedAt)
         XCTAssertEqual(history.snapshot?.summaries[.month]?.tokens, 190)
 

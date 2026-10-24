@@ -40,24 +40,28 @@ final class PiHistoryBenchmarkTests: XCTestCase {
                 "BENCHMARK \(name): bytes=\(bytes), files=\(files), operations=\(files * operationsPerFile)"
             )
             let source = PiHistorySource(root: fixture.root)
-            let cold = try await scan(source, label: "\(name) cold")
-            XCTAssertTrue(cold.hasMore)
-            XCTAssertEqual(cold.coverage.issues, [])
-            let coldFilesRead = await source.filesRead
-            XCTAssertLessThan(coldFilesRead, files)
-
-            let catchUp = try await scan(source, label: "\(name) catch-up")
+            let service = HistoryService(adapters: [source])
+            let cold = try await scan(
+                service,
+                source: source,
+                label: "\(name) cold + catch-up",
+                expectCatchUp: true
+            )
             let total = Int64(files * operationsPerFile * 190)
-            XCTAssertFalse(catchUp.hasMore)
-            XCTAssertEqual(catchUp.coverage.state, .ready)
-            let catchUpFilesRead = await source.filesRead
-            XCTAssertEqual(catchUpFilesRead, files)
-            XCTAssertEqual(catchUp.summaries[.today]?.tokens, total)
+            XCTAssertFalse(cold.hasMore)
+            XCTAssertEqual(cold.coverage.state, .ready)
+            let coldFilesRead = await source.filesRead
+            XCTAssertEqual(coldFilesRead, files)
+            XCTAssertEqual(cold.summaries[.today]?.tokens, total)
             var parsed = await source.filesParsed
             XCTAssertEqual(parsed, files, "Catch-up must not reread cached files.")
 
             for iteration in 1...3 {
-                let warm = try await scan(source, label: "\(name) warm-\(iteration)")
+                let warm = try await scan(
+                    service,
+                    source: source,
+                    label: "\(name) warm-\(iteration)"
+                )
                 XCTAssertEqual(warm.summaries[.today]?.tokens, total)
                 XCTAssertEqual(warm.coverage.state, .ready)
             }
@@ -68,7 +72,7 @@ final class PiHistoryBenchmarkTests: XCTestCase {
             try handle.seekToEnd()
             try handle.write(contentsOf: Data((F.message(id: "appended") + "\n").utf8))
             try handle.close()
-            let appended = try await scan(source, label: "\(name) append")
+            let appended = try await scan(service, source: source, label: "\(name) append")
             XCTAssertEqual(appended.coverage.state, .ready)
             XCTAssertEqual(appended.summaries[.today]?.tokens, total + 190)
             parsed = await source.filesParsed
@@ -77,7 +81,12 @@ final class PiHistoryBenchmarkTests: XCTestCase {
     }
 
     /// Sample the main actor while the source actor works. Timings are evidence, not CI thresholds.
-    private func scan(_ source: PiHistorySource, label: String) async throws -> HistorySnapshot {
+    private func scan(
+        _ service: HistoryService,
+        source: PiHistorySource,
+        label: String,
+        expectCatchUp: Bool = false
+    ) async throws -> HistorySnapshot {
         let clock = ContinuousClock()
         let start = clock.now
         var lastTick = start
@@ -93,14 +102,26 @@ final class PiHistoryBenchmarkTests: XCTestCase {
             }
         }
         defer { heartbeat.cancel() }
-        let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
+        let publications = HistorySnapshotRecorder()
+        let snapshot = try await service.refresh(now: F.now, calendar: F.calendar) {
+            await publications.append($0)
+        }
+        let updates = await publications.values
+        if expectCatchUp {
+            XCTAssertTrue(updates.contains { $0.hasMore })
+            XCTAssertLessThan(
+                updates.first?.summaries[.today]?.tokens ?? 0,
+                snapshot.summaries[.today]?.tokens ?? 0
+            )
+        }
+        XCTAssertEqual(updates.last?.summaries, snapshot.summaries)
         let elapsed = start.duration(to: clock.now)
         longestGap = max(longestGap, lastTick.duration(to: clock.now))
         heartbeat.cancel()
         await heartbeat.value
         let parsed = await source.filesParsed
         print(
-            "BENCHMARK \(label): seconds=\(seconds(elapsed)), parsed=\(parsed), mainTicks=\(ticks), maxMainGapMs=\(seconds(longestGap) * 1_000)"
+            "BENCHMARK \(label): seconds=\(seconds(elapsed)), parsed=\(parsed), publications=\(updates.count), mainTicks=\(ticks), maxMainGapMs=\(seconds(longestGap) * 1_000)"
         )
         return snapshot
     }

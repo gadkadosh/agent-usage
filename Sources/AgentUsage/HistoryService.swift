@@ -5,15 +5,13 @@ actor HistoryService {
     private let adapters: [any HistoryAdapter]
     private var readings: [HistoryAgentID: SourceReading] = [:]
     private var refreshTask: Task<HistorySnapshot, Error>?
-    private var request: HistoryRequest?
-    private var pending: Set<HistoryAgentID> = []
 
     init(adapters: [any HistoryAdapter]) {
         precondition(Set(adapters.map(\.id)).count == adapters.count)
         self.adapters = adapters
     }
 
-    /// Overlapping callers join the current batch. The initiating caller receives updates;
+    /// Overlapping callers join the complete refresh. The initiating caller receives updates;
     /// joiners receive its final snapshot without starting another read or replacing its observer.
     func refresh(
         now: Date,
@@ -21,47 +19,50 @@ actor HistoryService {
         onUpdate: @escaping @Sendable (HistorySnapshot) async -> Void = { _ in }
     ) async throws -> HistorySnapshot {
         if let refreshTask { return try await refreshTask.value }
-        let request: HistoryRequest
-        if let previous = self.request, !pending.isEmpty {
-            request = previous
-        } else {
-            request = HistoryRequest(now: now, calendar: calendar)
-            pending = Set(adapters.map(\.id))
-        }
-        self.request = request
-        let task = Task { try await performBatch(request, onUpdate: onUpdate) }
+        let request = HistoryRequest(now: now, calendar: calendar)
+        let task = Task { try await performRefresh(request, onUpdate: onUpdate) }
         refreshTask = task
         defer { refreshTask = nil }
         return try await task.value
     }
 
-    private func performBatch(
+    private func performRefresh(
         _ request: HistoryRequest,
         onUpdate: @escaping @Sendable (HistorySnapshot) async -> Void
     ) async throws -> HistorySnapshot {
-        let batch = adapters.filter { pending.contains($0.id) }
-        pending.removeAll()
+        var loading = Set(adapters.map(\.id))
+        var latest: HistorySnapshot?
         await withTaskGroup(of: Outcome.self) { group in
-            for adapter in batch {
-                group.addTask {
-                    Outcome(id: adapter.id, result: try? await adapter.read(request))
-                }
+            for adapter in adapters {
+                group.addTask { await Self.read(adapter, request: request) }
             }
-            var running = Set(batch.map(\.id))
             for await outcome in group {
-                running.remove(outcome.id)
-                if readings[outcome.id, default: SourceReading()].accept(outcome.result) {
-                    pending.insert(outcome.id)
+                let adapter = outcome.adapter
+                if readings[adapter.id, default: SourceReading()].accept(outcome.result) {
+                    // Pace only this source's catch-up; other sources keep progressing.
+                    group.addTask {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        return await Self.read(adapter, request: request)
+                    }
+                } else {
+                    loading.remove(adapter.id)
                 }
-                // Publish each completed source even while other adapters are still reading.
-                // An initial all-source IO failure keeps the existing unavailable presentation.
                 if canPublish {
-                    await onUpdate(snapshot(request, loading: running.union(pending)))
+                    let result = snapshot(request, loading: loading)
+                    latest = result
+                    await onUpdate(result)
                 }
             }
         }
-        guard canPublish else { throw HistoryReadError.unavailable }
-        return snapshot(request, loading: pending)
+        // Reuse the last publication, including all retained sources, without aggregating again.
+        guard let latest else { throw HistoryReadError.unavailable }
+        return latest
+    }
+
+    private static func read(_ adapter: any HistoryAdapter, request: HistoryRequest) async
+        -> Outcome
+    {
+        Outcome(adapter: adapter, result: try? await adapter.read(request))
     }
 
     private var canPublish: Bool {
@@ -112,9 +113,7 @@ actor HistoryService {
             coverage: .combined(sources.compactMap(\.coverage)),
             fetchedAt: sources.compactMap(\.fetchedAt).min() ?? request.now,
             hasMore: !loading.isEmpty,
-            sources: sources,
-            refreshError: sources.contains { $0.failed }
-                ? HistoryReadError.unavailable.localizedDescription : nil
+            sources: sources
         )
     }
 
@@ -155,7 +154,7 @@ actor HistoryService {
     }
 
     private struct Outcome: Sendable {
-        let id: HistoryAgentID
+        let adapter: any HistoryAdapter
         let result: HistoryAdapterResult?
     }
 }

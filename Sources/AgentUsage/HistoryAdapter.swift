@@ -1,5 +1,7 @@
 import Foundation
 
+enum HistoryReadError: Error, Equatable { case unavailable }
+
 struct HistoryAgentID: Hashable, Sendable {
     let rawValue: String
     static let pi = Self(rawValue: "pi")

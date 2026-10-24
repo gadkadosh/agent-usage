@@ -24,10 +24,13 @@ struct HistoryPanel: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            if let error = history.error {
+            if history.error != nil {
                 Label("Couldn't refresh pi history", systemImage: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
-                Text(error).font(.caption)
+                Text(
+                    "Pi history could not be read. Check access to the session directory, then refresh."
+                )
+                .font(.caption)
                 if history.snapshot != nil {
                     Text("Showing the last readable history. Totals may have changed.")
                         .font(.caption).foregroundStyle(.secondary)

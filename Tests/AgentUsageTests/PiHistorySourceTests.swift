@@ -51,8 +51,8 @@ final class PiHistorySourceTests: XCTestCase {
             XCTFail("Expected an unavailable directory")
         } catch {
             XCTAssertEqual(
-                error.localizedDescription,
-                HistoryReadError.unavailable.localizedDescription
+                error as? HistoryReadError,
+                .unavailable
             )
             XCTAssertFalse(error.localizedDescription.contains(fixture.root.path))
         }
@@ -371,8 +371,8 @@ final class PiHistorySourceTests: XCTestCase {
             )
         } catch {
             XCTAssertEqual(
-                error.localizedDescription,
-                HistoryReadError.unavailable.localizedDescription
+                error as? HistoryReadError,
+                .unavailable
             )
         }
 

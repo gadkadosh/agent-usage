@@ -6,36 +6,40 @@ import XCTest
 
 @MainActor
 final class HistoryRefreshTests: XCTestCase {
-    func testLiveStorePublishesFastSourceWhileAnotherIsStillReading() async throws {
+    func testFastSourceFinishesCatchUpWhileAnotherSourceIsStillReading() async throws {
         let gate = HistoryGate("Slow adapter")
-        let fast = ClosureHistoryAdapter(id: .pi) { request in reading(100, request) }
+        let fast = CatchUpHistoryAdapter()
         let slow = ClosureHistoryAdapter(id: .init(rawValue: "slow")) { request in
             await gate.pause()
-            return reading(200, request)
+            return reading(300, request)
         }
         let store = HistoryStore.live(
             adapters: [fast, slow],
             now: { PiHistoryFixtures.now },
             calendar: PiHistoryFixtures.calendar
         )
-        let published = XCTestExpectation(description: "Fast source reaches the live store")
+        let caughtUp = XCTestExpectation(
+            description: "Fast source finishes while slow source is blocked"
+        )
         let subscription = store.$snapshot.compactMap { $0 }.first {
-            $0.summaries[.today]?.tokens == 100
-        }.sink { _ in published.fulfill() }
+            $0.summaries[.today]?.tokens == 200
+        }.sink { _ in caughtUp.fulfill() }
         defer {
             subscription.cancel()
             Task { await gate.resume() }
         }
         store.start()
         guard await gate.waitUntilPaused() else { return }
-        await fulfillment(of: [published], timeout: 5)
-        XCTAssertEqual(store.summary?.tokens, 100)
+        await fulfillment(of: [caughtUp], timeout: 2)
+        XCTAssertEqual(store.summary?.tokens, 200)
         XCTAssertTrue(store.isRefreshing)
-        XCTAssertEqual(store.snapshot?.hasMore, true)
         XCTAssertEqual(store.snapshot?.sources.map(\.isLoading), [false, true])
+        let fastRequests = await fast.requests
+        XCTAssertEqual(fastRequests.count, 2)
+        XCTAssertEqual(fastRequests.map(\.now), [PiHistoryFixtures.now, PiHistoryFixtures.now])
         await gate.resume()
         await store.refresh()
-        XCTAssertEqual(store.summary?.tokens, 300)
+        XCTAssertEqual(store.summary?.tokens, 500)
         XCTAssertEqual(store.snapshot?.hasMore, false)
         XCTAssertFalse(store.isRefreshing)
         let slowReads = await gate.count
@@ -131,4 +135,15 @@ private func reading(_ tokens: Int64, _ request: HistoryRequest) -> HistoryAdapt
         coverage: HistoryCoverage(state: .ready, hasReadings: true, issues: []),
         fetchedAt: request.now
     )
+}
+
+private actor CatchUpHistoryAdapter: HistoryAdapter {
+    nonisolated let id = HistoryAgentID.pi
+    private(set) var requests: [HistoryRequest] = []
+    func read(_ request: HistoryRequest) -> HistoryAdapterResult {
+        requests.append(request)
+        var result = reading(Int64(requests.count * 100), request)
+        result.hasMore = requests.count == 1
+        return result
+    }
 }

@@ -47,5 +47,4 @@ struct HistorySnapshot: Sendable {
     /// Pending source reads or continuation batches, not permanent coverage gaps.
     var hasMore = false
     var sources: [HistorySourceSnapshot] = []
-    var refreshError: String?
 }
