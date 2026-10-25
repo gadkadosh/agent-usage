@@ -6,7 +6,7 @@ umask 077
 usage() {
     cat <<'HELP'
 Usage:
-  ui-review.sh launch SESSION --app APP [--sessions SYNTHETIC_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME]
+  ui-review.sh launch SESSION --app APP [--pi-history SYNTHETIC_PI_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME]
   ui-review.sh status SESSION
   ui-review.sh capture SESSION NAME
   ui-review.sh cleanup SESSION
@@ -31,7 +31,7 @@ case "$command" in launch|status|capture|cleanup) ;; *) fail "Unknown command: $
 [[ $(uname -s) == Darwin ]] || fail 'Requires macOS.'
 
 app=
-fixtures=
+pi_fixtures=
 codex_fixtures=
 name=
 if [[ $command == launch ]]; then
@@ -39,7 +39,7 @@ if [[ $command == launch ]]; then
         [[ $# -ge 2 ]] || fail "Missing value for $1"
         case "$1" in
             --app) app=$2 ;;
-            --sessions) fixtures=$2 ;;
+            --pi-history) pi_fixtures=$2 ;;
             --codex-history) codex_fixtures=$2 ;;
             *) fail "Unknown option: $1" ;;
         esac
@@ -47,10 +47,10 @@ if [[ $command == launch ]]; then
     done
     [[ -d $app ]] || fail 'Supply --app with a packaged .app directory.'
     app=$(cd "$app" && pwd -P)
-    if [[ -n $fixtures ]]; then
-        [[ -d $fixtures ]] || fail 'Synthetic sessions directory does not exist.'
-        fixtures=$(cd "$fixtures" && pwd -P)
-        [[ -z $(find "$fixtures" -type l -print -quit) ]] || fail 'Synthetic sessions must not contain symlinks.'
+    if [[ -n $pi_fixtures ]]; then
+        [[ -d $pi_fixtures ]] || fail 'Synthetic Pi history directory does not exist.'
+        pi_fixtures=$(cd "$pi_fixtures" && pwd -P)
+        [[ -z $(find "$pi_fixtures" -type l -print -quit) ]] || fail 'Synthetic Pi history must not contain symlinks.'
     fi
     if [[ -n $codex_fixtures ]]; then
         [[ -d $codex_fixtures ]] || fail 'Synthetic Codex history directory does not exist.'
@@ -71,9 +71,9 @@ if [[ ! -e $session && $command == launch ]]; then
     session=$(cd "$session" && pwd -P)
     state="$session/session.plist"
     /usr/bin/plutil -create xml1 "$state"
-    put version 1
+    put version 2
     put source "$app"
-    put fixtures "$fixtures"
+    put pi_fixtures "$pi_fixtures"
     put codex_fixtures "$codex_fixtures"
     # The unique executable name also makes direct System Events interaction easy.
     token=$(/usr/bin/uuidgen | tr -d '-' | cut -c1-12)
@@ -95,9 +95,9 @@ if [[ ! -e $session && $command == launch ]]; then
     /usr/bin/plutil -replace CFBundleIdentifier -string "local.agentusage.review.$token" "$plist"
     /usr/bin/codesign --force --sign - --timestamp=none "$bundle"
     /usr/bin/codesign --verify --strict "$bundle"
-    mkdir -p "$session/agent/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/evidence"
-    if [[ -n $fixtures ]]; then
-        /usr/bin/ditto "$fixtures" "$session/agent/sessions"
+    mkdir -p "$session/pi/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/evidence"
+    if [[ -n $pi_fixtures ]]; then
+        /usr/bin/ditto "$pi_fixtures" "$session/pi/sessions"
     fi
     if [[ -n $codex_fixtures ]]; then
         for history_dir in sessions archived_sessions; do
@@ -112,9 +112,9 @@ if [[ ! -e $session && $command == launch ]]; then
         /usr/bin/shasum -a 256 "$executable" | cut -d ' ' -f1
         printf 'Prepared UTC: %s\n' "$(date -u +%FT%TZ)"
         /usr/bin/sw_vers
-        printf 'Synthetic sessions source: %s\n' "${fixtures:-empty}"
-        printf 'Snapshot hashes (relative to agent/sessions):\n'
-        (cd "$session/agent/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
+        printf 'Synthetic Pi history source: %s\n' "${pi_fixtures:-empty}"
+        printf 'Snapshot hashes (relative to pi/sessions):\n'
+        (cd "$session/pi/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
         printf 'Synthetic Codex history source: %s\nSnapshot hashes (relative to codex):\n' "${codex_fixtures:-empty}"
         (cd "$session/codex" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
     } > "$session/provenance.txt"
@@ -124,7 +124,9 @@ else
     session=$(cd "$session" && pwd -P)
     state="$session/session.plist"
 fi
-[[ -f $state && $(get version) == 1 ]] || fail 'Not a ui-review session.'
+[[ -f $state ]] || fail 'Not a ui-review session.'
+version=$(get version)
+[[ $version == 1 || $version == 2 ]] || fail 'Not a ui-review session.'
 # Partial preparation is never silently reused.
 [[ $(get ready 2>/dev/null || true) == yes ]] || fail 'Incomplete preparation; inspect the session and use a new directory.'
 process=$(get process)
@@ -164,13 +166,15 @@ APPLESCRIPT
 
 case "$command" in
     launch)
-        [[ $(get source) == "$app" && $(get fixtures) == "$fixtures" ]] || fail 'Session inputs differ; use a new session directory.'
-        [[ $(get codex_fixtures 2>/dev/null || true) == "$codex_fixtures" ]] || fail 'Codex session inputs differ; use a new session directory.'
+        [[ $version == 2 ]] || fail 'Legacy review session; status, capture and cleanup remain supported. Use a new session directory to launch.'
+        [[ $(get source) == "$app" ]] || fail 'Source app differs; use a new session directory.'
+        [[ $(get pi_fixtures) == "$pi_fixtures" ]] || fail 'Pi session inputs differ; use a new session directory.'
+        [[ $(get codex_fixtures) == "$codex_fixtures" ]] || fail 'Codex session inputs differ; use a new session directory.'
         if ! owned_process; then
             # Launch the real bundle executable to retain an exact PID, not open's PID.
             CODEX_HOME="$session/codex" \
-                PI_CODING_AGENT_DIR="$session/agent" \
-                PI_CODING_AGENT_SESSION_DIR="$session/agent/sessions" \
+                PI_CODING_AGENT_DIR="$session/pi" \
+                PI_CODING_AGENT_SESSION_DIR="$session/pi/sessions" \
                 "$executable" > "$session/app.log" 2>&1 < /dev/null &
             pid=$!
             started=$(/bin/ps -p "$pid" -o lstart=)

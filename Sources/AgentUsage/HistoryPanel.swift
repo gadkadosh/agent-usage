@@ -271,13 +271,4 @@ extension HistoryCoverage {
         if issues.contains(.toolAggregate) { messages.append("Tool usage may be counted twice.") }
         return messages.isEmpty ? nil : messages.joined(separator: " ")
     }
-
-    var emptyDescription: String {
-        switch state {
-        case .missing: "No pi history found. Missing history isn't zero usage."
-        case .unsupported: "Pi history was found, but its session format isn't supported yet."
-        case .unavailable, .partial: "Pi history was found, but no supported files could be read."
-        case .ready: "No recorded pi usage for this period."
-        }
-    }
 }

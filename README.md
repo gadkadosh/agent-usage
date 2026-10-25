@@ -2,7 +2,7 @@
 
 Your ChatGPT limits and local [pi](https://pi.dev) and Codex token usage, right in your macOS menu bar.
 
-<img src="docs/images/dashboard.png" alt="Agent Usage dashboard showing remaining ChatGPT limits, reset countdowns, and a 7-day pi token usage chart" width="360">
+<img src="docs/images/dashboard.png" alt="Agent Usage dashboard showing remaining ChatGPT limits, reset countdowns, and combined 7-day token usage with Codex and pi totals" width="360">
 
 *Example dashboard with synthetic data.*
 

@@ -3,8 +3,8 @@ import Foundation
 @testable import AgentUsage
 
 enum CodexHistoryFixtures {
-    static let now = PiHistoryFixtures.now
-    static let calendar = PiHistoryFixtures.calendar
+    static let now = HistoryFixtures.now
+    static let calendar = HistoryFixtures.calendar
     static let time = "2026-10-02T10:00:00.000Z"
 
     static func line(_ type: String, _ payload: [String: Any], time: String = time) -> String {

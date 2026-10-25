@@ -26,13 +26,15 @@ History indexing starts in the background at app launch. Opening the panel or ch
 
 Pi and Codex are the live history adapters. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
 
+Production `HistoryStore.live()` discovers all supported adapters. Tests use `live(adapters:)` with explicit synthetic sources; it never adds adapters or falls through to personal history discovery. Snapshots carry explicit source identities, never an implied Pi source.
+
 `HistoryService` owns the complete refresh. Each source reads and catches up independently under one fixed clock, calendar and retention cutoff, publishing accepted results as they arrive. Completed or failed adapters wait for the next refresh. The presentation store publishes updates and awaits completion.
 
 Failed or unsupported reads retain the previous timestamped observations. Reaggregation filters yesterday's activity out of Today after midnight, even if the source stays unavailable. Operation identities are scoped to each source. Coverage and failures use typed source status; the panel chooses agent-specific error wording, and file-count diagnostics stay inside the reader. Missing optional sources do not make healthy contributions incomplete.
 
-### Discovery and supported formats
+### Pi discovery and supported formats
 
-The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
+Pi discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is `.jsonl` files at the root or in nested directories (up to the shared 16-directory-level scan limit), including child-session layouts, validated against pi 1.0.0 session formats v2/v3. `subagent-artifacts` directories are excluded because their transcript copies are not canonical sessions. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
 
 ### Codex discovery and accounting
 
@@ -48,7 +50,7 @@ Totals are input plus output tokens. Cached input/cache-write categories and rea
 
 ### Indexing and safety limits
 
-The in-memory index stores operation identity, timestamps, token counts, and available token categories/model/provider metadata (names bounded to 256 bytes), not transcripts or credentials. The source performs no history uploads or writes.
+The in-memory index stores operation identity, timestamps, token counts, and available token categories/model/provider metadata (names bounded to 256 bytes), not transcripts or credentials. Neither adapter uploads or writes history.
 
 Pi files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
 
@@ -60,7 +62,9 @@ Unchanged eligible file contents are reused; changed files are reparsed in full,
 
 ### Tests
 
-Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
+Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never real agent credentials or personal histories.
+
+Shared `HistoryFixtures` supplies the fixed clock/calendar, and `HistoryFixtureRoot` supplies temporary files. `PiHistoryFixtures` and `CodexHistoryFixtures` generate only their respective formats.
 
 ### Synthetic native screenshots
 
@@ -72,7 +76,7 @@ AGENT_USAGE_RENDER_DIR=/tmp/agent-usage-captures \
   swift test --filter DashboardRenderingTests
 ```
 
-It captures all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode. See the [native UI review guide](../scripts/ui-review.md) for isolated packaged-app verification.
+It captures combined-agent and single-agent dashboards, all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode. See the [native UI review guide](../scripts/ui-review.md) for isolated packaged-app verification.
 
 ### Formatting
 

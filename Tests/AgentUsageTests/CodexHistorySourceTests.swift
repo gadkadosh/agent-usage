@@ -11,7 +11,7 @@ final class CodexHistorySourceTests: XCTestCase {
     func testActiveArchivedCopiesAndSubagentsCountOnceAndRefreshReplacesDeletedHistory()
         async throws
     {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let lines = [F.header(), F.durable()]
         let active = try fixture.write("sessions/2026/10/02/rollout-a.jsonl", lines: lines)
@@ -36,7 +36,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testWorldStateAndLocalSettingsDoNotMakeReadableHistoryPartial() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write(
             "sessions/rollout.jsonl",
@@ -56,7 +56,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testConflictingResponseCopiesAreExcludedAndMarkedIncomplete() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("sessions/rollout-a.jsonl", lines: [F.header(), F.durable()])
         try fixture.write(
@@ -72,7 +72,7 @@ final class CodexHistorySourceTests: XCTestCase {
     func testRewrittenCopiesCannotMoveOldUsageIntoTheWindowAcrossRefreshes() async throws {
         for durable in [true, false] {
             for originalRoot in ["sessions", "archived_sessions"] {
-                let fixture = try PiHistoryFixtureRoot()
+                let fixture = try HistoryFixtureRoot()
                 defer { fixture.remove() }
                 let copyRoot = originalRoot == "sessions" ? "archived_sessions" : "sessions"
                 let record = durable ? F.durable() : F.counter()
@@ -108,7 +108,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testOlderMetadataStillObeysTheOperationLimit() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let old = F.durable().replacingOccurrences(
             of: F.time,
@@ -129,7 +129,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testOldConflictingCopyStillInvalidatesRecentUsage() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("sessions/rollout-copy.jsonl", lines: [F.header(), F.durable()])
         let old = F.durable(input: 200).replacingOccurrences(
@@ -143,7 +143,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testMissingHomeIsNotCreatedAndUnsupportedHistoryIsNotObservedZero() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let home = fixture.root.appendingPathComponent("missing")
         let result = try await CodexHistorySource(home: home).read(request)
@@ -157,7 +157,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testBatchReplacementIncludesEarlierResultsAndNeverDuplicatesThem() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let first = try fixture.write(
             "sessions/rollout-a.jsonl",
@@ -176,7 +176,7 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testDirectoryFailureKeepsAcceptedHistoryWithSourceScopedStaleCoverage() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("sessions/rollout-a.jsonl", lines: [F.header(), F.durable()])
         let root = fixture.root.appendingPathComponent("sessions")
@@ -197,8 +197,8 @@ final class CodexHistorySourceTests: XCTestCase {
     }
 
     func testSymlinkDescendantsAreNotRead() async throws {
-        let fixture = try PiHistoryFixtureRoot()
-        let outside = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
+        let outside = try HistoryFixtureRoot()
         defer {
             fixture.remove()
             outside.remove()
@@ -233,34 +233,5 @@ final class CodexHistorySourceTests: XCTestCase {
             ).path,
             "/synthetic/codex"
         )
-    }
-
-    func testLiveCompositionCombinesBothInjectedRootsWithoutReadingCredentials() async throws {
-        let fixture = try PiHistoryFixtureRoot()
-        defer { fixture.remove() }
-        try fixture.write(
-            "pi/session.jsonl",
-            lines: [PiHistoryFixtures.header(), PiHistoryFixtures.message()]
-        )
-        try fixture.write("codex/sessions/rollout-a.jsonl", lines: [F.header(), F.durable()])
-        let store = HistoryStore.live(
-            root: fixture.root.appendingPathComponent("pi"),
-            codexHome: fixture.root.appendingPathComponent("codex"),
-            now: { F.now },
-            calendar: F.calendar
-        )
-        await store.refresh()
-        XCTAssertEqual(store.summary?.tokens, 310)
-        XCTAssertEqual(store.snapshot?.visibleSources.map(\.id), [.codex, .pi])
-        for period in HistoryPeriod.allCases {
-            store.period = period
-            XCTAssertEqual(store.summary?.tokens, 310)
-            XCTAssertEqual(
-                store.snapshot?.visibleSources.reduce(0) {
-                    $0 + ($1.summaries[period]?.tokens ?? 0)
-                },
-                310
-            )
-        }
     }
 }

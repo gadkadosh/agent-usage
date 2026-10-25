@@ -6,8 +6,8 @@ import XCTest
 final class MultiAgentHistoryTests: XCTestCase {
     func testFastSourcePublishesWhileAnotherSourceIsStillReading() async throws {
         let request = HistoryRequest(
-            now: PiHistoryFixtures.now,
-            calendar: PiHistoryFixtures.calendar
+            now: HistoryFixtures.now,
+            calendar: HistoryFixtures.calendar
         )
         let piResult = result(tokens: 100)
         let codexResult = result(tokens: 200)
@@ -39,8 +39,8 @@ final class MultiAgentHistoryTests: XCTestCase {
     }
 
     func testRowsHideUnusedAndMissingSourcesButKeepZeroTodayAndFailedSources() {
-        let now = PiHistoryFixtures.now
-        let calendar = PiHistoryFixtures.calendar
+        let now = HistoryFixtures.now
+        let calendar = HistoryFixtures.calendar
         let old = UsageObservation(
             operationID: "old",
             timestamp: now.addingTimeInterval(-3 * 86400),
@@ -90,6 +90,27 @@ final class MultiAgentHistoryTests: XCTestCase {
         XCTAssertEqual(snapshot.visibleSources.count, 0)
     }
 
+    func testAggregateOnlySnapshotDoesNotInventAnAgent() {
+        let snapshot = HistorySnapshot(
+            summaries: historySummaries(
+                [
+                    UsageObservation(
+                        operationID: "aggregate",
+                        timestamp: HistoryFixtures.now,
+                        tokens: 100
+                    )
+                ],
+                now: HistoryFixtures.now,
+                calendar: HistoryFixtures.calendar
+            ),
+            coverage: HistoryCoverage(state: .ready, hasReadings: true, issues: []),
+            fetchedAt: HistoryFixtures.now,
+            sources: []
+        )
+        XCTAssertEqual(snapshot.summaries[.today]?.tokens, 100)
+        XCTAssertTrue(snapshot.visibleSources.isEmpty)
+    }
+
     func testPartialAndStaleStatusBelongsToTheAgent() {
         let source = HistorySourceSnapshot(
             id: .codex,
@@ -99,7 +120,7 @@ final class MultiAgentHistoryTests: XCTestCase {
                 hasReadings: true,
                 issues: [.unreadableFile, .staleFile]
             ),
-            fetchedAt: PiHistoryFixtures.now,
+            fetchedAt: HistoryFixtures.now,
             failed: false
         )
         XCTAssertEqual(source.status, "Incomplete history. Includes older readings.")
@@ -110,12 +131,12 @@ final class MultiAgentHistoryTests: XCTestCase {
             observations: [
                 UsageObservation(
                     operationID: "same",
-                    timestamp: PiHistoryFixtures.now,
+                    timestamp: HistoryFixtures.now,
                     tokens: tokens
                 )
             ],
             coverage: HistoryCoverage(state: .ready, hasReadings: true, issues: []),
-            fetchedAt: PiHistoryFixtures.now
+            fetchedAt: HistoryFixtures.now
         )
     }
 }

@@ -12,7 +12,7 @@ final class PiHistoryMemoryTests: XCTestCase {
         guard ProcessInfo.processInfo.environment["AGENT_USAGE_MEMORY_REGRESSION"] == "1" else {
             throw XCTSkip("Opt-in memory regression; run with --filter PiHistoryMemoryTests.")
         }
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write(lines: [
             PiHistoryFixtures.header(), PiHistoryFixtures.message(),
@@ -44,8 +44,8 @@ final class PiHistoryMemoryTests: XCTestCase {
             }
         )
         let snapshot = try await source.refresh(
-            now: PiHistoryFixtures.now,
-            calendar: PiHistoryFixtures.calendar
+            now: HistoryFixtures.now,
+            calendar: HistoryFixtures.calendar
         )
         XCTAssertEqual(snapshot.coverage.state, .ready)
         let snapshotFilesRead = await source.filesRead

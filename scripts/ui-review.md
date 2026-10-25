@@ -15,20 +15,33 @@ scripts/ui-review.sh status .scratch/review-after
 
 Launch prints a unique process name and PID. The copied `.app` is renamed and ad-hoc
 re-signed, leaving the source bundle and existing app instances alone. It runs the
-copied bundle executable directly to retain its exact PID. Both pi directory
-variables point into the session. Credentials are empty; no provider requests can
-be authenticated. To review history, pass `--sessions /path/to/synthetic/sessions`.
-`CODEX_HOME` also points into the session, even when no Codex fixtures are supplied.
-Pass `--codex-history /path/to/synthetic/codex-home` to copy its `sessions` and
-`archived_sessions` subdirectories. Other Codex files, including credentials and
-SQLite state, are not copied. Provenance records both agents' fixture hashes.
-Only use invented, non-sensitive input. This directory is copied once; symlinks are
-rejected. The harness does not generate fixtures or freeze the app's clock.
+copied bundle executable directly to retain its exact PID. Each agent's environment
+points into the session, even when no history is supplied. Pi uses `SESSION/pi`
+(`PI_CODING_AGENT_DIR`) and `SESSION/pi/sessions` (`PI_CODING_AGENT_SESSION_DIR`);
+Codex uses `SESSION/codex` (`CODEX_HOME`). Credentials are empty; no provider requests
+can be authenticated.
+
+Supply either or both optional history inputs:
+
+| Option | Synthetic input layout | Isolated destination |
+| --- | --- | --- |
+| `--pi-history /path/to/pi-sessions` | Pi sessions directory containing JSONL files and project subdirectories | `SESSION/pi/sessions` |
+| `--codex-history /path/to/codex-home` | Codex home containing `sessions` and/or `archived_sessions` | `SESSION/codex/sessions` and `SESSION/codex/archived_sessions` |
+
+Other Codex files, including credentials and SQLite state, are not copied. Pi's
+input must contain only invented history, not an agent home or credentials.
+Provenance labels each agent's input path and snapshot hashes. Inputs are copied
+once; symlinks are rejected. The harness does not generate fixtures or freeze the
+app's clock. Only use invented, non-sensitive input.
 
 Launch again with the same arguments to reuse the running instance or restart the
-same prepared copy. Changes to the source app or fixture directory are **not**
+same prepared copy. Changes to the source app or either fixture directory are **not**
 recopied. Use a new session for a new build/input. Do not move session directories
 or run concurrent commands against the same session.
+
+`--pi-history` replaces the former `--sessions` flag. Legacy review sessions retain
+support for status, capture, and cleanup, but cannot be relaunched with this harness;
+use a new session directory for the new layout. Existing evidence is not migrated.
 
 ## Reviewing inside a VM
 

@@ -4,8 +4,8 @@ import XCTest
 @testable import AgentUsage
 
 final class HistoryServiceTests: XCTestCase {
-    private let now = PiHistoryFixtures.now
-    private let calendar = PiHistoryFixtures.calendar
+    private let now = HistoryFixtures.now
+    private let calendar = HistoryFixtures.calendar
 
     func testReplacementCorrectsAndRemovesRecordsRatherThanAppending() async throws {
         let adapter = ScriptedAdapter(

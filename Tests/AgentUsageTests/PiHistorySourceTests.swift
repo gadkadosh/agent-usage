@@ -29,7 +29,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testMissingEmptyUnsupportedAndUnreadableSourcesAreNotZeroReadings() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let missingURL = fixture.root.appendingPathComponent("missing")
         let missing = PiHistorySource(root: missingURL)
@@ -61,7 +61,7 @@ final class PiHistorySourceTests: XCTestCase {
     func testForkCloneAndFileCopiesDeduplicateWithoutFollowingParentPathsOrEditingInputs()
         async throws
     {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let original = try fixture.write(lines: [
             F.header(), F.message(), F.message(id: "abandoned"),
@@ -92,7 +92,7 @@ final class PiHistorySourceTests: XCTestCase {
     func testUnchangedFilesAreCachedAppendReplacementDeletionAndMidnightRefreshCorrectly()
         async throws
     {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write(lines: [F.header(), F.message()])
         let source = PiHistorySource(root: fixture.root)
@@ -155,7 +155,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testPartialWritesRecoverAndMixedUnsupportedFilesRemainPartial() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let message = F.message(id: "partial")
         let prefix = String(message.prefix(message.count / 2))
@@ -180,7 +180,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testEmptyOrOversizedFileAndScanDepthLimitsAreExplicitGaps() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("empty.jsonl", lines: [], ending: "")
         let source = PiHistorySource(root: fixture.root)
@@ -208,7 +208,7 @@ final class PiHistorySourceTests: XCTestCase {
     func testNestedSessionsCountOnceAndArtifactsArePrunedBeforeConsumingTheScanBudget()
         async throws
     {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("--cwd--/parent.jsonl", lines: [F.header(), F.message()])
         try fixture.write(
@@ -239,7 +239,7 @@ final class PiHistorySourceTests: XCTestCase {
     func testNestedDepthBoundaryRetainsAcceptedUsageAndWarnsAboutExcludedSessions()
         async throws
     {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("a/b/session.jsonl", lines: [F.header(), F.message()])
         try fixture.write("a/b/c/session.jsonl", lines: [F.header(), F.message(id: "excluded")])
@@ -254,8 +254,8 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testNestedLinksAndArtifactNamedLinksStillProduceSafetyWarnings() async throws {
-        let fixture = try PiHistoryFixtureRoot()
-        let outside = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
+        let outside = try HistoryFixtureRoot()
         defer {
             fixture.remove()
             outside.remove()
@@ -278,7 +278,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testNestedAncestorSwappedToSymlinkDuringReadIsRejectedAndRecovers() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("a/b/session.jsonl", lines: [F.header(), F.message()])
         let action = ReadAction()
@@ -300,7 +300,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testRecordsSpanningReadChunksAndCRLFDoNotLoseUsage() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         // Real smoke-check records exceeded 1 MiB; keep this entirely synthetic.
         let contents = String(repeating: "synthetic-private-text", count: 60_000)
@@ -318,7 +318,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testUnreadableChangedFileRetainsLastReadableDataAndRecovers() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write(lines: [F.header(), F.message()])
         let source = PiHistorySource(root: fixture.root)
@@ -342,7 +342,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testUnreadableProjectRejectsRefreshInsteadOfTreatingCachedFilesAsDeleted() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let manager = FileManager.default
         try fixture.write("project-a/session.jsonl", lines: [F.header(), F.message(id: "a")])
@@ -391,7 +391,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testOperationLimitRetriesAfterCapacityBecomesAvailable() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write(lines: [F.header(), F.message(), F.message(id: "new")])
         let source = PiHistorySource(root: fixture.root, limits: .init(operations: 1))
@@ -409,7 +409,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testRefreshByteBudgetAllowsCachedFilesAndRetriesExcludedFiles() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write("first.jsonl", lines: [F.header(), F.message()])
         try fixture.write("second.jsonl", lines: [F.header(), F.message(id: "operation-b")])
@@ -429,7 +429,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testByteCatchUpConvergesDespitePermanentFileLimit() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         var size = 0
         for index in 0..<5 {
@@ -457,7 +457,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testFailedReadsDoNotCauseEndlessByteCatchUpWithoutIndexProgress() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write("a.jsonl", lines: [F.header(), F.message()])
         try fixture.write("b.jsonl", lines: [F.header(), F.message(id: "operation-b")])
@@ -474,7 +474,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testOperationCapStopsAutomaticCatchUpWithByteDeferrals() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write("a.jsonl", lines: [F.header(), F.message()])
         try fixture.write("b.jsonl", lines: [F.header(), F.message(id: "operation-b")])
@@ -490,8 +490,8 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testSymlinksAreNotFollowedAndRootFilesMayBeFlat() async throws {
-        let fixture = try PiHistoryFixtureRoot()
-        let outside = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
+        let outside = try HistoryFixtureRoot()
         defer {
             fixture.remove()
             outside.remove()
@@ -511,7 +511,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testConflictingOperationsExcludedRatherThanPickingArbitraryCopy() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("original.jsonl", lines: [F.header(), F.message()])
         try fixture.write(
@@ -528,7 +528,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testClockMovingBackwardsReloadsOlderRecordsInsteadOfReusingTrimmedIndex() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let oldTime: Int64 = 1_788_422_400_000  // 2026-09-03 08:00 UTC
         try fixture.write(lines: [F.header(), F.message(time: oldTime)])
@@ -543,7 +543,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testOversizedAndMalformedRecordsDoNotHideLaterUsage() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let oversized = F.message(
             id: "excluded",
@@ -568,7 +568,7 @@ final class PiHistorySourceTests: XCTestCase {
     }
 
     func testChangingReadsAreExcludedAndRetriedWithoutCommittingCache() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write(lines: [F.header(), F.message()])
         let action = ReadAction()

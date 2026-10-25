@@ -46,22 +46,10 @@ struct HistorySnapshot: Sendable {
     let fetchedAt: Date
     /// Pending source reads or continuation batches, not permanent coverage gaps.
     var hasMore = false
-    var sources: [HistorySourceSnapshot] = []
+    var sources: [HistorySourceSnapshot]
 
     var visibleSources: [HistorySourceSnapshot] {
-        // Injected single-source snapshots still describe Pi without requiring source rows.
-        let candidates =
-            sources.isEmpty
-            ? [
-                HistorySourceSnapshot(
-                    id: .pi,
-                    summaries: summaries,
-                    coverage: coverage,
-                    fetchedAt: fetchedAt,
-                    failed: false
-                )
-            ] : sources
-        return candidates.filter { source in
+        sources.filter { source in
             source.failed
                 || (source.coverage.map {
                     $0.state != .missing
