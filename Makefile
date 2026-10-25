@@ -1,7 +1,7 @@
 .PHONY: app check-clt-build test format format-check
 
 SWIFT ?= swift
-SWIFT_FILES := Package.swift Sources Tests
+SWIFT_FILES := Package.swift Sources Tests scripts
 
 app:
 	SWIFT="$(SWIFT)" /bin/bash scripts/build-app.sh
