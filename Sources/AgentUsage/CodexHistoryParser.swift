@@ -89,6 +89,7 @@ struct CodexHistoryParser: HistoryLineParser {
         case "event_msg":
             switch payload.type {
             case "thread_settings_applied":
+                let wasInherited = inherited
                 if let owner = payload.threadId {
                     inherited = owner != sessionID
                     if !inherited {
@@ -99,7 +100,9 @@ struct CodexHistoryParser: HistoryLineParser {
                 } else if inherited {
                     issues.insert(.unsupportedRecord)
                 }
-                turnID = nil
+                // Local settings can follow task_started/turn_context within a live turn.
+                // Only discard turn ownership when crossing or reading an inherited prefix.
+                if wasInherited || inherited { turnID = nil }
             case "task_started", "turn_started":
                 pendingDurableTurn = nil
                 turnID = payload.turnId.flatMap { validID($0) ? $0 : nil }
@@ -111,7 +114,8 @@ struct CodexHistoryParser: HistoryLineParser {
             // Snapshots may contain latest_token_usage_record; those are replay state,
             // not new spending. The cumulative fallback may restart after compaction.
             break
-        case "response_item": break
+        // World-state snapshots/patches resume environment diffing, not token accounting.
+        case "response_item", "world_state": break
         default: issues.insert(.unsupportedRecord)
         }
     }

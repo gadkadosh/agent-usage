@@ -35,6 +35,26 @@ final class CodexHistorySourceTests: XCTestCase {
         XCTAssertEqual(second.observations.map(\.tokens), [60])
     }
 
+    func testWorldStateAndLocalSettingsDoNotMakeReadableHistoryPartial() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write(
+            "sessions/rollout.jsonl",
+            lines: [
+                F.header(), F.start(), F.line("world_state", ["full": true, "state": [:]]),
+                F.settings("thread-a"), F.durable(), F.counter(),
+            ]
+        )
+        let source = CodexHistorySource(home: fixture.root)
+        for _ in 0..<2 {
+            let result = try await source.read(request)
+            XCTAssertEqual(result.observations.map(\.tokens), [120])
+            XCTAssertEqual(result.coverage.state, .ready)
+            XCTAssertEqual(result.coverage.issues, [])
+            XCTAssertNil(result.coverage.warning)
+        }
+    }
+
     func testConflictingResponseCopiesAreExcludedAndMarkedIncomplete() async throws {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }

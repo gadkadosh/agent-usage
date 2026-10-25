@@ -91,6 +91,46 @@ final class CodexHistoryParserTests: XCTestCase {
         XCTAssertTrue(partial.issues.contains(.incompleteLine))
     }
 
+    func testWorldStateSnapshotsAndPatchesDoNotAffectAccountingOrCoverage() {
+        let parser = F.parse([
+            F.header(),
+            F.line("world_state", ["full": true, "state": ["cwd": "/invented"]]),
+            F.start(), F.durable(),
+            F.line("world_state", ["full": false, "state": ["cwd": "/invented/child"]]),
+            F.counter(), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testLocalSettingsDoNotEndTheActiveTurnOrBreakCounterPairing() {
+        for durable in [true, false] {
+            var lines = [F.header(), F.start(), F.settings("thread-a")]
+            if durable { lines.append(F.durable()) }
+            lines += [F.counter(), F.counter(150, 30, lastInput: 50, lastOutput: 10)]
+            let parser = F.parse(lines)
+            XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+            XCTAssertEqual(parser.issues, [])
+        }
+    }
+
+    func testChildSettingsDoNotCarryAnInheritedTurnIntoLocalCounterAccounting() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.header(), F.start(), F.counter(),
+            F.settings("child"), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations, [])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testUnknownRolloutRecordsStillReportIncompleteCoverage() {
+        let parser = F.parse([
+            F.header(), F.line("unknown_record", [:]), F.durable(),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
     func testNonUsagePayloadsAndCompactionSnapshotsAreNotAdditionalSpending() {
         let parser = F.parse([
             F.header(), F.line("response_item", ["type": "message", "content": "invented"]),
