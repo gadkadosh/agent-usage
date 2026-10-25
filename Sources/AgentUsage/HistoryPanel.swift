@@ -63,29 +63,37 @@ struct HistoryPanel: View {
                     )
                     .font(.subheadline).foregroundStyle(.secondary)
                 }
-                ForEach(snapshot.visibleSources, id: \.id) { source in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(source.id.symbol).font(.title3).accessibilityHidden(true)
-                            Text(source.id.name).fontWeight(.medium)
-                            Spacer()
-                            if source.coverage?.hasReadings == true {
-                                let tokens = source.summaries[history.period]?.tokens ?? 0
-                                Text("\(tokens.formatted(.number.notation(.compactName))) tokens")
-                                    .monospacedDigit()
-                                    .accessibilityLabel("\(tokens) tokens")
-                            } else {
-                                Text(source.failed ? "Failed" : "Unavailable")
-                                    .foregroundStyle(.secondary)
+                let sources = snapshot.visibleSources
+                if !sources.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(sources, id: \.id) { source in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(source.id.symbol).font(.title3).accessibilityHidden(true)
+                                    Text(source.id.name).fontWeight(.medium)
+                                    Spacer()
+                                    if source.coverage?.hasReadings == true {
+                                        let tokens = source.summaries[history.period]?.tokens ?? 0
+                                        Text(
+                                            "\(tokens.formatted(.number.notation(.compactName))) tokens"
+                                        )
+                                        .monospacedDigit()
+                                        .accessibilityLabel("\(tokens) tokens")
+                                    } else {
+                                        Text(source.failed ? "Failed" : "Unavailable")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .font(.subheadline)
+                                if let status = source.status {
+                                    Label(status, systemImage: "exclamationmark.triangle")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                         }
-                        .font(.subheadline)
-                        if let status = source.status {
-                            Label(status, systemImage: "exclamationmark.triangle")
-                                .font(.caption).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
                     }
+                    .padding(.top, 4)
                 }
                 historyFooter(snapshot)
             } else if history.error == nil {
