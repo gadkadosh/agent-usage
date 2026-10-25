@@ -1,8 +1,9 @@
 import Darwin
 import Foundation
 
-/// An in-memory, per-file index. All IO/parsing/aggregation runs on this actor, not the UI actor.
-actor PiHistorySource {
+/// An in-memory, per-file index. All IO/parsing runs on this actor, not the UI actor.
+actor PiHistorySource: HistoryAdapter {
+    nonisolated let id = HistoryAgentID.pi
     struct Limits: Sendable {
         var visitedEntries = 20_000
         var directoryDepth = 16
@@ -19,6 +20,9 @@ actor PiHistorySource {
     private var cache: [URL: IndexedFile] = [:]
     private var cacheStart: Date?
     private(set) var filesParsed = 0
+    // Diagnostics belong to this file reader, not the shared coverage contract.
+    private(set) var filesRead = 0
+    private(set) var filesSkipped = 0
 
     init(
         root: URL,
@@ -47,9 +51,8 @@ actor PiHistorySource {
             .deletingLastPathComponent().appendingPathComponent("sessions", isDirectory: true)
     }
 
-    func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws
-        -> HistorySnapshot
-    {
+    func read(_ request: HistoryRequest) throws -> HistoryAdapterResult {
+        let now = request.now
         let manager = FileManager.default
         do {
             let values = try root.resourceValues(forKeys: [.isDirectoryKey])
@@ -65,8 +68,7 @@ actor PiHistorySource {
                 filesRead: 0,
                 issues: [],
                 state: .missing,
-                now: now,
-                calendar: calendar
+                now: now
             )
         } catch {
             throw HistoryReadError.unavailable
@@ -100,7 +102,7 @@ actor PiHistorySource {
         var remainingBytes = limits.refreshBytes
         var hasMoreFiles = false
         var madeProgress = false
-        let since = HistoryPeriod.month.start(at: now, calendar: calendar)
+        let since = request.since
         // A clock/timezone change can move the range backwards; cached files may then lack records.
         let previousCache = (cacheStart.map { since >= $0 } ?? true) ? cache : [:]
         for case let url as URL in enumerator {
@@ -259,12 +261,11 @@ actor PiHistorySource {
             filesSkipped: filesSkipped,
             issues: issues,
             state: state,
-            now: now,
-            calendar: calendar
+            now: now
         )
         // Continue byte-budget deferrals only while the index advances. Failed reads and
         // permanent safety limits must not cause an endless background retry loop.
-        result.hasMoreFiles = hasMoreFiles && madeProgress
+        result.hasMore = hasMoreFiles && madeProgress
         // Commit only a completed refresh. Deleted files disappear; retain 30 calendar days.
         cache = indexed
         cacheStart = since
@@ -277,28 +278,16 @@ actor PiHistorySource {
         filesSkipped: Int = 0,
         issues: Set<HistoryIssue>,
         state: HistoryCoverage.State,
-        now: Date,
-        calendar: Calendar
-    ) -> HistorySnapshot {
-        HistorySnapshot(
-            summaries: Dictionary(
-                uniqueKeysWithValues: HistoryPeriod.allCases.map {
-                    (
-                        $0,
-                        PeriodSummary.aggregate(
-                            observations,
-                            period: $0,
-                            now: now,
-                            calendar: calendar
-                        )
-                    )
-                }
-            ),
+        now: Date
+    ) -> HistoryAdapterResult {
+        self.filesRead = filesRead
+        self.filesSkipped = filesSkipped
+        return HistoryAdapterResult(
+            observations: observations,
             coverage: HistoryCoverage(
                 state: state,
-                filesRead: filesRead,
-                issues: issues,
-                filesSkipped: filesSkipped
+                hasReadings: filesRead > 0 || filesSkipped > 0,
+                issues: issues
             ),
             fetchedAt: now
         )
@@ -428,11 +417,4 @@ actor PiHistorySource {
     private struct FileLimitError: Error {}
     private struct BatchLimitError: Error {}
     private struct ChangingFileError: Error {}
-}
-
-enum HistoryReadError: LocalizedError {
-    case unavailable
-    var errorDescription: String? {
-        "Pi history could not be read. Check access to the session directory, then refresh."
-    }
 }

@@ -1,5 +1,7 @@
 import Foundation
 
+@testable import AgentUsage
+
 // Synthetic roots only. Never load agent SDKs or fall through to a real home directory.
 struct PiHistoryFixtureRoot {
     let root: URL
@@ -28,4 +30,27 @@ struct PiHistoryFixtureRoot {
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
+}
+
+// Keep source-focused assertions on presentation summaries without putting aggregation in Pi.
+extension PiHistorySource {
+    func refresh(now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) throws
+        -> HistorySnapshot
+    {
+        try read(HistoryRequest(now: now, calendar: calendar)).summarized(
+            now: now,
+            calendar: calendar
+        )
+    }
+}
+
+extension HistoryAdapterResult {
+    func summarized(now: Date, calendar: Calendar) -> HistorySnapshot {
+        HistorySnapshot(
+            summaries: historySummaries(observations, now: now, calendar: calendar),
+            coverage: coverage,
+            fetchedAt: fetchedAt,
+            hasMore: hasMore
+        )
+    }
 }

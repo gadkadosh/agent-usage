@@ -29,7 +29,7 @@ final class HistoryLiveTests: XCTestCase {
         XCTAssertNil(allowance.snapshot)
         XCTAssertNil(history.error)
         XCTAssertEqual(history.snapshot?.coverage.state, .ready)
-        XCTAssertEqual(history.snapshot?.coverage.filesRead, 1)
+        XCTAssertEqual(history.snapshot?.coverage.hasReadings, true)
         XCTAssertEqual(history.snapshot?.summaries[.today]?.tokens, 190)
         XCTAssertEqual(history.snapshot?.summaries[.week]?.tokens, 380)
         XCTAssertEqual(history.snapshot?.summaries[.month]?.tokens, 570)
@@ -83,7 +83,7 @@ final class HistoryLiveTests: XCTestCase {
         }
         try XCTSkipIf(FileManager.default.isReadableFile(atPath: fixture.root.path))
         await history.refresh()
-        XCTAssertEqual(history.error, HistoryReadError.unavailable.localizedDescription)
+        XCTAssertEqual(history.error, HistoryReadError.unavailable)
         XCTAssertEqual(history.snapshot?.fetchedAt, previous.fetchedAt)
         XCTAssertEqual(history.snapshot?.summaries[.month]?.tokens, 190)
 

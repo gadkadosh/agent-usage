@@ -19,7 +19,8 @@ final class PiHistorySidecarTests: XCTestCase {
             for _ in 0..<2 {
                 let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
                 XCTAssertEqual(snapshot.coverage.state, .ready)
-                XCTAssertEqual(snapshot.coverage.filesRead, 1)
+                let snapshotFilesRead = await source.filesRead
+                XCTAssertEqual(snapshotFilesRead, 1)
                 XCTAssertTrue(snapshot.coverage.issues.isEmpty)
                 XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
             }
@@ -33,12 +34,14 @@ final class PiHistorySidecarTests: XCTestCase {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("orphan.jsonl.lease", lines: ["not a session"])
-        let snapshot = try await PiHistorySource(root: fixture.root).refresh(
+        let source = PiHistorySource(root: fixture.root)
+        let snapshot = try await source.refresh(
             now: F.now,
             calendar: F.calendar
         )
         XCTAssertEqual(snapshot.coverage.state, .missing)
-        XCTAssertEqual(snapshot.coverage.filesRead, 0)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 0)
         XCTAssertTrue(snapshot.coverage.issues.isEmpty)
     }
 
@@ -48,12 +51,14 @@ final class PiHistorySidecarTests: XCTestCase {
             defer { fixture.remove() }
             try fixture.write(lines: [F.header(), F.message()])
             try fixture.write(path, lines: ["not a supported history"])
-            let snapshot = try await PiHistorySource(root: fixture.root).refresh(
+            let source = PiHistorySource(root: fixture.root)
+            let snapshot = try await source.refresh(
                 now: F.now,
                 calendar: F.calendar
             )
             XCTAssertEqual(snapshot.coverage.state, .partial)
-            XCTAssertEqual(snapshot.coverage.filesRead, 1)
+            let snapshotFilesRead = await source.filesRead
+            XCTAssertEqual(snapshotFilesRead, 1)
             XCTAssertEqual(snapshot.coverage.issues, [.unsupportedRecord])
             XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
         }

@@ -5,21 +5,36 @@ import SwiftUI
 @MainActor
 final class HistoryStore: ObservableObject {
     @Published private(set) var snapshot: HistorySnapshot?
-    @Published private(set) var error: String?
+    @Published private(set) var error: HistoryReadError?
     @Published private(set) var isRefreshing = false
     @Published var period: HistoryPeriod = .today
 
     var summary: PeriodSummary? { snapshot?.summaries[period] }
 
-    private let fetch: @Sendable () async throws -> HistorySnapshot
+    private let fetch:
+        @Sendable (@escaping @Sendable (HistorySnapshot) async -> Void) async throws ->
+            HistorySnapshot
     private var scan: Task<Void, Never>?
     private var started = false
 
     init(fetch: @escaping @Sendable () async throws -> HistorySnapshot) {
-        self.fetch = fetch
+        self.fetch = { _ in try await fetch() }
     }
 
-    /// Launch once without awaiting IO. The store, not the panel, owns the scan.
+    init(
+        fetchUpdates:
+            @escaping @Sendable (@escaping @Sendable (HistorySnapshot) async -> Void)
+            async throws -> HistorySnapshot
+    ) {
+        self.fetch = fetchUpdates
+    }
+
+    private func publish(_ result: HistorySnapshot) {
+        snapshot = result
+        error = result.sources.contains { $0.failed } ? .unavailable : nil
+    }
+
+    /// Launch once without awaiting IO. Closing the panel does not cancel the refresh.
     func start() {
         guard !started else { return }
         started = true
@@ -46,18 +61,14 @@ final class HistoryStore: ObservableObject {
             scan = nil
         }
         do {
-            while true {
-                let result = try await fetch()
-                snapshot = result
-                error = nil
-                guard result.hasMoreFiles else { return }
-                // Pace catch-up and let the UI present each batch before continuing.
-                try await Task.sleep(for: .milliseconds(100))
+            let result = try await fetch { [weak self] result in
+                await self?.publish(result)
             }
+            publish(result)
         } catch {
             // Never forward IO/decoder errors containing sensitive paths or payloads.
             // Failed enumeration must not replace the last reading with zero.
-            self.error = HistoryReadError.unavailable.localizedDescription
+            self.error = .unavailable
         }
     }
 }

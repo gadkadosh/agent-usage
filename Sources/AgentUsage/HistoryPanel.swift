@@ -24,10 +24,13 @@ struct HistoryPanel: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            if let error = history.error {
+            if history.error != nil {
                 Label("Couldn't refresh pi history", systemImage: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
-                Text(error).font(.caption)
+                Text(
+                    "Pi history could not be read. Check access to the session directory, then refresh."
+                )
+                .font(.caption)
                 if history.snapshot != nil {
                     Text("Showing the last readable history. Totals may have changed.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -65,7 +68,7 @@ struct HistoryPanel: View {
                             .accessibilityLabel("\(summary.tokens) tokens")
                     }
                     .font(.subheadline)
-                } else if snapshot.hasMoreFiles {
+                } else if snapshot.hasMore {
                     Text("Reading pi history…").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(snapshot.coverage.emptyDescription)
@@ -188,7 +191,7 @@ struct HistoryPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
-                if snapshot.hasMoreFiles && history.isRefreshing {
+                if snapshot.hasMore && history.isRefreshing {
                     Text("Loading history… Totals are still updating.")
                 } else {
                     Text(

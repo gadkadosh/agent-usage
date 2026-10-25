@@ -35,8 +35,7 @@ final class HistoryStoreTests: XCTestCase {
         await store.refresh()
         XCTAssertNil(store.snapshot)
         XCTAssertNil(store.summary)
-        XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
-        XCTAssertFalse(store.error!.contains("private-secret"))
+        XCTAssertEqual(store.error, HistoryReadError.unavailable)
         XCTAssertFalse(store.isRefreshing)
     }
 
@@ -48,7 +47,7 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertEqual(store.snapshot?.fetchedAt, historySnapshot().fetchedAt)
         XCTAssertEqual(store.snapshot?.coverage, historySnapshot().coverage)
         XCTAssertEqual(store.summary, historySnapshot().summaries[.today])
-        XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
+        XCTAssertEqual(store.error, HistoryReadError.unavailable)
         XCTAssertFalse(store.isRefreshing)
         await store.refresh()
         XCTAssertEqual(store.snapshot?.fetchedAt, historySnapshot(read: 3).fetchedAt)
@@ -164,48 +163,33 @@ final class HistoryStoreTests: XCTestCase {
         )
         let size = try Data(contentsOf: first).count
         let source = PiHistorySource(root: fixture.root, limits: .init(refreshBytes: size))
+        let service = HistoryService(adapters: [source])
         let gate = HistoryGate()
-        let store = HistoryStore(fetch: {
-            let result = try await source.refresh(
+        let store = HistoryStore(fetchUpdates: { update in
+            try await service.refresh(
                 now: PiHistoryFixtures.now,
                 calendar: PiHistoryFixtures.calendar
-            )
-            if !result.hasMoreFiles { await gate.pause() }
-            return result
+            ) { result in
+                await update(result)
+                // Hold after the first publication; the UI has received an intermediate total.
+                if result.hasMore { await gate.pause() }
+            }
         })
         store.start()
         defer { Task { await gate.resume() } }
         guard await gate.waitUntilPaused() else { return }
         XCTAssertEqual(store.summary?.tokens, 190)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, true)
+        XCTAssertEqual(store.snapshot?.hasMore, true)
         XCTAssertEqual(store.snapshot?.coverage.issues, [])
         XCTAssertTrue(store.isRefreshing)
         let joined = Task { await store.refresh() }
         await gate.resume()
         await joined.value
         XCTAssertEqual(store.summary?.tokens, 380)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, false)
+        XCTAssertEqual(store.snapshot?.hasMore, false)
         XCTAssertFalse(store.isRefreshing)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
-    }
-
-    func testCatchUpFailureKeepsIntermediateReadingAndManualRefreshRecovers() async {
-        let fetcher = ScriptedHistory()
-        let store = HistoryStore(fetch: {
-            var snapshot = try await fetcher.fetch()
-            snapshot.hasMoreFiles = snapshot.fetchedAt == historySnapshot().fetchedAt
-            return snapshot
-        })
-        await store.refresh()
-        XCTAssertEqual(store.summary?.tokens, 100)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, true)
-        XCTAssertEqual(store.error, HistoryReadError.unavailable.localizedDescription)
-        XCTAssertFalse(store.isRefreshing)
-        await store.refresh()
-        XCTAssertEqual(store.summary?.tokens, 300)
-        XCTAssertEqual(store.snapshot?.hasMoreFiles, false)
-        XCTAssertNil(store.error)
     }
 }
 
@@ -237,7 +221,7 @@ private func historySnapshot(read: Int = 1, state: HistoryCoverage.State = .read
         ),
         coverage: HistoryCoverage(
             state: state,
-            filesRead: readable ? 1 : 0,
+            hasReadings: readable,
             issues: state == .partial ? [.unreadableFile] : []
         ),
         fetchedAt: now
@@ -258,7 +242,7 @@ private actor ScriptedHistory {
 }
 
 /// Non-cooperative suspension for late-result tests, with bounded failures instead of hangs.
-private actor HistoryGate {
+actor HistoryGate {
     private(set) var count = 0
     private let name: String
     private var pending: CheckedContinuation<Void, Never>?

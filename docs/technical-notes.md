@@ -22,6 +22,14 @@ Missing or unreadable histories are not presented as zero usage. Failed refreshe
 
 History indexing starts in the background at app launch. Opening the panel or choosing Refresh starts a refresh or joins one already running. Closing the panel does not cancel indexing. There is no periodic history refresh timer. Changing periods uses the existing snapshot without rescanning. Periods end at the last history refresh, not a live counter; reopen or Refresh to update them. History works even when allowance access fails.
 
+### Adapter boundary
+
+Pi is currently the only live history adapter. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
+
+`HistoryService` owns the complete refresh. Each source reads and catches up independently under one fixed clock, calendar and retention cutoff, publishing accepted results as they arrive. Completed or failed adapters wait for the next refresh. The presentation store publishes updates and awaits completion.
+
+Failed or unsupported reads retain the previous timestamped observations. Reaggregation filters yesterday's activity out of Today after midnight, even if the source stays unavailable. Operation identities are scoped to each source. Coverage and failures use typed source status; Pi's panel chooses its error wording, and file-count diagnostics stay inside its reader. Missing optional sources do not make healthy contributions incomplete.
+
 ### Discovery and supported formats
 
 The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.

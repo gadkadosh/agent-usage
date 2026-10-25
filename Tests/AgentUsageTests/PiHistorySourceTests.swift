@@ -51,8 +51,8 @@ final class PiHistorySourceTests: XCTestCase {
             XCTFail("Expected an unavailable directory")
         } catch {
             XCTAssertEqual(
-                error.localizedDescription,
-                HistoryReadError.unavailable.localizedDescription
+                error as? HistoryReadError,
+                .unavailable
             )
             XCTAssertFalse(error.localizedDescription.contains(fixture.root.path))
         }
@@ -82,7 +82,8 @@ final class PiHistorySourceTests: XCTestCase {
         let source = PiHistorySource(root: fixture.root)
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.coverage.state, .ready)
-        XCTAssertEqual(snapshot.coverage.filesRead, 3)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 3)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 570)
         XCTAssertEqual(try Data(contentsOf: original), before)
         XCTAssertEqual(try Data(contentsOf: fork), forkBefore)
@@ -199,7 +200,7 @@ final class PiHistorySourceTests: XCTestCase {
             let limited = PiHistorySource(root: fixture.root, limits: limits)
             let snapshot = try await limited.refresh(now: F.now, calendar: F.calendar)
             XCTAssertTrue(snapshot.coverage.issues.contains(.scanLimit))
-            XCTAssertFalse(snapshot.hasMoreFiles)
+            XCTAssertFalse(snapshot.hasMore)
             XCTAssertFalse(snapshot.coverage.hasReadings)
         }
     }
@@ -226,9 +227,10 @@ final class PiHistorySourceTests: XCTestCase {
             let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
             XCTAssertEqual(snapshot.coverage.state, .ready)
             XCTAssertEqual(snapshot.coverage.issues, [])
-            XCTAssertEqual(snapshot.coverage.filesRead, 2)
+            let snapshotFilesRead = await source.filesRead
+            XCTAssertEqual(snapshotFilesRead, 2)
             XCTAssertEqual(snapshot.summaries[.today]?.tokens, 380)
-            XCTAssertFalse(snapshot.hasMoreFiles)
+            XCTAssertFalse(snapshot.hasMore)
         }
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
@@ -244,10 +246,11 @@ final class PiHistorySourceTests: XCTestCase {
         let source = PiHistorySource(root: fixture.root, limits: .init(directoryDepth: 2))
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
-        XCTAssertEqual(snapshot.coverage.filesRead, 1)
+        let snapshotFilesRead = await source.filesRead
+        XCTAssertEqual(snapshotFilesRead, 1)
         XCTAssertEqual(snapshot.coverage.state, .partial)
         XCTAssertEqual(snapshot.coverage.issues, [.scanLimit])
-        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertFalse(snapshot.hasMore)
     }
 
     func testNestedLinksAndArtifactNamedLinksStillProduceSafetyWarnings() async throws {
@@ -368,8 +371,8 @@ final class PiHistorySourceTests: XCTestCase {
             )
         } catch {
             XCTAssertEqual(
-                error.localizedDescription,
-                HistoryReadError.unavailable.localizedDescription
+                error as? HistoryReadError,
+                .unavailable
             )
         }
 
@@ -395,7 +398,7 @@ final class PiHistorySourceTests: XCTestCase {
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
         XCTAssertTrue(snapshot.coverage.issues.contains(.scanLimit))
-        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertFalse(snapshot.hasMore)
         _ = try await source.refresh(now: F.now, calendar: F.calendar)
         let parsed = await source.filesParsed
         XCTAssertEqual(parsed, 2)
@@ -414,10 +417,10 @@ final class PiHistorySourceTests: XCTestCase {
         let source = PiHistorySource(root: fixture.root, limits: .init(refreshBytes: size))
         let limited = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(limited.summaries[.today]?.tokens, 190)
-        XCTAssertTrue(limited.hasMoreFiles)
+        XCTAssertTrue(limited.hasMore)
         XCTAssertEqual(limited.coverage.issues, [])
         let recovered = try await source.refresh(now: F.now, calendar: F.calendar)
-        XCTAssertFalse(recovered.hasMoreFiles)
+        XCTAssertFalse(recovered.hasMore)
         XCTAssertEqual(recovered.summaries[.today]?.tokens, 380)
         XCTAssertEqual(recovered.coverage.state, .ready)
         _ = try await source.refresh(now: F.now, calendar: F.calendar)
@@ -446,7 +449,7 @@ final class PiHistorySourceTests: XCTestCase {
         for batch in 1...3 {
             let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
             XCTAssertEqual(snapshot.summaries[.today]?.tokens, Int64(min(batch * 2, 5) * 190))
-            XCTAssertEqual(snapshot.hasMoreFiles, batch < 3)
+            XCTAssertEqual(snapshot.hasMore, batch < 3)
             XCTAssertEqual(snapshot.coverage.issues, [.scanLimit])
         }
         let parsed = await source.filesParsed
@@ -465,7 +468,7 @@ final class PiHistorySourceTests: XCTestCase {
             didReadFile: { throw HistoryReadError.unavailable }
         )
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
-        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertFalse(snapshot.hasMore)
         XCTAssertEqual(snapshot.coverage.issues, [.unreadableFile])
         XCTAssertFalse(snapshot.coverage.hasReadings)
     }
@@ -482,7 +485,7 @@ final class PiHistorySourceTests: XCTestCase {
         )
         let snapshot = try await source.refresh(now: F.now, calendar: F.calendar)
         XCTAssertEqual(snapshot.summaries[.today]?.tokens, 190)
-        XCTAssertFalse(snapshot.hasMoreFiles)
+        XCTAssertFalse(snapshot.hasMore)
         XCTAssertEqual(snapshot.coverage.issues, [.scanLimit])
     }
 
