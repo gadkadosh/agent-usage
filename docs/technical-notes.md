@@ -50,7 +50,9 @@ Totals are input plus output tokens. Cached input/cache-write categories and rea
 
 The in-memory index stores operation identity, timestamps, token counts, and available token categories/model/provider metadata (names bounded to 256 bytes), not transcripts or credentials. The source performs no history uploads or writes.
 
-Files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
+Pi files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
+
+Codex resolves duplicates and conflicts before applying the chart cutoff. Its index retains older normalized accounting metadata and does not age-skip files: an older original can disqualify a copy whose envelope timestamp was rewritten into the current window. These older records share the existing operation and byte limits, so a large Codex archive can hit incomplete-coverage limits even with little recent activity.
 
 Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per root per batch. Pi has one root and Codex has independent active/archive roots, each with its own bounded index. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
 

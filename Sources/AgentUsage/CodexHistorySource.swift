@@ -45,10 +45,10 @@ actor CodexHistorySource: HistoryAdapter {
         let results = accepted.values
         issues.formUnion(results.flatMap { $0.coverage.issues })
         let observations = canonicalHistoryObservations(
-            results.flatMap(\.observations).filter { $0.timestamp >= request.since },
+            results.flatMap(\.observations),
             format: .codex,
             issues: &issues
-        )
+        ).filter { $0.timestamp >= request.since }
         let readable = results.contains { $0.coverage.hasReadings }
         let present = results.contains { $0.coverage.state != .missing }
         let state: HistoryCoverage.State =

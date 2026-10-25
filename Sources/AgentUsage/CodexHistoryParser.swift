@@ -8,7 +8,6 @@ struct CodexHistoryParser: HistoryLineParser {
     private(set) var observations: [UsageObservation] = []
     private(set) var issues: Set<HistoryIssue> = []
     private(set) var isSupported = false
-    private let since: Date
     private let maxOperations: Int
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
@@ -26,8 +25,9 @@ struct CodexHistoryParser: HistoryLineParser {
     private var seenResponses: Set<String> = []
     private var sawHeader = false
 
-    init(since: Date, maxOperations: Int = 250_000) {
-        self.since = since
+    // Keep older accounting metadata: only the source can resolve copies across roots
+    // before applying the retention window. A copied envelope may have a newer timestamp.
+    init(maxOperations: Int = 250_000) {
         self.maxOperations = maxOperations
     }
 
@@ -75,7 +75,6 @@ struct CodexHistoryParser: HistoryLineParser {
                 issues.insert(.invalidUsage)
                 return
             }
-            guard timestamp >= since else { return }
             guard observations.count < maxOperations else {
                 issues.insert(.scanLimit)
                 return
@@ -160,7 +159,6 @@ struct CodexHistoryParser: HistoryLineParser {
             // measures new activity, but omitted earlier local events remain unknown.
             issues.insert(.unsupportedRecord)
         }
-        guard timestamp >= since else { return }
         guard observations.count < maxOperations else {
             issues.insert(.scanLimit)
             return
@@ -178,7 +176,6 @@ struct CodexHistoryParser: HistoryLineParser {
     }
 
     private mutating func append(usage: Tokens, total: Int64, timestamp: Date, identity: String) {
-        guard timestamp >= since else { return }
         guard observations.count < maxOperations else {
             issues.insert(.scanLimit)
             return

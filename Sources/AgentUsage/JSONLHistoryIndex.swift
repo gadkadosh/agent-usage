@@ -145,7 +145,8 @@ actor JSONLHistoryIndex {
                 let before = try signature(handle)
                 // Normal pi writes update mtime. Ctime also catches imports/edits that preserve it.
                 // Keep checking metadata on every refresh so resumed sessions become eligible again.
-                if before.predates(since) {
+                // Codex needs old identities to reject rewritten recent copies.
+                if format == .pi, before.predates(since) {
                     filesSkipped += 1
                     continue
                 }
@@ -197,17 +198,19 @@ actor JSONLHistoryIndex {
             }
             if file.supported { filesRead += 1 }
             issues.formUnion(file.issues)
-            let recent = file.observations.filter { $0.timestamp >= since }
+            let retained =
+                format == .pi
+                ? file.observations.filter { $0.timestamp >= since } : file.observations
             let remaining = max(0, limits.operations - observations.count)
-            observations.append(contentsOf: recent.prefix(remaining))
-            if recent.count > remaining {
+            observations.append(contentsOf: retained.prefix(remaining))
+            if retained.count > remaining {
                 issues.insert(.scanLimit)
                 // Retry the truncated file on the next scan rather than caching an incomplete index.
                 indexed.removeValue(forKey: url)
             } else if let entry = indexed[url] {
                 indexed[url] = IndexedFile(
                     signature: entry.signature,
-                    observations: recent,
+                    observations: retained,
                     issues: entry.issues,
                     supported: entry.supported
                 )
@@ -243,7 +246,8 @@ actor JSONLHistoryIndex {
         // Continue byte-budget deferrals only while the index advances. Failed reads and
         // permanent safety limits must not cause an endless background retry loop.
         result.hasMore = hasMoreFiles && madeProgress
-        // Commit only a completed refresh. Deleted files disappear; retain 30 calendar days.
+        // Commit only a completed refresh. Deleted files disappear. Codex keeps bounded
+        // older metadata for cross-root canonicalization; Pi retains 30 calendar days.
         cache = indexed
         cacheStart = since
         return result
@@ -331,7 +335,7 @@ actor JSONLHistoryIndex {
         var parser: any HistoryLineParser
         switch format {
         case .pi: parser = PiHistoryParser(since: since, maxOperations: maxOperations)
-        case .codex: parser = CodexHistoryParser(since: since, maxOperations: maxOperations)
+        case .codex: parser = CodexHistoryParser(maxOperations: maxOperations)
         }
         var line = Data()
         var bytesRead = 0

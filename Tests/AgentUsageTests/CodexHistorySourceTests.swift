@@ -49,6 +49,79 @@ final class CodexHistorySourceTests: XCTestCase {
         XCTAssertTrue(result.coverage.issues.contains(.conflictingOperation))
     }
 
+    func testRewrittenCopiesCannotMoveOldUsageIntoTheWindowAcrossRefreshes() async throws {
+        for durable in [true, false] {
+            for originalRoot in ["sessions", "archived_sessions"] {
+                let fixture = try PiHistoryFixtureRoot()
+                defer { fixture.remove() }
+                let copyRoot = originalRoot == "sessions" ? "archived_sessions" : "sessions"
+                let record = durable ? F.durable() : F.counter()
+                let oldRecord = record.replacingOccurrences(
+                    of: F.time,
+                    with: "2026-08-01T10:00:00.000Z"
+                )
+                try fixture.write(
+                    "\(copyRoot)/rollout-copy.jsonl",
+                    lines: [F.header(), F.start(), record]
+                )
+                let source = CodexHistorySource(home: fixture.root)
+                let initial = try await source.read(request)
+                XCTAssertEqual(initial.observations.map(\.tokens), [120])
+                let original = try fixture.write(
+                    "\(originalRoot)/rollout-original.jsonl",
+                    lines: [F.header(), F.start(), oldRecord]
+                )
+                for _ in 0..<2 {
+                    let result = try await source.read(request)
+                    XCTAssertEqual(
+                        result.observations,
+                        [],
+                        "Old canonical activity is outside the window"
+                    )
+                    XCTAssertEqual(result.coverage.state, .ready)
+                }
+                try FileManager.default.removeItem(at: original)
+                let removed = try await source.read(request)
+                XCTAssertEqual(removed.observations.map(\.tokens), [120])
+            }
+        }
+    }
+
+    func testOlderMetadataStillObeysTheOperationLimit() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        let old = F.durable().replacingOccurrences(
+            of: F.time,
+            with: "2026-08-01T10:00:00.000Z"
+        )
+        try fixture.write(
+            "sessions/rollout.jsonl",
+            lines: [F.header(), old, F.durable("recent")]
+        )
+        let source = CodexHistorySource(home: fixture.root, limits: .init(operations: 1))
+        for _ in 0..<2 {
+            let result = try await source.read(request)
+            XCTAssertEqual(result.observations, [])
+            XCTAssertEqual(result.coverage.state, .partial)
+            XCTAssertTrue(result.coverage.issues.contains(.scanLimit))
+            XCTAssertFalse(result.hasMore, "A permanent limit must not cause endless catch-up")
+        }
+    }
+
+    func testOldConflictingCopyStillInvalidatesRecentUsage() async throws {
+        let fixture = try PiHistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write("sessions/rollout-copy.jsonl", lines: [F.header(), F.durable()])
+        let old = F.durable(input: 200).replacingOccurrences(
+            of: F.time,
+            with: "2026-08-01T10:00:00.000Z"
+        )
+        try fixture.write("archived_sessions/rollout-original.jsonl", lines: [F.header(), old])
+        let result = try await CodexHistorySource(home: fixture.root).read(request)
+        XCTAssertEqual(result.observations, [])
+        XCTAssertTrue(result.coverage.issues.contains(.conflictingOperation))
+    }
+
     func testMissingHomeIsNotCreatedAndUnsupportedHistoryIsNotObservedZero() async throws {
         let fixture = try PiHistoryFixtureRoot()
         defer { fixture.remove() }

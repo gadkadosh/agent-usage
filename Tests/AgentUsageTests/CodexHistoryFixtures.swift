@@ -74,7 +74,7 @@ enum CodexHistoryFixtures {
     }
 
     static func parse(_ lines: [String], max: Int = 250_000) -> CodexHistoryParser {
-        var parser = CodexHistoryParser(since: PiHistoryFixtures.since, maxOperations: max)
+        var parser = CodexHistoryParser(maxOperations: max)
         for line in lines { parser.consume(Data(line.utf8)) }
         parser.finish()
         return parser
