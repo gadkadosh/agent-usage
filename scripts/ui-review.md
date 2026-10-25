@@ -2,9 +2,10 @@
 
 `ui-review.sh` owns preparation, process lifecycle, and capture for the packaged app.
 It does not interact with controls, assert behavior, build the app, or publish evidence.
-Use it on a logged-in macOS desktop with Accessibility permission for your terminal.
-Capture also requires Screen Recording permission. These permissions are not changed
-by the harness.
+Use it on a logged-in macOS desktop with Accessibility permission for the process
+driving the review. Capture also requires Screen Recording permission. These
+permissions are not changed by the harness. The quick start below targets the
+current desktop; see `AGENTS.md` for the VM preference and host-review coordination.
 
 ```sh
 make app
@@ -24,6 +25,19 @@ Launch again with the same arguments to reuse the running instance or restart th
 same prepared copy. Changes to the source app or fixture directory are **not**
 recopied. Use a new session for a new build/input. Do not move session directories
 or run concurrent commands against the same session.
+
+## Reviewing inside a VM
+
+The harness runs unchanged inside a prepared macOS guest. You can build the packaged
+app on the host, then copy it, the harness, and any synthetic fixtures into the guest.
+Run the app, harness, and all UI interactions there; retrieve and inspect the
+screenshots and accessible artifacts afterward. A successful capture is not proof
+that the interaction worked.
+
+The guest needs a logged-in, unlocked desktop, SSH access, and Accessibility,
+automation, and Screen Recording permissions for the process driving the review.
+Verify those prerequisites through the actual guest execution path; permissions
+granted to a guest Terminal may not apply to commands run over SSH.
 
 ## Interaction and capture
 
