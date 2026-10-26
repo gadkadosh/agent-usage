@@ -17,6 +17,7 @@ struct CodexHistoryParser: HistoryLineParser {
     private let iso = ISO8601DateFormatter()
     private var sessionID: String?
     private var turnID: String?
+    private var isFork = false
     private var inherited = false
     private var previous: Tokens?
     private var counterSegment = 0
@@ -44,7 +45,8 @@ struct CodexHistoryParser: HistoryLineParser {
                 return
             }
             sessionID = id
-            inherited = entry.payload?.forkedFromId != nil
+            isFork = entry.payload?.forkedFromId != nil
+            inherited = isFork
             isSupported = true
             return
         }
@@ -157,9 +159,12 @@ struct CodexHistoryParser: HistoryLineParser {
                 issues.insert(.invalidUsage)
                 return
             }
+        } else if isFork {
+            // A referenced fork can replay parent usage on a rate-limit update.
+            // Without copied counters, this establishes a baseline, not new spending.
+            if cumulative.input > 0 || cumulative.output > 0 { issues.insert(.unsupportedRecord) }
+            return
         } else if cumulative.input != usage.input || cumulative.output != usage.output {
-            // Referenced forks can start from an inherited baseline. The last report
-            // measures new activity, but omitted earlier local events remain unknown.
             issues.insert(.unsupportedRecord)
         }
         guard observations.count < maxOperations else {

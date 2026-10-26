@@ -44,13 +44,35 @@ final class CodexHistoryParserTests: XCTestCase {
         XCTAssertEqual(parser.issues, [])
     }
 
-    func testReferencedForkUsesLastOperationNotInheritedCumulativeTotal() {
+    func testReferencedForkEstablishesBaselineBeforeCountingProvenAdvances() {
         let parser = F.parse([
             F.header("child", fork: "thread-a"), F.settings("child"),
             F.start("child-turn"), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            F.counter(200, 40, lastInput: 50, lastOutput: 10),
         ])
         XCTAssertEqual(parser.observations.map(\.tokens), [60])
-        XCTAssertTrue(parser.issues.contains(.unsupportedRecord))
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testReferencedForkReplayIsNotSpendingButDurableChildResponseStillCounts() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.settings("child"), F.start("child-turn"),
+            F.counter(), F.counter(),
+            F.durable("child-response", thread: "child", turn: "child-turn", input: 50, output: 10),
+            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [60])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testReferencedForkWithZeroBaselineCanCountLaterActivityWithoutAmbiguity() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.settings("child"), F.start("child-turn"),
+            F.counter(0, 0), F.counter(),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120])
+        XCTAssertEqual(parser.issues, [])
     }
 
     func testResumeReplayWithoutActiveTurnDoesNotCreateSpending() {

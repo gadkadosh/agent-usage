@@ -35,6 +35,43 @@ final class CodexHistorySourceTests: XCTestCase {
         XCTAssertEqual(second.observations.map(\.tokens), [60])
     }
 
+    func testForkReplayDoesNotDuplicateParentSpendingWithOrWithoutCopiedHistory() async throws {
+        for copied in [false, true] {
+            let fixture = try HistoryFixtureRoot()
+            defer { fixture.remove() }
+            let parent = [F.header(), F.start(), F.counter()]
+            let child =
+                [F.header("child", fork: "thread-a")]
+                + (copied ? parent : [])
+                + [
+                    F.settings("child"), F.start("child-turn"), F.counter(),
+                    F.durable(
+                        "child-response",
+                        thread: "child",
+                        turn: "child-turn",
+                        input: 50,
+                        output: 10
+                    ),
+                    F.counter(150, 30, lastInput: 50, lastOutput: 10),
+                ]
+            try fixture.write("sessions/parent.jsonl", lines: parent)
+            try fixture.write("sessions/child.jsonl", lines: child)
+            try fixture.write(
+                "archived_sessions/child-copy.jsonl",
+                lines: child.map {
+                    $0.replacingOccurrences(of: "2026-10-02", with: "2026-10-03")
+                }
+            )
+            let source = CodexHistorySource(home: fixture.root)
+            for _ in 0..<2 {
+                let result = try await source.read(request)
+                XCTAssertEqual(result.observations.map(\.tokens).sorted(), [60, 120])
+                XCTAssertEqual(result.coverage.state, copied ? .ready : .partial)
+                XCTAssertEqual(result.coverage.issues, copied ? [] : [.unsupportedRecord])
+            }
+        }
+    }
+
     func testWorldStateAndLocalSettingsDoNotMakeReadableHistoryPartial() async throws {
         let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
