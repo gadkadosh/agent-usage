@@ -109,15 +109,16 @@ enum DashboardFixtures {
             issues: state == .partial ? [.unsupportedVersion, .staleFile] : []
         )
         let weight = max(1, agents.count * (agents.count + 1) / 2)
-        let observations = agents.enumerated().map { index, id in
-            coverage.hasReadings && !zero
-                ? (0..<30).map { day in
-                    UsageObservation(
-                        operationID: "\(id.rawValue)-synthetic-\(day)",
-                        timestamp: calendar.date(byAdding: .day, value: -day, to: now)!,
-                        tokens: Int64((day % 5 + 1) * 18_420 * (index + 1) / weight)
-                    )
-                } : []
+        let observations = agents.enumerated().map { index, id -> [UsageObservation] in
+            guard coverage.hasReadings && !zero else { return [] }
+            return (0..<30).map { day in
+                let tokens = (day % 5 + 1) * 18_420 * (index + 1) / weight
+                return UsageObservation(
+                    operationID: "\(id.rawValue)-synthetic-\(day)",
+                    timestamp: calendar.date(byAdding: .day, value: -day, to: now)!,
+                    tokens: Int64(tokens)
+                )
+            }
         }
         return HistorySnapshot(
             summaries: historySummaries(observations.flatMap { $0 }, now: now, calendar: calendar),
