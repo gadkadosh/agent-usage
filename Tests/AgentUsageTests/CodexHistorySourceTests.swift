@@ -153,7 +153,7 @@ final class CodexHistorySourceTests: XCTestCase {
         try fixture.write("sessions/rollout-invalid.jsonl", lines: [F.start()])
         let invalid = try await CodexHistorySource(home: fixture.root).read(request)
         XCTAssertFalse(invalid.coverage.hasReadings)
-        XCTAssertNotEqual(invalid.coverage.state, .ready)
+        XCTAssertEqual(invalid.coverage.state, .unsupported)
     }
 
     func testBatchReplacementIncludesEarlierResultsAndNeverDuplicatesThem() async throws {
@@ -175,6 +175,65 @@ final class CodexHistorySourceTests: XCTestCase {
         XCTAssertEqual(b.observations.reduce(0) { $0 + $1.tokens }, 240)
     }
 
+    func testCatchUpReadsDeferredFilesAfterAnUnusableBatch() async throws {
+        for deferredRoot in ["sessions", "archived_sessions"] {
+            let otherRoot = deferredRoot == "sessions" ? "archived_sessions" : "sessions"
+            for hasPriorReadings in [true, false] {
+                for hasOtherRoot in [true, false] {
+                    let fixture = try HistoryFixtureRoot()
+                    defer { fixture.remove() }
+                    for name in ["a", "b"] {
+                        try fixture.write("\(deferredRoot)/\(name).jsonl", lines: [F.start()])
+                    }
+                    let root = fixture.root.appendingPathComponent(deferredRoot)
+                    let enumerator = try XCTUnwrap(
+                        FileManager.default.enumerator(
+                            at: root,
+                            includingPropertiesForKeys: nil
+                        )
+                    )
+                    let files = enumerator.allObjects.compactMap { $0 as? URL }
+                    XCTAssertEqual(files.count, 2)
+                    let first = try XCTUnwrap(files.first)
+                    let last = try XCTUnwrap(files.last)
+                    if hasOtherRoot {
+                        try fixture.write(
+                            "\(otherRoot)/healthy.jsonl",
+                            lines: [
+                                F.header("healthy"),
+                                F.durable("healthy", thread: "healthy", input: 20, output: 10),
+                            ]
+                        )
+                    }
+                    let service = HistoryService(adapters: [
+                        CodexHistorySource(home: fixture.root, limits: .init(refreshBytes: 1_000))
+                    ])
+                    if hasPriorReadings {
+                        try Data(([F.header(), F.durable()].joined(separator: "\n") + "\n").utf8)
+                            .write(to: first)
+                        let initial = try await service.refresh(now: F.now, calendar: F.calendar)
+                        XCTAssertEqual(initial.summaries[.today]?.tokens, hasOtherRoot ? 150 : 120)
+                    }
+                    // One unsupported file fills the batch without hitting a permanent limit.
+                    // Overwrite in place to preserve the enumeration order observed above.
+                    let invalid =
+                        F.start() + String(repeating: " ", count: 999 - F.start().utf8.count)
+                    try Data((invalid + "\n").utf8).write(to: first)
+                    try Data(
+                        ([
+                            F.header("new"), F.durable("new", thread: "new", input: 50, output: 10),
+                        ].joined(separator: "\n") + "\n").utf8
+                    ).write(to: last)
+                    let completed = try await service.refresh(now: F.now, calendar: F.calendar)
+                    XCTAssertEqual(completed.summaries[.today]?.tokens, hasOtherRoot ? 90 : 60)
+                    XCTAssertEqual(completed.coverage.state, .partial)
+                    XCTAssertEqual(completed.coverage.issues, [.unsupportedVersion])
+                    XCTAssertFalse(completed.hasMore)
+                }
+            }
+        }
+    }
+
     func testDirectoryFailureKeepsAcceptedHistoryWithSourceScopedStaleCoverage() async throws {
         let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
@@ -194,6 +253,103 @@ final class CodexHistorySourceTests: XCTestCase {
         XCTAssertEqual(result.observations.map(\.tokens), [120])
         XCTAssertTrue(result.coverage.issues.contains(.staleFile))
         XCTAssertEqual(result.coverage.state, .partial)
+    }
+
+    func testUnusableRootRetainsReadingsWhileOtherRootAdvancesAndRecoveryReplacesThem()
+        async throws
+    {
+        for failedRoot in ["sessions", "archived_sessions"] {
+            let healthyRoot = failedRoot == "sessions" ? "archived_sessions" : "sessions"
+            for replacement in [F.start(), "{not-json}"] {
+                for hasHealthyRoot in [true, false] {
+                    let fixture = try HistoryFixtureRoot()
+                    defer { fixture.remove() }
+                    let path = "\(failedRoot)/rollout.jsonl"
+                    try fixture.write(path, lines: [F.header(), F.durable()])
+                    if hasHealthyRoot {
+                        try fixture.write(
+                            "\(healthyRoot)/rollout.jsonl",
+                            lines: [
+                                F.header("other"),
+                                F.durable("other", thread: "other", input: 50, output: 10),
+                            ]
+                        )
+                    }
+                    let service = HistoryService(adapters: [CodexHistorySource(home: fixture.root)])
+                    let initial = try await service.refresh(now: F.now, calendar: F.calendar)
+                    XCTAssertEqual(initial.summaries[.today]?.tokens, hasHealthyRoot ? 180 : 120)
+
+                    try fixture.write(path, lines: [replacement])
+                    if hasHealthyRoot {
+                        try fixture.write(
+                            "\(healthyRoot)/rollout.jsonl",
+                            lines: [
+                                F.header("other"),
+                                F.durable("other", thread: "other", input: 80, output: 10),
+                            ]
+                        )
+                    }
+                    let healthyTokens: Int64 = hasHealthyRoot ? 90 : 0
+                    for _ in 0..<2 {
+                        let stale = try await service.refresh(now: F.now, calendar: F.calendar)
+                        XCTAssertEqual(stale.summaries[.today]?.tokens, 120 + healthyTokens)
+                        XCTAssertEqual(stale.coverage.state, .partial)
+                        XCTAssertTrue(stale.coverage.issues.contains(.staleFile))
+                        XCTAssertTrue(
+                            stale.coverage.issues.contains(
+                                replacement == F.start() ? .unsupportedVersion : .malformedRecord
+                            )
+                        )
+                        XCTAssertEqual(
+                            stale.sources.first?.status,
+                            "Incomplete history. Includes older readings."
+                        )
+                        XCTAssertFalse(stale.hasMore)
+                    }
+
+                    try fixture.write(path, lines: [F.header(), F.durable(input: 200)])
+                    let recovered = try await service.refresh(now: F.now, calendar: F.calendar)
+                    XCTAssertEqual(recovered.summaries[.today]?.tokens, 220 + healthyTokens)
+                    XCTAssertEqual(recovered.coverage.state, .ready)
+                    XCTAssertEqual(recovered.coverage.issues, [])
+
+                    // A readable empty history and confirmed deletion still clear old usage.
+                    try fixture.write(path, lines: [F.header()])
+                    let empty = try await service.refresh(now: F.now, calendar: F.calendar)
+                    XCTAssertEqual(empty.summaries[.today]?.tokens, healthyTokens)
+                    XCTAssertEqual(empty.coverage.state, .ready)
+                    try FileManager.default.removeItem(
+                        at: fixture.root.appendingPathComponent(path)
+                    )
+                    let deleted = try await service.refresh(now: F.now, calendar: F.calendar)
+                    XCTAssertEqual(deleted.summaries[.today]?.tokens, healthyTokens)
+                    XCTAssertFalse(deleted.coverage.issues.contains(.staleFile))
+                }
+            }
+        }
+    }
+
+    func testInitiallyUnusableRootDoesNotInventReadingsOrStaleStatus() async throws {
+        let fixture = try HistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write("sessions/rollout.jsonl", lines: ["{not-json}"])
+        try fixture.write(
+            "archived_sessions/rollout.jsonl",
+            lines: [F.header(), F.durable()]
+        )
+        let source = CodexHistorySource(home: fixture.root)
+        let first = try await source.read(request)
+        XCTAssertEqual(first.observations.map(\.tokens), [120])
+        XCTAssertEqual(first.coverage.state, .partial)
+        XCTAssertEqual(first.coverage.issues, [.malformedRecord])
+        try fixture.write(
+            "sessions/rollout.jsonl",
+            lines: [F.header("new"), F.durable(thread: "new")]
+        )
+        let recovered = try await source.read(request)
+        XCTAssertEqual(recovered.observations.map(\.tokens), [120, 120])
+        XCTAssertEqual(recovered.coverage.state, .ready)
+        XCTAssertEqual(recovered.coverage.issues, [])
     }
 
     func testSymlinkDescendantsAreNotRead() async throws {

@@ -31,15 +31,32 @@ actor CodexHistorySource: HistoryAdapter {
 
     func read(_ request: HistoryRequest) async throws -> HistoryAdapterResult {
         var issues: Set<HistoryIssue> = []
+        var coverage: [HistoryCoverage] = []
         var more = false
         for (number, index) in indices.enumerated() {
             do {
-                let result = try await index.read(request)
-                accepted[number] = result
-                more = more || result.hasMore
+                var result = try await index.read(request)
+                // An unusable batch can still defer readable files. Advance it internally
+                // until it can publish a usable result or has no further progress to make.
+                while !result.coverage.replacesReadings && result.hasMore {
+                    result = try await index.read(request)
+                }
+                coverage.append(result.coverage)
+                issues.formUnion(result.coverage.issues)
+                // Each root has its own last usable reading. An unusable result must not
+                // erase it just because the other root still makes Codex readable.
+                if result.coverage.replacesReadings {
+                    accepted[number] = result
+                    more = more || result.hasMore
+                } else if accepted[number]?.coverage.hasReadings == true {
+                    issues.insert(.staleFile)
+                }
             } catch {
+                coverage.append(
+                    HistoryCoverage(state: .unavailable, hasReadings: false, issues: [])
+                )
                 issues.insert(.unreadableFile)
-                if accepted[number] != nil { issues.insert(.staleFile) }
+                if accepted[number]?.coverage.hasReadings == true { issues.insert(.staleFile) }
             }
         }
         let results = accepted.values
@@ -50,11 +67,10 @@ actor CodexHistorySource: HistoryAdapter {
             issues: &issues
         ).filter { $0.timestamp >= request.since }
         let readable = results.contains { $0.coverage.hasReadings }
-        let present = results.contains { $0.coverage.state != .missing }
         let state: HistoryCoverage.State =
             readable
             ? (issues.isEmpty ? .ready : .partial)
-            : !issues.isEmpty ? .unavailable : present ? .unsupported : .missing
+            : HistoryCoverage.combined(coverage).state
         return HistoryAdapterResult(
             observations: observations,
             coverage: HistoryCoverage(state: state, hasReadings: readable, issues: issues),
