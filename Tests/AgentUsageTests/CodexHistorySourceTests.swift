@@ -55,6 +55,103 @@ final class CodexHistorySourceTests: XCTestCase {
         }
     }
 
+    func testMatchingUsageSurvivesDifferentOptionalMetadataAcrossCopies() async throws {
+        let fixture = try HistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write("sessions/rollout.jsonl", lines: [F.header(), F.durable()])
+        try fixture.write(
+            "archived_sessions/copy.jsonl",
+            lines: [
+                F.header(),
+                F.line("turn_context", ["turn_id": "turn-a", "model": "invented-model"]),
+                F.durable(),
+            ]
+        )
+        let result = try await CodexHistorySource(home: fixture.root).read(request)
+        XCTAssertEqual(result.observations.map(\.tokens), [120])
+        XCTAssertEqual(result.coverage.state, .ready)
+        XCTAssertEqual(result.coverage.issues, [])
+    }
+
+    func testCounterResetsKeepDistinctSpendingAndRewrittenCopiesStillDeduplicate() async throws {
+        for reset in [
+            F.counter(0, 0),
+            F.line(
+                "event_msg",
+                [
+                    "type": "token_count", "info": ["total_token_usage": F.tokens(-1, 0)],
+                ]
+            ),
+        ] {
+            let fixture = try HistoryFixtureRoot()
+            defer { fixture.remove() }
+            let lines = [
+                F.header(), F.start(), F.counter(), reset,
+                F.counter().replacingOccurrences(of: F.time, with: "2026-10-02T11:00:00.000Z"),
+            ]
+            try fixture.write("sessions/rollout.jsonl", lines: lines)
+            let source = CodexHistorySource(home: fixture.root)
+            let original = try await source.read(request)
+            XCTAssertEqual(original.observations.map(\.tokens).sorted(), [120, 120])
+            XCTAssertEqual(original.coverage.issues, [.invalidUsage])
+            try fixture.write(
+                "archived_sessions/copy.jsonl",
+                lines: lines.map {
+                    $0.replacingOccurrences(of: "2026-10-02", with: "2026-10-03")
+                }
+            )
+            for _ in 0..<2 {
+                let copied = try await source.read(request)
+                XCTAssertEqual(copied.observations.map(\.tokens).sorted(), [120, 120])
+                XCTAssertEqual(
+                    Set(copied.observations.map(\.timestamp)),
+                    Set(original.observations.map(\.timestamp))
+                )
+                XCTAssertEqual(copied.coverage.issues, [.invalidUsage])
+            }
+        }
+    }
+
+    func testRetainedRootsKeepTheirAcceptedFreshnessUntilRecoveryOrDeletion() async throws {
+        for failedRoot in ["sessions", "archived_sessions"] {
+            let healthyRoot = failedRoot == "sessions" ? "archived_sessions" : "sessions"
+            for hasHealthyRoot in [false, true] {
+                let fixture = try HistoryFixtureRoot()
+                defer { fixture.remove() }
+                let path = "\(failedRoot)/rollout.jsonl"
+                let file = try fixture.write(path, lines: [F.header(), F.durable()])
+                if hasHealthyRoot {
+                    try fixture.write(
+                        "\(healthyRoot)/rollout.jsonl",
+                        lines: [F.header("other"), F.durable(thread: "other")]
+                    )
+                }
+                let service = HistoryService(adapters: [CodexHistorySource(home: fixture.root)])
+                let initial = try await service.refresh(now: F.now, calendar: F.calendar)
+                XCTAssertEqual(initial.fetchedAt, F.now)
+                try fixture.write(path, lines: [F.start()])
+                let later = F.now.addingTimeInterval(3_600)
+                let stale = try await service.refresh(now: later, calendar: F.calendar)
+                XCTAssertEqual(stale.fetchedAt, F.now)
+                XCTAssertEqual(stale.sources.first?.fetchedAt, F.now)
+                XCTAssertEqual(stale.summaries[.today]?.tokens, hasHealthyRoot ? 240 : 120)
+                XCTAssertTrue(stale.coverage.issues.contains(.staleFile))
+
+                try fixture.write(path, lines: [F.header(), F.durable()])
+                let recovered = try await service.refresh(now: later, calendar: F.calendar)
+                XCTAssertEqual(recovered.fetchedAt, later)
+                XCTAssertEqual(recovered.coverage.state, .ready)
+                try FileManager.default.removeItem(at: file)
+                let deleted = try await service.refresh(
+                    now: later.addingTimeInterval(3_600),
+                    calendar: F.calendar
+                )
+                XCTAssertEqual(deleted.fetchedAt, later.addingTimeInterval(3_600))
+                XCTAssertEqual(deleted.summaries[.today]?.tokens, hasHealthyRoot ? 120 : 0)
+            }
+        }
+    }
+
     func testConflictingResponseCopiesAreExcludedAndMarkedIncomplete() async throws {
         let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }

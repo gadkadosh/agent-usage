@@ -6,22 +6,6 @@ struct UsageObservation: Equatable, Sendable {
     let operationID: String
     var timestamp: Date
     let tokens: Int64
-    var detail: TokenDetail?
-    var model: String?
-    var provider: String?
-}
-
-/// Input includes cached input; output includes reasoning. Unknown detail stays nil.
-struct TokenDetail: Equatable, Sendable {
-    let input: Int64
-    let output: Int64
-    let cachedInput: Int64?
-    let cacheWriteInput: Int64?
-    let reasoningOutput: Int64?
-}
-
-func historyMetadata(_ value: String?) -> String? {
-    value.flatMap { !$0.isEmpty && $0.utf8.count <= 256 ? $0 : nil }
 }
 
 enum HistoryPeriod: Int, CaseIterable, Sendable {

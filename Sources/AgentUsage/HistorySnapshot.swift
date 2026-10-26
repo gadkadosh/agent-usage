@@ -62,16 +62,20 @@ struct HistorySnapshot: Sendable {
 
 extension HistorySourceSnapshot {
     var status: String? {
+        let message: String
         if failed {
-            return coverage?.hasReadings == true
+            message =
+                coverage?.hasReadings == true
                 ? "Couldn't refresh. Showing older readings." : "History could not be read."
+        } else if coverage?.state == .unsupported {
+            message = "Unsupported history format."
+        } else if coverage?.state == .unavailable {
+            message = "History could not be read."
+        } else if coverage?.issues.contains(.staleFile) == true {
+            message = "Incomplete history. Includes older readings."
+        } else {
+            return coverage?.warning
         }
-        guard let coverage else { return nil }
-        if coverage.state == .unsupported { return "Unsupported history format." }
-        if coverage.state == .unavailable { return "History could not be read." }
-        if coverage.issues.contains(.staleFile) {
-            return "Incomplete history. Includes older readings."
-        }
-        return coverage.warning
+        return [message, coverage?.accountingWarning].compactMap { $0 }.joined(separator: " ")
     }
 }

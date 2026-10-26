@@ -74,7 +74,8 @@ actor CodexHistorySource: HistoryAdapter {
         return HistoryAdapterResult(
             observations: observations,
             coverage: HistoryCoverage(state: state, hasReadings: readable, issues: issues),
-            fetchedAt: request.now,
+            fetchedAt: results.filter { $0.coverage.hasReadings }.map(\.fetchedAt).min()
+                ?? request.now,
             hasMore: more
         )
     }

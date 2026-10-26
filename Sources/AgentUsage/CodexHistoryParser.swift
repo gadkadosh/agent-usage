@@ -17,10 +17,9 @@ struct CodexHistoryParser: HistoryLineParser {
     private let iso = ISO8601DateFormatter()
     private var sessionID: String?
     private var turnID: String?
-    private var provider: String?
-    private var model: String?
     private var inherited = false
     private var previous: Tokens?
+    private var counterSegment = 0
     private var pendingDurableTurn: String?
     private var seenResponses: Set<String> = []
     private var sawHeader = false
@@ -46,7 +45,6 @@ struct CodexHistoryParser: HistoryLineParser {
             }
             sessionID = id
             inherited = entry.payload?.forkedFromId != nil
-            provider = historyMetadata(entry.payload?.modelProvider)
             isSupported = true
             return
         }
@@ -59,7 +57,6 @@ struct CodexHistoryParser: HistoryLineParser {
             turnID = nil
         case "turn_context":
             if let id = payload.turnId, validID(id) { turnID = id }
-            model = historyMetadata(payload.model)
         case "token_usage_record":
             guard let turn = payload.turnId, validID(turn) else {
                 issues.insert(.invalidUsage)
@@ -80,11 +77,12 @@ struct CodexHistoryParser: HistoryLineParser {
                 return
             }
             if seenResponses.insert(response).inserted { pendingDurableTurn = turn }
-            append(
-                usage: usage,
-                total: total,
-                timestamp: timestamp,
-                identity: "response|\(sessionID ?? "")|\(response)"
+            observations.append(
+                observation(
+                    total: total,
+                    timestamp: timestamp,
+                    identity: "response|\(sessionID ?? "")|\(response)"
+                )
             )
         case "event_msg":
             switch payload.type {
@@ -92,11 +90,6 @@ struct CodexHistoryParser: HistoryLineParser {
                 let wasInherited = inherited
                 if let owner = payload.threadId {
                     inherited = owner != sessionID
-                    if !inherited {
-                        model = historyMetadata(payload.threadSettings?.model)
-                        provider =
-                            historyMetadata(payload.threadSettings?.modelProviderId) ?? provider
-                    }
                 } else if inherited {
                     issues.insert(.unsupportedRecord)
                 }
@@ -124,10 +117,16 @@ struct CodexHistoryParser: HistoryLineParser {
         guard let info else { return }  // Rate-limit-only events carry no usage.
         guard let cumulative = info.totalTokenUsage, cumulative.total != nil else {
             issues.insert(.invalidUsage)
+            if previous != nil { counterSegment += 1 }
             previous = nil
             return
         }
         let prior = previous
+        // A reset can revisit an earlier cumulative position within the same turn.
+        // Segment identities use record order, not copy-rewritten envelope timestamps.
+        if let prior, cumulative.input < prior.input || cumulative.output < prior.output {
+            counterSegment += 1
+        }
         previous = cumulative
         guard !inherited else { return }
         guard let turnID else {
@@ -168,44 +167,22 @@ struct CodexHistoryParser: HistoryLineParser {
             return
         }
         let identity =
-            "counter|\(sessionID ?? "")|\(turnID)|\(cumulative.input)|\(cumulative.output)|\(cumulative.cachedInputTokens ?? 0)|\(cumulative.cacheWriteInputTokens ?? 0)"
-        observations.append(
-            observation(usage, total: total, timestamp: timestamp, identity: identity)
-        )
+            "counter|\(sessionID ?? "")|\(turnID)|\(counterSegment)|\(cumulative.input)|\(cumulative.output)|\(cumulative.cachedInputTokens ?? 0)|\(cumulative.cacheWriteInputTokens ?? 0)"
+        observations.append(observation(total: total, timestamp: timestamp, identity: identity))
     }
 
     mutating func finish() {
         if !sawHeader && issues.isEmpty { issues.insert(.incompleteLine) }
-
     }
 
-    private mutating func append(usage: Tokens, total: Int64, timestamp: Date, identity: String) {
-        guard observations.count < maxOperations else {
-            issues.insert(.scanLimit)
-            return
-        }
-        observations.append(
-            observation(usage, total: total, timestamp: timestamp, identity: identity)
-        )
-    }
-
-    private func observation(_ usage: Tokens, total: Int64, timestamp: Date, identity: String)
+    private func observation(total: Int64, timestamp: Date, identity: String)
         -> UsageObservation
     {
         let key = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
         return UsageObservation(
             operationID: key,
             timestamp: timestamp,
-            tokens: total,
-            detail: TokenDetail(
-                input: usage.input,
-                output: usage.output,
-                cachedInput: usage.cachedInputTokens,
-                cacheWriteInput: usage.cacheWriteInputTokens,
-                reasoningOutput: usage.reasoningOutputTokens
-            ),
-            model: model,
-            provider: provider
+            tokens: total
         )
     }
 
@@ -232,16 +209,8 @@ struct CodexHistoryParser: HistoryLineParser {
         let threadId: String?
         let responseId: String?
         let forkedFromId: String?
-        let threadSettings: Settings?
-        let model: String?
-        let modelProvider: String?
         let info: Info?
         let usage: Tokens?
-    }
-
-    private struct Settings: Decodable {
-        let model: String?
-        let modelProviderId: String?
     }
 
     private struct Info: Decodable {

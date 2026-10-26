@@ -39,6 +39,29 @@ final class HistoryCoveragePresentationTests: XCTestCase {
         )
     }
 
+    func testSourceStatusKeepsAccountingWarningsAlongsideStaleOrFailedReadings() {
+        for failed in [false, true] {
+            let source = HistorySourceSnapshot(
+                id: .pi,
+                summaries: [:],
+                coverage: HistoryCoverage(
+                    state: .partial,
+                    hasReadings: true,
+                    issues: [.staleFile, .toolAggregate]
+                ),
+                fetchedAt: nil,
+                failed: failed
+            )
+            XCTAssertEqual(
+                source.status,
+                (failed
+                    ? "Couldn't refresh. Showing older readings."
+                    : "Incomplete history. Includes older readings.")
+                    + " Tool usage may be counted twice."
+            )
+        }
+    }
+
     func testToolOverlapIsNotPresentedAsMissingUsage() {
         XCTAssertEqual(
             HistoryCoverage(state: .ready, hasReadings: true, issues: [.toolAggregate]).warning,

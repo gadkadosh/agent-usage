@@ -12,8 +12,6 @@ final class CodexHistoryParserTests: XCTestCase {
             F.counter(150, 30, lastInput: 50, lastOutput: 10),
         ])
         XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
-        XCTAssertEqual(parser.observations.first?.detail?.cachedInput, 50)
-        XCTAssertEqual(parser.observations.first?.detail?.reasoningOutput, 10)
         XCTAssertEqual(parser.issues, [])
     }
 

@@ -268,7 +268,11 @@ extension HistoryCoverage {
         var messages: [String] = []
         if state == .partial { messages.append("Partial history. Totals may be incomplete.") }
         if issues.contains(.staleFile) { messages.append("Includes older readings.") }
-        if issues.contains(.toolAggregate) { messages.append("Tool usage may be counted twice.") }
+        if let accountingWarning { messages.append(accountingWarning) }
         return messages.isEmpty ? nil : messages.joined(separator: " ")
+    }
+
+    var accountingWarning: String? {
+        hasReadings && issues.contains(.toolAggregate) ? "Tool usage may be counted twice." : nil
     }
 }

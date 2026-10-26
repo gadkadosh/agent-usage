@@ -122,10 +122,7 @@ struct PiHistoryParser: HistoryLineParser {
             UsageObservation(
                 operationID: key,
                 timestamp: timestamp,
-                tokens: total,
-                detail: usage.detail,
-                model: historyMetadata(entry.message?.model),
-                provider: historyMetadata(entry.message?.provider)
+                tokens: total
             )
         )
     }
@@ -162,8 +159,6 @@ struct PiHistoryParser: HistoryLineParser {
         let role: String
         let timestamp: Double?
         let stopReason: String?
-        let model: String?
-        let provider: String?
         let usage: Tokens?
     }
 
@@ -175,17 +170,6 @@ struct PiHistoryParser: HistoryLineParser {
         // These are subsets, not additional tokens. totalTokens/cost are deliberately ignored.
         let reasoning: Int64?
         let cacheWrite1h: Int64?
-
-        var detail: TokenDetail? {
-            guard let input, let output, let cacheRead, let cacheWrite else { return nil }
-            return TokenDetail(
-                input: input + cacheRead + cacheWrite,
-                output: output,
-                cachedInput: cacheRead,
-                cacheWriteInput: cacheWrite,
-                reasoningOutput: reasoning
-            )
-        }
 
         var normalizedTotal: Int64? {
             guard let input, let output, let cacheRead, let cacheWrite else { return nil }
