@@ -15,12 +15,17 @@ final class HistoryLiveTests: XCTestCase {
             "codex/sessions/rollout.jsonl",
             lines: [CodexHistoryFixtures.header(), CodexHistoryFixtures.durable()]
         )
+        let openCodeFixture = try OpenCodeHistoryFixture()
+        try openCodeFixture.message()
+        let openCode = OpenCodeHistorySource(database: openCodeFixture.database)
         let pi = PiHistorySource(root: fixture.root.appendingPathComponent("pi"))
         let codex = CodexHistorySource(home: fixture.root.appendingPathComponent("codex"))
         for (adapters, ids, total) in [
             ([pi] as [any HistoryAdapter], [HistoryAgentID.pi], Int64(190)),
             ([codex] as [any HistoryAdapter], [HistoryAgentID.codex], Int64(120)),
             ([pi, codex] as [any HistoryAdapter], [.codex, .pi], Int64(310)),
+            ([openCode] as [any HistoryAdapter], [.openCode], Int64(200)),
+            ([pi, codex, openCode] as [any HistoryAdapter], [.codex, .openCode, .pi], Int64(510)),
         ] {
             let store = HistoryStore.live(adapters: adapters, now: { F.now }, calendar: F.calendar)
             await store.refresh()

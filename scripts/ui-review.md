@@ -18,29 +18,36 @@ re-signed, leaving the source bundle and existing app instances alone. It runs t
 copied bundle executable directly to retain its exact PID. Each agent's environment
 points into the session, even when no history is supplied. Pi uses `SESSION/pi`
 (`PI_CODING_AGENT_DIR`) and `SESSION/pi/sessions` (`PI_CODING_AGENT_SESSION_DIR`);
-Codex uses `SESSION/codex` (`CODEX_HOME`). Credentials are empty; no provider requests
+Codex uses `SESSION/codex` (`CODEX_HOME`). OpenCode uses
+`SESSION/xdg-data/opencode/opencode.db` (`XDG_DATA_HOME=SESSION/xdg-data`,
+`OPENCODE_DB=opencode.db`), overriding any inherited database selection. Credentials are empty; no provider requests
 can be authenticated.
 
-Supply either or both optional history inputs:
+Supply any combination of optional history inputs:
 
 | Option | Synthetic input layout | Isolated destination |
 | --- | --- | --- |
 | `--pi-history /path/to/pi-sessions` | Pi sessions directory containing JSONL files and project subdirectories | `SESSION/pi/sessions` |
 | `--codex-history /path/to/codex-home` | Codex home containing `sessions` and/or `archived_sessions` | `SESSION/codex/sessions` and `SESSION/codex/archived_sessions` |
+| `--opencode-history /path/to/synthetic.db` | Closed, checkpointed synthetic OpenCode v2 SQLite database (no `-wal` or `-shm` sidecars) | `SESSION/xdg-data/opencode/opencode.db` |
 
-Other Codex files, including credentials and SQLite state, are not copied. Pi's
+Other Codex files, including credentials and SQLite state, are not copied.
+Only the supplied OpenCode database file is copied, not its containing directory.
+Close all synthetic database connections before supplying it; sidecars are rejected
+to avoid a snapshot that silently omits WAL writes. Pi's
 input must contain only invented history, not an agent home or credentials.
 Provenance labels each agent's input path and snapshot hashes. Inputs are copied
 once; symlinks are rejected. The harness does not generate fixtures or freeze the
 app's clock. Only use invented, non-sensitive input.
 
 Launch again with the same arguments to reuse the running instance or restart the
-same prepared copy. Changes to the source app or either fixture directory are **not**
+same prepared copy. Changes to the source app or any fixture input are **not**
 recopied. Use a new session for a new build/input. Do not move session directories
 or run concurrent commands against the same session.
 
-`--pi-history` replaces the former `--sessions` flag. Legacy review sessions retain
-support for status, capture, and cleanup, but cannot be relaunched with this harness;
+`--pi-history` replaces the former `--sessions` flag. Pre-OpenCode review sessions (versions 1 and 2) retain
+support for status, capture, and cleanup, but cannot be relaunched with this harness
+because they lack OpenCode isolation;
 use a new session directory for the new layout. Existing evidence is not migrated.
 
 ## Reviewing inside a VM

@@ -6,7 +6,7 @@ umask 077
 usage() {
     cat <<'HELP'
 Usage:
-  ui-review.sh launch SESSION --app APP [--pi-history SYNTHETIC_PI_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME]
+  ui-review.sh launch SESSION --app APP [--pi-history SYNTHETIC_PI_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME] [--opencode-history SYNTHETIC_OPENCODE_DB]
   ui-review.sh status SESSION
   ui-review.sh capture SESSION NAME
   ui-review.sh cleanup SESSION
@@ -33,6 +33,7 @@ case "$command" in launch|status|capture|cleanup) ;; *) fail "Unknown command: $
 app=
 pi_fixtures=
 codex_fixtures=
+opencode_fixtures=
 name=
 if [[ $command == launch ]]; then
     while [[ $# -gt 0 ]]; do
@@ -41,6 +42,7 @@ if [[ $command == launch ]]; then
             --app) app=$2 ;;
             --pi-history) pi_fixtures=$2 ;;
             --codex-history) codex_fixtures=$2 ;;
+            --opencode-history) opencode_fixtures=$2 ;;
             *) fail "Unknown option: $1" ;;
         esac
         shift 2
@@ -57,6 +59,11 @@ if [[ $command == launch ]]; then
         codex_fixtures=$(cd "$codex_fixtures" && pwd -P)
         [[ -z $(find "$codex_fixtures" -type l -print -quit) ]] || fail 'Synthetic Codex history must not contain symlinks.'
     fi
+    if [[ -n $opencode_fixtures ]]; then
+        [[ -f $opencode_fixtures && ! -L $opencode_fixtures ]] || fail 'Supply a regular synthetic OpenCode database file.'
+        opencode_fixtures="$(cd "$(dirname "$opencode_fixtures")" && pwd -P)/$(basename "$opencode_fixtures")"
+        [[ ! -e $opencode_fixtures-wal && ! -e $opencode_fixtures-shm ]] || fail 'Close and checkpoint the synthetic OpenCode database before copying it.'
+    fi
 elif [[ $command == capture ]]; then
     [[ $# == 1 && $1 =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || fail 'Capture needs a simple name (letters, digits, underscores, hyphens).'
     name=$1
@@ -71,10 +78,11 @@ if [[ ! -e $session && $command == launch ]]; then
     session=$(cd "$session" && pwd -P)
     state="$session/session.plist"
     /usr/bin/plutil -create xml1 "$state"
-    put version 2
+    put version 3
     put source "$app"
     put pi_fixtures "$pi_fixtures"
     put codex_fixtures "$codex_fixtures"
+    put opencode_fixtures "$opencode_fixtures"
     # The unique executable name also makes direct System Events interaction easy.
     token=$(/usr/bin/uuidgen | tr -d '-' | cut -c1-12)
     process="UsageReview$token"
@@ -95,7 +103,7 @@ if [[ ! -e $session && $command == launch ]]; then
     /usr/bin/plutil -replace CFBundleIdentifier -string "local.agentusage.review.$token" "$plist"
     /usr/bin/codesign --force --sign - --timestamp=none "$bundle"
     /usr/bin/codesign --verify --strict "$bundle"
-    mkdir -p "$session/pi/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/evidence"
+    mkdir -p "$session/pi/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/xdg-data/opencode" "$session/evidence"
     if [[ -n $pi_fixtures ]]; then
         /usr/bin/ditto "$pi_fixtures" "$session/pi/sessions"
     fi
@@ -105,6 +113,9 @@ if [[ ! -e $session && $command == launch ]]; then
                 /usr/bin/ditto "$codex_fixtures/$history_dir" "$session/codex/$history_dir"
             fi
         done
+    fi
+    if [[ -n $opencode_fixtures ]]; then
+        /usr/bin/ditto "$opencode_fixtures" "$session/xdg-data/opencode/opencode.db"
     fi
     {
         printf 'Source app: %s\nSource executable SHA-256: %s\n' "$app" "$source_hash"
@@ -117,6 +128,8 @@ if [[ ! -e $session && $command == launch ]]; then
         (cd "$session/pi/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
         printf 'Synthetic Codex history source: %s\nSnapshot hashes (relative to codex):\n' "${codex_fixtures:-empty}"
         (cd "$session/codex" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
+        printf 'Synthetic OpenCode history source: %s\nSnapshot hashes (relative to xdg-data/opencode):\n' "${opencode_fixtures:-empty}"
+        (cd "$session/xdg-data/opencode" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
     } > "$session/provenance.txt"
     put ready yes
 else
@@ -126,7 +139,7 @@ else
 fi
 [[ -f $state ]] || fail 'Not a ui-review session.'
 version=$(get version)
-[[ $version == 1 || $version == 2 ]] || fail 'Not a ui-review session.'
+[[ $version == 1 || $version == 2 || $version == 3 ]] || fail 'Not a ui-review session.'
 # Partial preparation is never silently reused.
 [[ $(get ready 2>/dev/null || true) == yes ]] || fail 'Incomplete preparation; inspect the session and use a new directory.'
 process=$(get process)
@@ -166,13 +179,16 @@ APPLESCRIPT
 
 case "$command" in
     launch)
-        [[ $version == 2 ]] || fail 'Legacy review session; status, capture and cleanup remain supported. Use a new session directory to launch.'
+        [[ $version == 3 ]] || fail 'Legacy review session; status, capture and cleanup remain supported. Use a new session directory to launch.'
         [[ $(get source) == "$app" ]] || fail 'Source app differs; use a new session directory.'
         [[ $(get pi_fixtures) == "$pi_fixtures" ]] || fail 'Pi session inputs differ; use a new session directory.'
         [[ $(get codex_fixtures) == "$codex_fixtures" ]] || fail 'Codex session inputs differ; use a new session directory.'
+        [[ $(get opencode_fixtures) == "$opencode_fixtures" ]] || fail 'OpenCode session inputs differ; use a new session directory.'
         if ! owned_process; then
             # Launch the real bundle executable to retain an exact PID, not open's PID.
-            CODEX_HOME="$session/codex" \
+            XDG_DATA_HOME="$session/xdg-data" \
+                OPENCODE_DB=opencode.db \
+                CODEX_HOME="$session/codex" \
                 PI_CODING_AGENT_DIR="$session/pi" \
                 PI_CODING_AGENT_SESSION_DIR="$session/pi/sessions" \
                 "$executable" > "$session/app.log" 2>&1 < /dev/null &

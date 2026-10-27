@@ -14,7 +14,7 @@ Allowance refreshes about once a minute, independently of local history. The Cha
 
 ## Local history
 
-Choose **Today / 7 days / 30 days** for combined Pi and Codex token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket changes only the large number, not the period totals in the rows. API cost estimates are outside scope.
+Choose **Today / 7 days / 30 days** for combined Pi, Codex, and OpenCode token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket changes only the large number, not the period totals in the rows. API cost estimates are outside scope.
 
 Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable observations. An unreadable agent with no accepted readings shows Unavailable/Failed, rather than a numeric zero. Warnings belong to the affected agent row; the combined chart shows available contributions. Healthy agents with no recorded activity in the last 30 days stay hidden. An agent remains visible with zero usage for a shorter selected period when it has activity in the 30-day window. The footer shows loading progress during catch-up, otherwise the oldest accepted contribution's update time. An unusable Codex root retains its accepted update time; cached-file fallbacks within a usable root can still carry the latest attempt time.
 
@@ -24,7 +24,7 @@ History indexing starts in the background at app launch. Opening the panel or ch
 
 ### Adapter boundary
 
-Pi and Codex are the live history adapters. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
+Pi, Codex, and OpenCode are the live history adapters. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
 
 Production `HistoryStore.live()` discovers all supported adapters. Tests use `live(adapters:)` with explicit synthetic sources; it never adds adapters or falls through to personal history discovery. Snapshots carry explicit source identities, never an implied Pi source.
 
@@ -48,9 +48,24 @@ The JSONL contract is verified against [OpenAI Codex 0.163.0](https://github.com
 
 Totals are input plus output tokens. Cached input/cache-write categories and reasoning output are subsets, counted once. Response IDs are scoped to their spending thread. Active/archive copies deduplicate together; conflicting copies are excluded and marked partial. Matching copies with different envelope timestamps use the earliest available timestamp. Child and background threads contribute to the Codex row. Compaction/replay snapshots are not new spending.
 
+### OpenCode discovery and accounting
+
+OpenCode reads the stable-channel database at `~/.local/share/opencode/opencode.db`. `XDG_DATA_HOME` changes the data base directory; `OPENCODE_DB` selects an absolute database path or a path relative to the OpenCode data directory. Overrides support `~/` paths. `OPENCODE_DB=:memory:` has no persisted history. Configuration-directory overrides do not relocate history. Finder-launched apps only see overrides in their own environment. Development-channel databases require an explicit `OPENCODE_DB`; the adapter does not scan arbitrary databases.
+
+The SQLite contract is verified against [OpenCode 2.0.0](https://github.com/anomalyco/opencode/tree/v2.0.0) and [2.2.0](https://github.com/anomalyco/opencode/tree/v2.2.0). Support starts at 2.0, with compatible 2.x schemas accepted without requiring an installed CLI. Missing required tables/columns are unsupported, not zero usage. Legacy 1.x JSON storage and legacy tables retained in a v2 database are not read; unknown future schemas are not promised compatible.
+
+- [`session_message`](https://github.com/anomalyco/opencode/blob/v2.2.0/packages/core/src/session/sql.ts) assistant rows supply response usage, including subagents and failed responses when usage was recorded. Session aggregate counters, paired step events, and compaction/replay message copies are not additional spending.
+- [`session.usage.recorded`](https://github.com/anomalyco/opencode/blob/v2.2.0/packages/schema/src/session-event.ts) events supply separately persisted title-generation and compaction spending. Both original unversioned and version-1 event names are supported. Unknown versions or usage sources mark coverage partial; missing usage events cannot be reconstructed from aggregate session counters.
+- [`SessionUsage`](https://github.com/anomalyco/opencode/blob/v2.2.0/packages/core/src/session/usage.ts) stores non-cached input, visible output, reasoning, cache-read input, and cache-write input separately. All five categories are validated and summed once; these are not overlapping subsets in OpenCode's v2 format.
+- [`Fork projection`](https://github.com/anomalyco/opencode/blob/v2.2.0/packages/core/src/session/projector.ts) copies settled messages with `msg_<fork-event-id>_<sequence>` identities. These copies stay excluded even if their ancestor is deleted or the fork is exported/reimported without its fork metadata. Fork metadata also excludes inherited activity preceding the fork's creation. Newly generated fork responses still count. Message/event primary keys provide stable operation identities. Deleted sessions no longer contribute; surviving copies do not replace deleted originals.
+
+Each refresh opens the database read-only and queries only identities, timestamps, and usage fields in one SQLite read transaction. WAL commits are visible without a running OpenCode server; uncommitted writes are not. No migrations, history writes, credential reads, or network requests are performed. SQLite may use its normal WAL shared-memory locking. No copied database or persistent index is created. Busy, unreadable, corrupt, and invalid-only reads retain the last accepted contribution through the shared history service; confirmed absence clears it.
+
+Reads have a 250,000-record ceiling, a 20-million SQLite instruction budget, a 16 MiB SQLite value limit, and a 250 ms busy timeout. Record limits return usable partial readings where available; instruction-budget exhaustion retains older readings rather than publishing an inconsistent snapshot. These are permanent per-refresh limits, not continuation batches. Refreshes requery the retained window rather than using the JSONL file index. Symlink databases and non-regular files are rejected.
+
 ### Indexing and safety limits
 
-The shared in-memory index returns unresolved candidates from each root; adapters resolve duplicates/conflicts and apply the final chart cutoff. Parser, retention and discovery exclusions are configured per adapter; filesystem safety and budgets stay shared. The index stores only operation identity, timestamps, and token totals, not transcripts, credentials, or model/provider attribution. Token categories are validated while parsing but are not retained separately. Neither adapter uploads or writes history.
+For Pi and Codex, the shared in-memory index returns unresolved candidates from each root; adapters resolve duplicates/conflicts and apply the final chart cutoff. Parser, retention and discovery exclusions are configured per adapter; filesystem safety and budgets stay shared. The index stores only operation identity, timestamps, and token totals, not transcripts, credentials, or model/provider attribution. Token categories are validated while parsing but are not retained separately. No adapter uploads or writes history.
 
 Pi files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
 
@@ -64,7 +79,7 @@ Unchanged eligible file contents are reused; changed files are reparsed in full,
 
 Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never real agent credentials or personal histories.
 
-Shared `HistoryFixtures` supplies the fixed clock/calendar, and `HistoryFixtureRoot` supplies temporary files. `PiHistoryFixtures` and `CodexHistoryFixtures` generate only their respective formats.
+Shared `HistoryFixtures` supplies the fixed clock/calendar, and `HistoryFixtureRoot` supplies temporary files. `PiHistoryFixtures`, `CodexHistoryFixtures`, and `OpenCodeHistoryFixture` generate only their respective formats. OpenCode tests use temporary SQLite databases, including committed/uncommitted WAL data, never personal history.
 
 ### Synthetic native screenshots
 
