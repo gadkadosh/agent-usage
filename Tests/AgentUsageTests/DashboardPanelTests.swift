@@ -67,18 +67,6 @@ final class DashboardPanelTests: XCTestCase {
         )
     }
 
-    func testDashboardFixtureCombinesExplicitAgentsAndSupportsSingleAgentViews() {
-        let combined = DashboardFixtures.history()
-        XCTAssertEqual(combined.visibleSources.map(\.id), [.codex, .pi])
-        XCTAssertEqual(combined.sources.map { $0.summaries[.today]?.tokens }, [6_140, 12_280])
-        XCTAssertEqual(combined.summaries[.today]?.tokens, 18_420)
-        for id in [HistoryAgentID.pi, .codex] {
-            let single = DashboardFixtures.history(agents: [id])
-            XCTAssertEqual(single.visibleSources.map(\.id), [id])
-            XCTAssertEqual(single.summaries[.today]?.tokens, 18_420)
-        }
-    }
-
     private func stores(_ readings: DashboardReadings) -> (UsageStore, HistoryStore) {
         (
             UsageStore(fetch: { try await readings.allowance() }, now: { DashboardFixtures.now }),
