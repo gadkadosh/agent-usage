@@ -171,6 +171,99 @@ final class OpenCodeHistorySourceTests: XCTestCase {
         XCTAssertEqual(conflicting.coverage.issues, [.conflictingOperation])
     }
 
+    func testMatchingResponseCopiesAcrossCutoffKeepTheirEarliestTimestamp() async throws {
+        for oldFirst in [true, false] {
+            let fixture = try F()
+            try fixture.message()
+            let dates = [request.since.addingTimeInterval(-1), request.now]
+            for index in oldFirst ? [0, 1] : [1, 0] {
+                try fixture.event(
+                    "evt_\(index)",
+                    type: "session.step.ended.1",
+                    at: dates[index],
+                    message: "msg_response"
+                )
+            }
+            let result = try await OpenCodeHistorySource(database: fixture.database).read(request)
+            XCTAssertTrue(result.observations.isEmpty)
+            XCTAssertEqual(
+                result.coverage,
+                HistoryCoverage(state: .ready, hasReadings: true, issues: [])
+            )
+        }
+    }
+
+    func testConflictingResponseCopiesOutsideWindowStillDisqualifyCurrentSpending() async throws {
+        for date in [request.since.addingTimeInterval(-1), request.now.addingTimeInterval(1)] {
+            for outsideFirst in [true, false] {
+                let fixture = try F()
+                try fixture.message()
+                let records = [(date, F.tokens(input: 500)), (request.now, F.usage)]
+                for index in outsideFirst ? [0, 1] : [1, 0] {
+                    try fixture.event(
+                        "evt_\(index)",
+                        type: "session.step.ended.1",
+                        at: records[index].0,
+                        usage: records[index].1,
+                        message: "msg_response"
+                    )
+                }
+                let result = try await OpenCodeHistorySource(database: fixture.database).read(
+                    request
+                )
+                XCTAssertTrue(result.observations.isEmpty)
+                XCTAssertEqual(
+                    result.coverage,
+                    HistoryCoverage(
+                        state: .partial,
+                        hasReadings: true,
+                        issues: [.conflictingOperation]
+                    )
+                )
+            }
+        }
+    }
+
+    func testOutOfWindowAccountingDoesNotEstablishReadingsOrOverflowTheWindow() async throws {
+        let fixture = try F()
+        try fixture.event(
+            "evt_old",
+            type: "session.step.ended.1",
+            at: request.since.addingTimeInterval(-1),
+            usage: F.tokens(input: Int64.max - 100),
+            message: "msg_old"
+        )
+        try fixture.event(
+            "evt_future",
+            type: "session.step.ended.1",
+            at: request.now.addingTimeInterval(1),
+            usage: F.tokens(input: Int64.max - 100),
+            message: "msg_future"
+        )
+        try fixture.event(
+            "evt_current",
+            type: "session.step.ended.1",
+            usage: "{}",
+            message: "msg_current"
+        )
+        let source = OpenCodeHistorySource(database: fixture.database)
+        let invalid = try await source.read(request)
+        XCTAssertTrue(invalid.observations.isEmpty)
+        XCTAssertEqual(
+            invalid.coverage,
+            HistoryCoverage(state: .partial, hasReadings: false, issues: [.invalidUsage])
+        )
+        try fixture.execute(
+            "UPDATE event SET data = '{\"assistantMessageID\":\"msg_current\",\"tokens\":\(F.usage)}' WHERE id = 'evt_current';"
+        )
+        let valid = try await source.read(request)
+        XCTAssertEqual(total(valid), 200)
+        XCTAssertEqual(
+            valid.coverage,
+            HistoryCoverage(state: .ready, hasReadings: true, issues: [])
+        )
+    }
+
     func testUnknownOrInvalidResponseEventsDoNotFallThroughToTheirProjection() async throws {
         for (type, usage, issue) in [
             ("session.step.ended.2", F.usage, HistoryIssue.unsupportedVersion),

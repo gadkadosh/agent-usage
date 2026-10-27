@@ -136,7 +136,6 @@ private final class OpenCodeDatabase {
         var issues: Set<HistoryIssue> = []
         var records = 0
         var readable = false
-        var total: Int64 = 0
         let since = request.since.timeIntervalSince1970 * 1_000
         let now = request.now.timeIntervalSince1970 * 1_000
 
@@ -155,7 +154,10 @@ private final class OpenCodeDatabase {
                 return
             }
             let milliseconds = Double(sqlite3_column_int64(row, 1))
-            guard milliseconds >= since, milliseconds <= now else { return }
+            let inWindow = milliseconds >= since && milliseconds <= now
+            // Reconcile all terminal responses before retention: an older matching record
+            // or a conflicting record outside the window can disqualify a current copy.
+            guard kind?.isResponse == true || inWindow else { return }
             guard let id = text(row, 0), !id.isEmpty else {
                 issues.insert(.malformedRecord)
                 return
@@ -187,7 +189,11 @@ private final class OpenCodeDatabase {
             }
             // Failed calls and unfinished/imported projections may have no recorded usage.
             if kind != .ended, sqlite3_column_type(row, 4) == SQLITE_NULL {
-                if kind != .usage { readable = true } else { issues.insert(.invalidUsage) }
+                if kind != .usage {
+                    readable = readable || inWindow
+                } else {
+                    issues.insert(.invalidUsage)
+                }
                 return
             }
             guard text(row, 4) == "object", let encoded = text(row, 3),
@@ -197,12 +203,12 @@ private final class OpenCodeDatabase {
                 issues.insert(.invalidUsage)
                 return
             }
+            readable = readable || inWindow
             let operationID = kind == .usage ? "event:\(id)" : "message:\(responseID ?? id)"
             guard !conflicts.contains(operationID) else { return }
             let timestamp = Date(timeIntervalSince1970: milliseconds / 1_000)
             if let prior = observations[operationID] {
                 guard prior.tokens == tokens else {
-                    total -= prior.tokens
                     observations.removeValue(forKey: operationID)
                     conflicts.insert(operationID)
                     issues.insert(.conflictingOperation)
@@ -211,12 +217,6 @@ private final class OpenCodeDatabase {
                 observations[operationID]?.timestamp = min(prior.timestamp, timestamp)
                 return
             }
-            guard !total.addingReportingOverflow(tokens).overflow else {
-                issues.insert(.invalidUsage)
-                return
-            }
-            readable = true
-            total += tokens
             observations[operationID] = UsageObservation(
                 operationID: operationID,
                 timestamp: timestamp,
@@ -269,11 +269,25 @@ private final class OpenCodeDatabase {
         }
         if records > maxRecords { issues.insert(.scanLimit) }
         try execute("COMMIT")
+        // Overflow checks apply to the retained total, not all historical accounting.
+        var total: Int64 = 0
+        let retained = observations.values.filter { observation in
+            guard observation.timestamp >= request.since, observation.timestamp <= request.now,
+                observation.tokens > 0
+            else { return false }
+            let next = total.addingReportingOverflow(observation.tokens)
+            guard !next.overflow else {
+                issues.insert(.invalidUsage)
+                return false
+            }
+            total = next.partialValue
+            return true
+        }
         // A genuinely empty, readable database measures zero. Invalid-only or permanently
         // bounded reads cannot erase an earlier accepted contribution with a guessed zero.
         let hasReadings = readable || issues.isEmpty
         return HistoryAdapterResult(
-            observations: observations.values.filter { $0.tokens > 0 },
+            observations: retained,
             coverage: HistoryCoverage(
                 state: issues.isEmpty ? .ready : .partial,
                 hasReadings: hasReadings,
