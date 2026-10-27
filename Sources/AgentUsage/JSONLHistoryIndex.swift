@@ -12,9 +12,25 @@ actor JSONLHistoryIndex {
         var operations = 250_000
     }
 
+    struct Configuration: Sendable {
+        enum Retention: Sendable { case window, all }
+        let makeParser: @Sendable (Date, Int) -> any HistoryLineParser
+        let retention: Retention
+        var excludedDirectories: Set<String> = []
+        var ignoredFileSuffixes: Set<String> = []
+    }
+
+    /// Unresolved candidates from one root, not an adapter's normalized replacement.
+    struct Result: Sendable {
+        let candidates: [UsageObservation]
+        let coverage: HistoryCoverage
+        let fetchedAt: Date
+        var hasMore = false
+    }
+
     private let root: URL
     private let limits: Limits
-    private let format: HistoryFileFormat
+    private let configuration: Configuration
     // A narrow injected IO boundary for deterministic concurrent-write and read-failure tests.
     private let didReadFile: @Sendable () throws -> Void
     private var cache: [URL: IndexedFile] = [:]
@@ -26,16 +42,16 @@ actor JSONLHistoryIndex {
     init(
         root: URL,
         limits: Limits = Limits(),
-        format: HistoryFileFormat,
+        configuration: Configuration,
         didReadFile: @escaping @Sendable () throws -> Void = {}
     ) {
         self.root = root.resolvingSymlinksInPath()
         self.limits = limits
-        self.format = format
+        self.configuration = configuration
         self.didReadFile = didReadFile
     }
 
-    func read(_ request: HistoryRequest) throws -> HistoryAdapterResult {
+    func read(_ request: HistoryRequest) throws -> Result {
         let now = request.now
         let manager = FileManager.default
         do {
@@ -110,12 +126,10 @@ actor JSONLHistoryIndex {
                 continue
             }
             if values.isDirectory == true {
-                // Subagent output/transcript copies are artifacts, not canonical sessions.
-                if url.lastPathComponent == "subagent-artifacts" {
+                if configuration.excludedDirectories.contains(url.lastPathComponent) {
                     enumerator.skipDescendants()
                     continue
                 }
-                // Genuine child sessions live below parent-session / run-id / run-N.
                 if enumerator.level > limits.directoryDepth {
                     enumerator.skipDescendants()
                     issues.insert(.scanLimit)
@@ -126,8 +140,9 @@ actor JSONLHistoryIndex {
                 issues.insert(.unsupportedRecord)
                 continue
             }
-            // Lease sidecars are metadata, not session histories.
-            if url.lastPathComponent.hasSuffix(".jsonl.lease") { continue }
+            if configuration.ignoredFileSuffixes.contains(where: url.lastPathComponent.hasSuffix) {
+                continue
+            }
             guard url.pathExtension == "jsonl" else {
                 issues.insert(.unsupportedRecord)
                 continue
@@ -143,10 +158,9 @@ actor JSONLHistoryIndex {
                 let handle = try openFile(relative, rootDescriptor: rootDescriptor)
                 defer { try? handle.close() }
                 let before = try signature(handle)
-                // Normal pi writes update mtime. Ctime also catches imports/edits that preserve it.
-                // Keep checking metadata on every refresh so resumed sessions become eligible again.
-                // Codex needs old identities to reject rewritten recent copies.
-                if format == .pi, before.predates(since) {
+                // Ctime catches imports/edits that preserve mtime. Check both on every refresh
+                // so resumed sessions become eligible again under window-limited retention.
+                if configuration.retention == .window, before.predates(since) {
                     filesSkipped += 1
                     continue
                 }
@@ -199,7 +213,7 @@ actor JSONLHistoryIndex {
             if file.supported { filesRead += 1 }
             issues.formUnion(file.issues)
             let retained =
-                format == .pi
+                configuration.retention == .window
                 ? file.observations.filter { $0.timestamp >= since } : file.observations
             let remaining = max(0, limits.operations - observations.count)
             observations.append(contentsOf: retained.prefix(remaining))
@@ -223,10 +237,6 @@ actor JSONLHistoryIndex {
             issues.insert(.scanLimit)
             hasMoreFiles = false
         }
-        let canonical =
-            format == .pi
-            ? canonicalHistoryObservations(observations, format: format, issues: &issues)
-            : observations  // Codex resolves conflicts across active AND archived roots together.
         let state: HistoryCoverage.State
         if filesRead > 0 || filesSkipped > 0 {
             state = issues.isEmpty ? .ready : .partial
@@ -236,7 +246,7 @@ actor JSONLHistoryIndex {
             state = issues.isEmpty ? .missing : .unavailable
         }
         var result = snapshot(
-            canonical,
+            observations,
             filesRead: filesRead,
             filesSkipped: filesSkipped,
             issues: issues,
@@ -246,8 +256,8 @@ actor JSONLHistoryIndex {
         // Continue byte-budget deferrals only while the index advances. Failed reads and
         // permanent safety limits must not cause an endless background retry loop.
         result.hasMore = hasMoreFiles && madeProgress
-        // Commit only a completed refresh. Deleted files disappear. Codex keeps bounded
-        // older metadata for cross-root canonicalization; Pi retains 30 calendar days.
+        // Commit only a completed refresh. Deleted files disappear; retained candidates
+        // obey the adapter's retention policy and the shared safety limits.
         cache = indexed
         cacheStart = since
         return result
@@ -260,11 +270,11 @@ actor JSONLHistoryIndex {
         issues: Set<HistoryIssue>,
         state: HistoryCoverage.State,
         now: Date
-    ) -> HistoryAdapterResult {
+    ) -> Result {
         self.filesRead = filesRead
         self.filesSkipped = filesSkipped
-        return HistoryAdapterResult(
-            observations: observations,
+        return Result(
+            candidates: observations,
             coverage: HistoryCoverage(
                 state: state,
                 hasReadings: filesRead > 0 || filesSkipped > 0,
@@ -332,11 +342,7 @@ actor JSONLHistoryIndex {
     ) throws -> (observations: [UsageObservation], issues: Set<HistoryIssue>, isSupported: Bool) {
         guard size <= min(limits.fileBytes, limits.refreshBytes) else { throw FileLimitError() }
         guard size <= remainingBytes else { throw BatchLimitError() }
-        var parser: any HistoryLineParser
-        switch format {
-        case .pi: parser = PiHistoryParser(since: since, maxOperations: maxOperations)
-        case .codex: parser = CodexHistoryParser(maxOperations: maxOperations)
-        }
+        var parser = configuration.makeParser(since, maxOperations)
         var line = Data()
         var bytesRead = 0
         var skippingLine = false

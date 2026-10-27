@@ -35,12 +35,28 @@ final class CodexHistoryParserTests: XCTestCase {
         XCTAssertEqual(parser.observations.map(\.tokens), [60])
     }
 
-    func testIncompleteResponseAfterDurableResponseInSameTurnStillCounts() {
+    func testIncompleteResponsesCountCumulativeAdvancesWhileLastUsageStaysUnchanged() {
+        // SpendingOnly updates cumulative usage but preserves the stored last_token_usage.
         let parser = F.parse([
             F.header(), F.start(), F.durable(), F.counter(),
-            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            F.counter(150, 30, lastInput: 100, lastOutput: 20),
+            F.counter(200, 40, lastInput: 100, lastOutput: 20),
+            F.counter(200, 40, lastInput: 100, lastOutput: 20),
         ])
-        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60, 60])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testZeroUsageResponseDoesNotSuppressLaterIncompleteSpending() {
+        let parser = F.parse([
+            F.header(), F.start(), F.durable(), F.counter(),
+            F.durable("zero", input: 0, output: 0),
+            F.counter(100, 20, lastInput: 0, lastOutput: 0),
+            F.counter(150, 30, lastInput: 0, lastOutput: 0),
+            F.durable("next", input: 25, output: 5),
+            F.counter(175, 35, lastInput: 25, lastOutput: 5),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 0, 60, 30])
         XCTAssertEqual(parser.issues, [])
     }
 
@@ -93,6 +109,25 @@ final class CodexHistoryParserTests: XCTestCase {
         XCTAssertTrue(parser.issues.contains(.invalidUsage))
     }
 
+    func testInvalidCountersPreserveBaselineForReplaysAndLaterSpending() {
+        let invalidReports = [
+            F.counter(-1, 0),
+            F.line("event_msg", ["type": "token_count", "info": [:]]),
+        ]
+        for invalid in invalidReports {
+            for (next, expected): (String, [Int64]) in [
+                (F.counter(), [120]),
+                (F.counter(150, 30, lastInput: 100, lastOutput: 20), [120, 60]),
+            ] {
+                let parser = F.parse([
+                    F.header(), F.start(), F.counter(), invalid, next,
+                ])
+                XCTAssertEqual(parser.observations.map(\.tokens), expected)
+                XCTAssertEqual(parser.issues, [.invalidUsage])
+            }
+        }
+    }
+
     func testInvalidUsageUnsupportedHeaderLimitsAndPartialLinesAreReported() {
         XCTAssertFalse(F.parse([F.start(), F.counter()]).isSupported)
         let invalid = F.line(
@@ -121,6 +156,42 @@ final class CodexHistoryParserTests: XCTestCase {
         ])
         XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
         XCTAssertEqual(parser.issues, [])
+    }
+
+    func testKnownNonAccountingRecordsDoNotAffectUsageOrCounterPairing() {
+        let records: [(String, [String: Any])] = [
+            (
+                "retained_context",
+                [
+                    "type": "verified_answer", "turn_id": "turn-a", "call_id": "call-a",
+                    "questions": [["question": "Continue?", "answer": "Yes"]],
+                ]
+            ),
+            ("security_risk_score", ["scores": ["risk": 0.1], "call_id": "call-a"]),
+            (
+                "inter_agent_communication",
+                [
+                    "author": "root", "recipient": "root/reviewer", "content": "Review complete",
+                    "trigger_turn": false,
+                ]
+            ),
+            ("inter_agent_communication_metadata", ["trigger_turn": false]),
+            (
+                "realtime_item",
+                [
+                    "id": "item-a", "realtime_session_id": "realtime-a",
+                    "type": "transcript_segment", "role": "assistant", "text": "Hello",
+                ]
+            ),
+        ]
+        for (type, payload) in records {
+            let parser = F.parse([
+                F.header(), F.start(), F.durable(), F.line(type, payload), F.counter(),
+                F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            ])
+            XCTAssertEqual(parser.observations.map(\.tokens), [120, 60], type)
+            XCTAssertEqual(parser.issues, [], type)
+        }
     }
 
     func testLocalSettingsDoNotEndTheActiveTurnOrBreakCounterPairing() {

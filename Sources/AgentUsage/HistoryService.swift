@@ -38,7 +38,8 @@ actor HistoryService {
             }
             for await outcome in group {
                 let adapter = outcome.adapter
-                if readings[adapter.id, default: SourceReading()].accept(outcome.result) {
+                readings[adapter.id, default: SourceReading()].accept(outcome.result)
+                if outcome.result?.hasMore == true {
                     // Pace only this source's catch-up; other sources keep progressing.
                     group.addTask {
                         try? await Task.sleep(for: .milliseconds(100))
@@ -125,20 +126,18 @@ actor HistoryService {
         var latest: HistoryCoverage?
         var failed = false
 
-        /// Returns true only when an accepted result requests another batch.
-        mutating func accept(_ result: HistoryAdapterResult?) -> Bool {
+        mutating func accept(_ result: HistoryAdapterResult?) {
             latest = result?.coverage
             guard let result else {
                 failed = true
-                return false
+                return
             }
             guard result.coverage.replacesReadings else {
                 failed = accepted?.coverage.hasReadings == true
-                return false
+                return
             }
             accepted = result
             failed = false
-            return result.hasMore
         }
 
         var coverage: HistoryCoverage? {

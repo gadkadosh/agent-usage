@@ -9,7 +9,7 @@ import Foundation
 /// Subsets: https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/docs/message-types.md
 /// Canonical sources: message.usage, usage.usage, compaction.usage, branch_summary.usage.
 /// Never decode transcript fields. Tool nestedCalls/details are not additional usage.
-/// Returns candidates: the index must deduplicate IDs and exclude conflicting copies.
+/// Returns candidates: the adapter must deduplicate IDs and exclude conflicting copies.
 struct PiHistoryParser: HistoryLineParser {
     private(set) var observations: [UsageObservation] = []
     private(set) var issues: Set<HistoryIssue> = []

@@ -112,20 +112,15 @@ final class CodexHistorySourceTests: XCTestCase {
 
     func testCounterResetsKeepDistinctSpendingAndRewrittenCopiesStillDeduplicate() async throws {
         for reset in [
-            F.counter(0, 0),
-            F.line(
-                "event_msg",
-                [
-                    "type": "token_count", "info": ["total_token_usage": F.tokens(-1, 0)],
-                ]
-            ),
+            [F.counter(0, 0)],
+            [F.counter(-1, 0), F.counter(0, 0)],
         ] {
             let fixture = try HistoryFixtureRoot()
             defer { fixture.remove() }
-            let lines = [
-                F.header(), F.start(), F.counter(), reset,
-                F.counter().replacingOccurrences(of: F.time, with: "2026-10-02T11:00:00.000Z"),
-            ]
+            let lines =
+                [F.header(), F.start(), F.counter()] + reset + [
+                    F.counter().replacingOccurrences(of: F.time, with: "2026-10-02T11:00:00.000Z")
+                ]
             try fixture.write("sessions/rollout.jsonl", lines: lines)
             let source = CodexHistorySource(home: fixture.root)
             let original = try await source.read(request)
@@ -307,6 +302,45 @@ final class CodexHistorySourceTests: XCTestCase {
         XCTAssertFalse(b.hasMore)
         XCTAssertEqual(b.observations.count, 2)
         XCTAssertEqual(b.observations.reduce(0) { $0 + $1.tokens }, 240)
+    }
+
+    func testUnsupportedActiveRootDoesNotDrainBeforeReadingArchivedHistory() async throws {
+        let fixture = try HistoryFixtureRoot()
+        defer { fixture.remove() }
+        let unsupported = F.start() + String(repeating: " ", count: 999 - F.start().utf8.count)
+        for name in ["a", "b", "c"] {
+            try fixture.write("sessions/\(name).jsonl", lines: [unsupported])
+        }
+        try fixture.write(
+            "archived_sessions/healthy.jsonl",
+            lines: [F.header(), F.durable()]
+        )
+        let source = CodexHistorySource(home: fixture.root, limits: .init(refreshBytes: 1_000))
+        for batch in 1...3 {
+            let result = try await source.read(request)
+            XCTAssertEqual(result.observations.map(\.tokens), [120])
+            XCTAssertEqual(result.coverage.state, .partial)
+            XCTAssertEqual(result.coverage.issues, [.unsupportedVersion])
+            XCTAssertEqual(result.hasMore, batch < 3)
+        }
+    }
+
+    func testPiDiscoveryExclusionsAreNotAppliedToCodex() async throws {
+        let fixture = try HistoryFixtureRoot()
+        defer { fixture.remove() }
+        try fixture.write(
+            "sessions/subagent-artifacts/rollout.jsonl",
+            lines: [F.header(), F.durable()]
+        )
+        let source = CodexHistorySource(home: fixture.root)
+        let initial = try await source.read(request)
+        XCTAssertEqual(initial.observations.map(\.tokens), [120])
+        XCTAssertEqual(initial.coverage.state, .ready)
+        try fixture.write("sessions/orphan.jsonl.lease", lines: ["unknown sidecar"])
+        let withUnknownFile = try await source.read(request)
+        XCTAssertEqual(withUnknownFile.observations.map(\.tokens), [120])
+        XCTAssertEqual(withUnknownFile.coverage.state, .partial)
+        XCTAssertEqual(withUnknownFile.coverage.issues, [.unsupportedRecord])
     }
 
     func testCatchUpReadsDeferredFilesAfterAnUnusableBatch() async throws {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pi discovery and normalization use the shared bounded JSONL index.
+/// Pi discovery uses the shared bounded JSONL index; normalization belongs to this adapter.
 actor PiHistorySource: HistoryAdapter {
     nonisolated let id = HistoryAgentID.pi
     typealias Limits = JSONLHistoryIndex.Limits
@@ -11,7 +11,17 @@ actor PiHistorySource: HistoryAdapter {
         limits: Limits = Limits(),
         didReadFile: @escaping @Sendable () throws -> Void = {}
     ) {
-        index = JSONLHistoryIndex(root: root, limits: limits, format: .pi, didReadFile: didReadFile)
+        index = JSONLHistoryIndex(
+            root: root,
+            limits: limits,
+            configuration: .init(
+                makeParser: { PiHistoryParser(since: $0, maxOperations: $1) },
+                retention: .window,
+                excludedDirectories: ["subagent-artifacts"],
+                ignoredFileSuffixes: [".jsonl.lease"]
+            ),
+            didReadFile: didReadFile
+        )
     }
 
     var filesParsed: Int { get async { await index.filesParsed } }
@@ -36,6 +46,23 @@ actor PiHistorySource: HistoryAdapter {
     }
 
     func read(_ request: HistoryRequest) async throws -> HistoryAdapterResult {
-        try await index.read(request)
+        let result = try await index.read(request)
+        var issues = result.coverage.issues
+        let observations = canonicalHistoryObservations(
+            result.candidates,
+            format: .pi,
+            issues: &issues
+        ).filter { $0.timestamp >= request.since }
+        return HistoryAdapterResult(
+            observations: observations,
+            coverage: HistoryCoverage(
+                state: result.coverage.state == .ready && !issues.isEmpty
+                    ? .partial : result.coverage.state,
+                hasReadings: result.coverage.hasReadings,
+                issues: issues
+            ),
+            fetchedAt: result.fetchedAt,
+            hasMore: result.hasMore
+        )
     }
 }

@@ -78,7 +78,8 @@ struct CodexHistoryParser: HistoryLineParser {
                 issues.insert(.scanLimit)
                 return
             }
-            if seenResponses.insert(response).inserted { pendingDurableTurn = turn }
+            // A zero-usage response has no positive counter advance to suppress.
+            if seenResponses.insert(response).inserted, total > 0 { pendingDurableTurn = turn }
             observations.append(
                 observation(
                     total: total,
@@ -109,8 +110,10 @@ struct CodexHistoryParser: HistoryLineParser {
             // Snapshots may contain latest_token_usage_record; those are replay state,
             // not new spending. The cumulative fallback may restart after compaction.
             break
-        // World-state snapshots/patches resume environment diffing, not token accounting.
-        case "response_item", "world_state": break
+        // Known conversation, review and replay metadata is not additional spending.
+        case "response_item", "world_state", "retained_context", "security_risk_score",
+            "inter_agent_communication", "inter_agent_communication_metadata", "realtime_item":
+            break
         default: issues.insert(.unsupportedRecord)
         }
     }
@@ -118,9 +121,8 @@ struct CodexHistoryParser: HistoryLineParser {
     private mutating func consumeCounter(_ info: Info?, timestamp: Date?) {
         guard let info else { return }  // Rate-limit-only events carry no usage.
         guard let cumulative = info.totalTokenUsage, cumulative.total != nil else {
+            // Invalid reports do not establish a reset or erase a validated baseline.
             issues.insert(.invalidUsage)
-            if previous != nil { counterSegment += 1 }
-            previous = nil
             return
         }
         let prior = previous
@@ -145,27 +147,34 @@ struct CodexHistoryParser: HistoryLineParser {
             pendingDurableTurn = nil
             return
         }
-        guard let usage = info.lastTokenUsage, let total = usage.total, let timestamp else {
+        guard let timestamp else {
             issues.insert(.invalidUsage)
             return
         }
-        // Counters are context estimates in some paths. Only accept a last-operation
-        // report consistent with the observed cumulative advance; never bill a reset.
+        let total: Int64
         if let prior {
-            guard cumulative.input >= prior.input, cumulative.output >= prior.output,
-                cumulative.input - prior.input == usage.input,
-                cumulative.output - prior.output == usage.output
-            else {
+            // SpendingOnly advances cumulative usage without changing last_token_usage.
+            // Input/output deltas capture that spending; context estimates affect total_tokens
+            // only. Never bill a reset, even when last usage still looks valid.
+            guard cumulative.input >= prior.input, cumulative.output >= prior.output else {
                 issues.insert(.invalidUsage)
                 return
             }
+            total = cumulative.input - prior.input + cumulative.output - prior.output
         } else if isFork {
             // A referenced fork can replay parent usage on a rate-limit update.
             // Without copied counters, this establishes a baseline, not new spending.
             if cumulative.input > 0 || cumulative.output > 0 { issues.insert(.unsupportedRecord) }
             return
-        } else if cumulative.input != usage.input || cumulative.output != usage.output {
-            issues.insert(.unsupportedRecord)
+        } else {
+            guard let usage = info.lastTokenUsage, let initialTotal = usage.total else {
+                issues.insert(.invalidUsage)
+                return
+            }
+            if cumulative.input != usage.input || cumulative.output != usage.output {
+                issues.insert(.unsupportedRecord)
+            }
+            total = initialTotal
         }
         guard observations.count < maxOperations else {
             issues.insert(.scanLimit)

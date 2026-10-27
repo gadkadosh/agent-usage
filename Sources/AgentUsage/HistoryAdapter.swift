@@ -32,13 +32,15 @@ struct HistoryAdapterResult: Sendable {
     let observations: [UsageObservation]
     let coverage: HistoryCoverage
     let fetchedAt: Date
+    /// Indexing advanced and deferred work remains, independently of measurement acceptance.
+    /// Failures and permanent limits must not request continuation.
     var hasMore = false
 }
 
 /// Implementations own discovery, IO, indexing, normalization and duplicate/conflict resolution.
 /// Ready and usable partial results replace all accepted observations, including deletions.
 /// Missing clears the contribution. Unsupported/unavailable results (or thrown failures)
-/// retain the previous contribution. Only accepted results may request continuation.
+/// retain the previous contribution. Indexing continuation is independent of acceptance.
 /// No transcript content, credentials or raw IO errors cross this boundary.
 protocol HistoryAdapter: Sendable {
     var id: HistoryAgentID { get }

@@ -3,14 +3,17 @@ import Foundation
 actor CodexHistorySource: HistoryAdapter {
     nonisolated let id = HistoryAgentID.codex
     private let indices: [JSONLHistoryIndex]
-    private var accepted: [Int: HistoryAdapterResult] = [:]
+    private var accepted: [Int: JSONLHistoryIndex.Result] = [:]
 
     init(home: URL, limits: JSONLHistoryIndex.Limits = .init()) {
         indices = ["sessions", "archived_sessions"].map {
             JSONLHistoryIndex(
                 root: home.appendingPathComponent($0, isDirectory: true),
                 limits: limits,
-                format: .codex
+                configuration: .init(
+                    makeParser: { _, limit in CodexHistoryParser(maxOperations: limit) },
+                    retention: .all
+                )
             )
         }
     }
@@ -35,19 +38,14 @@ actor CodexHistorySource: HistoryAdapter {
         var more = false
         for (number, index) in indices.enumerated() {
             do {
-                var result = try await index.read(request)
-                // An unusable batch can still defer readable files. Advance it internally
-                // until it can publish a usable result or has no further progress to make.
-                while !result.coverage.replacesReadings && result.hasMore {
-                    result = try await index.read(request)
-                }
+                let result = try await index.read(request)
+                more = more || result.hasMore
                 coverage.append(result.coverage)
                 issues.formUnion(result.coverage.issues)
                 // Each root has its own last usable reading. An unusable result must not
                 // erase it just because the other root still makes Codex readable.
                 if result.coverage.replacesReadings {
                     accepted[number] = result
-                    more = more || result.hasMore
                 } else if accepted[number]?.coverage.hasReadings == true {
                     issues.insert(.staleFile)
                 }
@@ -62,7 +60,7 @@ actor CodexHistorySource: HistoryAdapter {
         let results = accepted.values
         issues.formUnion(results.flatMap { $0.coverage.issues })
         let observations = canonicalHistoryObservations(
-            results.flatMap(\.observations),
+            results.flatMap(\.candidates),
             format: .codex,
             issues: &issues
         ).filter { $0.timestamp >= request.since }
