@@ -65,11 +65,15 @@ struct HistoryPanel: View {
                 }
                 let sources = snapshot.visibleSources
                 if !sources.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(sources, id: \.id) { source in
                             VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(source.id.symbol).font(.title3).accessibilityHidden(true)
+                                HStack(spacing: 8) {
+                                    Text(source.id.symbol)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 20)
+                                        .accessibilityHidden(true)
                                     Text(source.id.name).fontWeight(.medium)
                                     Spacer()
                                     if source.coverage?.hasReadings == true {
@@ -91,8 +95,18 @@ struct HistoryPanel: View {
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .overlay(alignment: .bottom) {
+                                if source.id != sources.last?.id {
+                                    Rectangle().fill(Color.primary.opacity(0.08))
+                                        .frame(height: 0.5)
+                                        .padding(.horizontal, 12)
+                                }
+                            }
                         }
                     }
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                     .padding(.top, 4)
                 }
                 historyFooter(snapshot)

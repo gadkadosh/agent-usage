@@ -15,7 +15,7 @@ struct DashboardPanel: View {
     /// The same layout can be rendered without activating native-window scans.
     var content: some View {
         DashboardViewport(
-            content: VStack(alignment: .leading, spacing: 18) {
+            content: VStack(alignment: .leading, spacing: 16) {
                 DashboardHeader(
                     isRefreshing: usage.isRefreshing || history.isRefreshing,
                     onRefresh: { Task { await refresh() } },
