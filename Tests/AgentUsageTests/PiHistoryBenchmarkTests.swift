@@ -17,7 +17,7 @@ final class PiHistoryBenchmarkTests: XCTestCase {
             ("transcript-heavy", 40, 256, 32_768),
             ("operation-heavy", 160, 1_024, 2_048),
         ] {
-            let fixture = try PiHistoryFixtureRoot()
+            let fixture = try HistoryFixtureRoot()
             defer { fixture.remove() }
             var bytes = 0
             var firstFile: URL?

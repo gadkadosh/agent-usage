@@ -19,6 +19,8 @@ final class DashboardRenderingTests: XCTestCase {
             ("ready-light-week", .ready, .week, false),
             ("ready-light-month", .ready, .month, false),
             ("ready-dark-week", .ready, .week, true),
+            ("pi-only-light", .ready, .week, false),
+            ("codex-only-light", .ready, .week, false),
             ("partial-light", .partial, .week, false),
             ("missing-light", .missing, .today, false),
             ("stale-light", .ready, .today, false),
@@ -30,7 +32,13 @@ final class DashboardRenderingTests: XCTestCase {
         for (name, state, period, dark) in scenarios {
             let readings = DashboardReadings(
                 failHistoryAfterFirst: name == "stale-light",
-                snapshot: DashboardFixtures.history(state: state, zero: name == "zero-light")
+                snapshot: DashboardFixtures.history(
+                    state: state,
+                    zero: name == "zero-light",
+                    agents: name == "pi-only-light"
+                        ? [.pi]
+                        : name == "codex-only-light" ? [.codex] : [.codex, .pi]
+                )
             )
             let history = HistoryStore(fetch: { try await readings.history() })
             history.period = period

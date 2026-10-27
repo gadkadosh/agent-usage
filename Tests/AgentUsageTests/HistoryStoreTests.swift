@@ -150,7 +150,7 @@ final class HistoryStoreTests: XCTestCase {
     }
 
     func testStartupPublishesIntermediateBatchAndCatchesUpWithoutPanel() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let lines = [PiHistoryFixtures.header(), PiHistoryFixtures.message()]
         let first = try fixture.write("a.jsonl", lines: lines)
@@ -167,8 +167,8 @@ final class HistoryStoreTests: XCTestCase {
         let gate = HistoryGate()
         let store = HistoryStore(fetchUpdates: { update in
             try await service.refresh(
-                now: PiHistoryFixtures.now,
-                calendar: PiHistoryFixtures.calendar
+                now: HistoryFixtures.now,
+                calendar: HistoryFixtures.calendar
             ) { result in
                 await update(result)
                 // Hold after the first publication; the UI has received an intermediate total.
@@ -210,21 +210,25 @@ private func historySnapshot(read: Int = 1, state: HistoryCoverage.State = .read
                 tokens: Int64(read * 100)
             )
         } : []
+    let summaries = historySummaries(observations, now: now, calendar: calendar)
+    let coverage = HistoryCoverage(
+        state: state,
+        hasReadings: readable,
+        issues: state == .partial ? [.unreadableFile] : []
+    )
     return HistorySnapshot(
-        summaries: Dictionary(
-            uniqueKeysWithValues: HistoryPeriod.allCases.map {
-                (
-                    $0,
-                    PeriodSummary.aggregate(observations, period: $0, now: now, calendar: calendar)
-                )
-            }
-        ),
-        coverage: HistoryCoverage(
-            state: state,
-            hasReadings: readable,
-            issues: state == .partial ? [.unreadableFile] : []
-        ),
-        fetchedAt: now
+        summaries: summaries,
+        coverage: coverage,
+        fetchedAt: now,
+        sources: [
+            HistorySourceSnapshot(
+                id: .init(rawValue: "synthetic"),
+                summaries: summaries,
+                coverage: coverage,
+                fetchedAt: now,
+                failed: false
+            )
+        ]
     )
 }
 

@@ -14,9 +14,9 @@ Allowance refreshes about once a minute, independently of local history. The Cha
 
 ## Local history
 
-Choose **Today / 7 days / 30 days** for pi token totals and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Other agents and API cost estimates are not supported yet.
+Choose **Today / 7 days / 30 days** for combined Pi and Codex token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket changes only the large number, not the period totals in the rows. API cost estimates are outside scope.
 
-Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable totals. The history footer shows loading progress during catch-up, otherwise its update time, with a brief warning when totals may be incomplete, stale or double-counted.
+Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable observations. An unreadable agent with no accepted readings shows Unavailable/Failed, rather than a numeric zero. Warnings belong to the affected agent row; the combined chart shows available contributions. Healthy agents with no recorded activity in the last 30 days stay hidden. An agent remains visible with zero usage for a shorter selected period when it has activity in the 30-day window. The footer shows loading progress during catch-up, otherwise the oldest accepted contribution's update time. An unusable Codex root retains its accepted update time; cached-file fallbacks within a usable root can still carry the latest attempt time.
 
 ### Refresh behavior
 
@@ -24,29 +24,47 @@ History indexing starts in the background at app launch. Opening the panel or ch
 
 ### Adapter boundary
 
-Pi is currently the only live history adapter. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
+Pi and Codex are the live history adapters. `HistoryAdapter` accepts an explicit 30-day request window and returns normalized observations, coverage, an observation time, and continuation state. Ready and usable partial results replace that source's accepted set, including corrected or deleted records. A readable empty result establishes zero; confirmed missing history clears the contribution. Unsupported or unavailable results retain the last accepted observations as stale. Continuation batches include earlier accepted observations instead of returning additive deltas. Storage-specific caches, safety budgets, and duplicate/conflict handling stay inside the adapter.
 
-`HistoryService` owns the complete refresh. Each source reads and catches up independently under one fixed clock, calendar and retention cutoff, publishing accepted results as they arrive. Completed or failed adapters wait for the next refresh. The presentation store publishes updates and awaits completion.
+Production `HistoryStore.live()` discovers all supported adapters. Tests use `live(adapters:)` with explicit synthetic sources; it never adds adapters or falls through to personal history discovery. Snapshots carry explicit source identities, never an implied Pi source.
 
-Failed or unsupported reads retain the previous timestamped observations. Reaggregation filters yesterday's activity out of Today after midnight, even if the source stays unavailable. Operation identities are scoped to each source. Coverage and failures use typed source status; Pi's panel chooses its error wording, and file-count diagnostics stay inside its reader. Missing optional sources do not make healthy contributions incomplete.
+`HistoryService` owns the complete refresh and paces continuation batches. Each source reads and catches up independently under one fixed clock, calendar and retention cutoff, publishing readings and status as they arrive. Indexing can advance without a usable measurement; continuation does not require replacing accepted readings. Completed adapters, failures and permanent limits wait for the next refresh. The presentation store publishes updates and awaits completion.
 
-### Discovery and supported formats
+Failed or unsupported reads retain the previous timestamped observations. Reaggregation filters yesterday's activity out of Today after midnight, even if the source stays unavailable. Operation identities are scoped to each source. Coverage and failures use typed source status; the panel chooses agent-specific error wording, and file-count diagnostics stay inside the reader. Missing optional sources do not make healthy contributions incomplete.
 
-The source discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is flat `.jsonl` files or one project-directory level, validated against pi 1.0.0 session formats v2/v3. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
+### Pi discovery and supported formats
+
+Pi discovers `~/.pi/agent/sessions`, honoring `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` (including `~/` paths). Supported coverage is `.jsonl` files at the root or in nested directories (up to the shared 16-directory-level scan limit), including child-session layouts, validated against pi 1.0.0 session formats v2/v3. `subagent-artifacts` directories are excluded because their transcript copies are not canonical sessions. Legacy v1, hidden files, package directories, compressed histories, settings-only/CLI-only paths, ephemeral sessions and other computers are excluded. Session lease sidecars (`*.jsonl.lease`) are ignored without marking history partial. No agent extensions or running pi process are needed.
+
+### Codex discovery and accounting
+
+Codex reads `~/.codex/sessions` and `~/.codex/archived_sessions`, honoring `CODEX_HOME` (including `~/` paths). It does not read Codex credentials or SQLite state. This covers local CLI, app, extension, child, and background threads when their usage is persisted in those roots; remote/cloud-only, temporary, deleted, compressed, or otherwise unpersisted histories are outside coverage.
+
+The JSONL contract is verified against [OpenAI Codex 0.163.0](https://github.com/openai/codex/tree/83086188ae0614bd882818ff1aa23f3194962012):
+
+- [Protocol types](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/protocol/src/protocol.rs) define response usage, cumulative counters, cache/reasoning subsets, and thread ownership. Known conversation/replay metadata (`response_item`, `world_state`, `retained_context`, `security_risk_score`, `inter_agent_communication`, `inter_agent_communication_metadata`, and `realtime_item`) does not affect totals or coverage; unknown record types still mark coverage partial.
+- [Session accounting](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/session/mod.rs) and [compaction accounting](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/compact.rs) persist a durable response record before the paired token-count report. The parser uses the response record once and suppresses its paired counter. Unmatched reports count validated, nondecreasing cumulative input/output advances; incomplete responses can advance these counters without updating last-operation usage. Without a baseline, non-fork histories use validated last-operation usage and mark ambiguous initial activity partial. Repeated reports and counter resets are not additional spending; invalid counters mark coverage partial without discarding the last validated baseline. Only validated counter decreases start a new identity segment so later spending cannot collide with an earlier cumulative position.
+- [Rollout recording](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/rollout/src/recorder.rs) writes a fork's header before inherited records and may rewrite envelope timestamps. Durable records belonging to ancestors are excluded. Legacy inherited reports are excluded until a settings marker identifies the actual child thread. Referenced forks without copied counters use the first valid counter as a baseline, not new spending; ambiguous initial activity is omitted and marked partial. Local settings updates preserve the active turn; crossing an inherited-history boundary clears it. Earlier formats without enough ownership/counter metadata may be partial; ambiguous copied legacy usage is omitted rather than guessed.
+
+Totals are input plus output tokens. Cached input/cache-write categories and reasoning output are subsets, counted once. Response IDs are scoped to their spending thread. Active/archive copies deduplicate together; conflicting copies are excluded and marked partial. Matching copies with different envelope timestamps use the earliest available timestamp. Child and background threads contribute to the Codex row. Compaction/replay snapshots are not new spending.
 
 ### Indexing and safety limits
 
-The in-memory index stores only operation identity, timestamps and token counts, not transcripts or credentials. The source performs no history uploads or writes.
+The shared in-memory index returns unresolved candidates from each root; adapters resolve duplicates/conflicts and apply the final chart cutoff. Parser, retention and discovery exclusions are configured per adapter; filesystem safety and budgets stay shared. The index stores only operation identity, timestamps, and token totals, not transcripts, credentials, or model/provider attribution. Token categories are validated while parsing but are not retained separately. Neither adapter uploads or writes history.
 
-Files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
+Pi files whose modification and change times both precede the 30-day chart cutoff are not read or validated. This assumes normal pi writes with consistent clocks; imported histories with both filesystem times backdated can be missed. Metadata is still checked on every refresh, so resumed sessions become eligible again. An archive containing only age-excluded files shows zero usage, not missing history.
 
-Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per batch. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
+Codex resolves duplicates and conflicts before applying the chart cutoff. Its index retains older normalized accounting metadata and does not age-skip files: an older original can disqualify a copy whose envelope timestamp was rewritten into the current window. These older records share the existing operation and byte limits, so a large Codex archive can hit incomplete-coverage limits even with little recent activity.
+
+Unchanged eligible file contents are reused; changed files are reparsed in full, and app restart repeats the cold scan of eligible files. Large archives are read in batches with a 256 MiB read budget per root per batch. Pi has one root and Codex has independent active/archive roots, each with its own bounded index. Each adapter call reads at most one batch per root, including when a batch contains only unsupported history. Intermediate totals appear while indexing automatically continues in the background, even with the panel closed. Permanent safety limits and exclusions may still leave coverage incomplete. Some permanent exclusions cannot be recovered by refreshing.
 
 ## Development
 
 ### Tests
 
-Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never your real pi auth file or histories.
+Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never real agent credentials or personal histories.
+
+Shared `HistoryFixtures` supplies the fixed clock/calendar, and `HistoryFixtureRoot` supplies temporary files. `PiHistoryFixtures` and `CodexHistoryFixtures` generate only their respective formats.
 
 ### Synthetic native screenshots
 
@@ -58,7 +76,7 @@ AGENT_USAGE_RENDER_DIR=/tmp/agent-usage-captures \
   swift test --filter DashboardRenderingTests
 ```
 
-It captures all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode. See the [native UI review guide](../scripts/ui-review.md) for isolated packaged-app verification.
+It captures combined-agent and single-agent dashboards, all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode. See the [native UI review guide](../scripts/ui-review.md) for isolated packaged-app verification.
 
 ### Formatting
 

@@ -4,8 +4,8 @@ import XCTest
 @testable import AgentUsage
 
 final class HistoryServiceTests: XCTestCase {
-    private let now = PiHistoryFixtures.now
-    private let calendar = PiHistoryFixtures.calendar
+    private let now = HistoryFixtures.now
+    private let calendar = HistoryFixtures.calendar
 
     func testReplacementCorrectsAndRemovesRecordsRatherThanAppending() async throws {
         let adapter = ScriptedAdapter(
@@ -118,8 +118,7 @@ final class HistoryServiceTests: XCTestCase {
                     hasReadings: false,
                     issues: [.unsupportedVersion]
                 ),
-                fetchedAt: now.addingTimeInterval(60),
-                hasMore: true  // Failed/unusable results must never schedule retries.
+                fetchedAt: now.addingTimeInterval(60)
             )
             let adapter = ScriptedAdapter(
                 id: .pi,
@@ -159,6 +158,51 @@ final class HistoryServiceTests: XCTestCase {
             XCTAssertEqual(deleted.coverage.state, .missing)
             XCTAssertFalse(deleted.coverage.hasReadings)
             XCTAssertFalse(deleted.sources.contains { $0.failed })
+        }
+    }
+
+    func testIndexingContinuesWithoutAcceptingUnusableMeasurements() async throws {
+        for state in [HistoryCoverage.State.unsupported, .unavailable, .partial] {
+            for hasPriorReadings in [false, true] {
+                let unusable = HistoryAdapterResult(
+                    observations: [],
+                    coverage: HistoryCoverage(
+                        state: state,
+                        hasReadings: false,
+                        issues: [.unsupportedVersion]
+                    ),
+                    fetchedAt: now.addingTimeInterval(60),
+                    hasMore: true
+                )
+                let adapter = ScriptedAdapter(
+                    id: .pi,
+                    results: (hasPriorReadings ? [result([observation("a", 200)])] : [])
+                        + [unusable, result([observation("b", 300)])]
+                )
+                let service = HistoryService(adapters: [adapter])
+                if hasPriorReadings {
+                    _ = try await service.refresh(now: now, calendar: calendar)
+                }
+                let updates = HistorySnapshotRecorder()
+                let completed = try await service.refresh(now: now, calendar: calendar) {
+                    await updates.append($0)
+                }
+                let published = await updates.values
+                XCTAssertEqual(published.count, 2)
+                let pending = try XCTUnwrap(published.first)
+                XCTAssertTrue(pending.hasMore)
+                XCTAssertTrue(pending.sources[0].isLoading)
+                XCTAssertEqual(pending.sources[0].coverage?.state, state)
+                XCTAssertEqual(pending.coverage.hasReadings, hasPriorReadings)
+                XCTAssertEqual(pending.summaries[.today]?.tokens, hasPriorReadings ? 200 : 0)
+                XCTAssertEqual(pending.sources[0].fetchedAt, hasPriorReadings ? now : nil)
+                XCTAssertEqual(completed.summaries[.today]?.tokens, 300)
+                XCTAssertEqual(completed.coverage.state, .ready)
+                XCTAssertFalse(completed.hasMore)
+                XCTAssertFalse(completed.sources[0].failed)
+                let requests = await adapter.requests
+                XCTAssertEqual(requests.count, hasPriorReadings ? 3 : 2)
+            }
         }
     }
 

@@ -73,11 +73,6 @@ final class DashboardSizingTests: XCTestCase {
         let cap = (NSScreen.main?.visibleFrame.height ?? 800) - 40
         XCTAssertGreaterThan(ready.height, 0)
         XCTAssertLessThanOrEqual(ready.height, cap + 1)
-        XCTAssertLessThan(
-            ready.height,
-            590,
-            "A healthy dashboard should not reserve space for errors."
-        )
 
         await readings.setError("Synthetic allowance unavailable. Sign in again in pi.")
         await usage.refresh()

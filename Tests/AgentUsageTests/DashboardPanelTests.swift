@@ -45,20 +45,38 @@ final class DashboardPanelTests: XCTestCase {
         XCTAssertEqual(history.summary?.tokens, 18_420)
     }
 
-    func testCoverageMessagesDoNotPresentUnreadableSourcesAsZero() {
-        for state in [HistoryCoverage.State.missing, .partial, .unavailable, .unsupported] {
-            let coverage = HistoryCoverage(state: state, hasReadings: false, issues: [])
-            XCTAssertFalse(coverage.hasReadings)
-            XCTAssertFalse(coverage.emptyDescription.contains("No recorded"))
+    func testUnreadableSourcesHaveAgentScopedStatusAndNoReadings() {
+        for id in [HistoryAgentID.pi, .codex] {
+            for (state, status) in [
+                (HistoryCoverage.State.unavailable, "History could not be read."),
+                (.unsupported, "Unsupported history format."),
+            ] {
+                let snapshot = DashboardFixtures.history(state: state, agents: [id])
+                XCTAssertFalse(snapshot.coverage.hasReadings)
+                XCTAssertEqual(snapshot.visibleSources.map(\.id), [id])
+                XCTAssertEqual(snapshot.visibleSources.first?.status, status)
+                XCTAssertEqual(snapshot.visibleSources.first?.coverage?.hasReadings, false)
+            }
+            XCTAssertTrue(
+                DashboardFixtures.history(state: .missing, agents: [id]).visibleSources.isEmpty
+            )
         }
         XCTAssertEqual(
             HistoryCoverage(state: .partial, hasReadings: true, issues: [.staleFile]).warning,
             "Partial history. Totals may be incomplete. Includes older readings."
         )
-        XCTAssertTrue(
-            HistoryCoverage(state: .missing, hasReadings: false, issues: []).emptyDescription
-                .contains("isn't zero usage")
-        )
+    }
+
+    func testDashboardFixtureCombinesExplicitAgentsAndSupportsSingleAgentViews() {
+        let combined = DashboardFixtures.history()
+        XCTAssertEqual(combined.visibleSources.map(\.id), [.codex, .pi])
+        XCTAssertEqual(combined.sources.map { $0.summaries[.today]?.tokens }, [6_140, 12_280])
+        XCTAssertEqual(combined.summaries[.today]?.tokens, 18_420)
+        for id in [HistoryAgentID.pi, .codex] {
+            let single = DashboardFixtures.history(agents: [id])
+            XCTAssertEqual(single.visibleSources.map(\.id), [id])
+            XCTAssertEqual(single.summaries[.today]?.tokens, 18_420)
+        }
     }
 
     private func stores(_ readings: DashboardReadings) -> (UsageStore, HistoryStore) {
@@ -71,7 +89,7 @@ final class DashboardPanelTests: XCTestCase {
 
 /// Shared test-only fixtures; never construct live stores, discovery or networking.
 enum DashboardFixtures {
-    static let now = PiHistoryFixtures.now
+    static let now = HistoryFixtures.now
     static let limits = UsageLimits(
         rateLimit: .init(
             primaryWindow: .init(usedPercent: 28, resetAfterSeconds: 8_280),
@@ -81,37 +99,40 @@ enum DashboardFixtures {
 
     static func history(
         state: HistoryCoverage.State = .ready,
-        zero: Bool = false
+        zero: Bool = false,
+        agents: [HistoryAgentID] = [.codex, .pi]
     ) -> HistorySnapshot {
-        let readable = state == .ready || state == .partial
-        let calendar = Calendar.autoupdatingCurrent
-        let observations = (0..<30).map { day in
-            UsageObservation(
-                operationID: "synthetic-\(day)",
-                timestamp: calendar.date(byAdding: .day, value: -day, to: now)!,
-                tokens: Int64((day % 5 + 1) * 18_420)
-            )
+        let calendar = HistoryFixtures.calendar
+        let coverage = HistoryCoverage(
+            state: state,
+            hasReadings: state == .ready || state == .partial,
+            issues: state == .partial ? [.unsupportedVersion, .staleFile] : []
+        )
+        let weight = max(1, agents.count * (agents.count + 1) / 2)
+        let observations = agents.enumerated().map { index, id -> [UsageObservation] in
+            guard coverage.hasReadings && !zero else { return [] }
+            return (0..<30).map { day in
+                let tokens = (day % 5 + 1) * 18_420 * (index + 1) / weight
+                return UsageObservation(
+                    operationID: "\(id.rawValue)-synthetic-\(day)",
+                    timestamp: calendar.date(byAdding: .day, value: -day, to: now)!,
+                    tokens: Int64(tokens)
+                )
+            }
         }
         return HistorySnapshot(
-            summaries: Dictionary(
-                uniqueKeysWithValues: HistoryPeriod.allCases.map {
-                    (
-                        $0,
-                        PeriodSummary.aggregate(
-                            readable && !zero ? observations : [],
-                            period: $0,
-                            now: now,
-                            calendar: calendar
-                        )
-                    )
-                }
-            ),
-            coverage: HistoryCoverage(
-                state: state,
-                hasReadings: readable,
-                issues: state == .partial ? [.unsupportedVersion, .staleFile] : []
-            ),
-            fetchedAt: now
+            summaries: historySummaries(observations.flatMap { $0 }, now: now, calendar: calendar),
+            coverage: coverage,
+            fetchedAt: now,
+            sources: agents.enumerated().map { index, id in
+                HistorySourceSnapshot(
+                    id: id,
+                    summaries: historySummaries(observations[index], now: now, calendar: calendar),
+                    coverage: coverage,
+                    fetchedAt: now,
+                    failed: false
+                )
+            }
         )
     }
 }

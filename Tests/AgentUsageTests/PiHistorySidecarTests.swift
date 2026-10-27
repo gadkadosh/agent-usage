@@ -9,7 +9,7 @@ final class PiHistorySidecarTests: XCTestCase {
 
     func testLeaseSidecarsAreIgnoredInFlatAndProjectRoots() async throws {
         for path in ["session.jsonl", "--synthetic--/session.jsonl"] {
-            let fixture = try PiHistoryFixtureRoot()
+            let fixture = try HistoryFixtureRoot()
             defer { fixture.remove() }
             try fixture.write(path, lines: [F.header(), F.message()])
             let sidecar = try fixture.write(path + ".lease", lines: ["not a session"])
@@ -31,7 +31,7 @@ final class PiHistorySidecarTests: XCTestCase {
     }
 
     func testOrphanLeaseSidecarIsNotReportedAsUnavailableHistory() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write("orphan.jsonl.lease", lines: ["not a session"])
         let source = PiHistorySource(root: fixture.root)
@@ -47,7 +47,7 @@ final class PiHistorySidecarTests: XCTestCase {
 
     func testOtherUnsupportedFilesStillProduceCoverageWarnings() async throws {
         for path in ["archive.jsonl.gz", "unknown.lease"] {
-            let fixture = try PiHistoryFixtureRoot()
+            let fixture = try HistoryFixtureRoot()
             defer { fixture.remove() }
             try fixture.write(lines: [F.header(), F.message()])
             try fixture.write(path, lines: ["not a supported history"])

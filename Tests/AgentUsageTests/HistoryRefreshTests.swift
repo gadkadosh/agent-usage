@@ -15,8 +15,8 @@ final class HistoryRefreshTests: XCTestCase {
         }
         let store = HistoryStore.live(
             adapters: [fast, slow],
-            now: { PiHistoryFixtures.now },
-            calendar: PiHistoryFixtures.calendar
+            now: { HistoryFixtures.now },
+            calendar: HistoryFixtures.calendar
         )
         let caughtUp = XCTestExpectation(
             description: "Fast source finishes while slow source is blocked"
@@ -36,7 +36,7 @@ final class HistoryRefreshTests: XCTestCase {
         XCTAssertEqual(store.snapshot?.sources.map(\.isLoading), [false, true])
         let fastRequests = await fast.requests
         XCTAssertEqual(fastRequests.count, 2)
-        XCTAssertEqual(fastRequests.map(\.now), [PiHistoryFixtures.now, PiHistoryFixtures.now])
+        XCTAssertEqual(fastRequests.map(\.now), [HistoryFixtures.now, HistoryFixtures.now])
         await gate.resume()
         await store.refresh()
         XCTAssertEqual(store.summary?.tokens, 500)
@@ -56,8 +56,8 @@ final class HistoryRefreshTests: XCTestCase {
         }
         let store = HistoryStore.live(
             adapters: [fast, slow],
-            now: { PiHistoryFixtures.now },
-            calendar: PiHistoryFixtures.calendar
+            now: { HistoryFixtures.now },
+            calendar: HistoryFixtures.calendar
         )
         let published = XCTestExpectation(description: "Available data is published before failure")
         let subscription = store.$snapshot.compactMap { $0 }.first {
@@ -89,15 +89,15 @@ final class HistoryRefreshTests: XCTestCase {
     }
 
     func testRealPiReaderRetainsUnsupportedHistoryThenClearsConfirmedDeletion() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write(lines: [
             PiHistoryFixtures.header(), PiHistoryFixtures.message(),
         ])
         let store = HistoryStore.live(
-            root: fixture.root,
-            now: { PiHistoryFixtures.now },
-            calendar: PiHistoryFixtures.calendar
+            adapters: [PiHistorySource(root: fixture.root)],
+            now: { HistoryFixtures.now },
+            calendar: HistoryFixtures.calendar
         )
         await store.refresh()
         XCTAssertEqual(store.summary?.tokens, 190)

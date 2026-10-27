@@ -46,5 +46,36 @@ struct HistorySnapshot: Sendable {
     let fetchedAt: Date
     /// Pending source reads or continuation batches, not permanent coverage gaps.
     var hasMore = false
-    var sources: [HistorySourceSnapshot] = []
+    var sources: [HistorySourceSnapshot]
+
+    var visibleSources: [HistorySourceSnapshot] {
+        sources.filter { source in
+            source.failed
+                || (source.coverage.map {
+                    $0.state != .missing
+                        && ((source.summaries[.month]?.tokens ?? 0) > 0
+                            || $0.state != .ready || source.isLoading)
+                } ?? false)
+        }.sorted { $0.id.name.localizedCaseInsensitiveCompare($1.id.name) == .orderedAscending }
+    }
+}
+
+extension HistorySourceSnapshot {
+    var status: String? {
+        let message: String
+        if failed {
+            message =
+                coverage?.hasReadings == true
+                ? "Couldn't refresh. Showing older readings." : "History could not be read."
+        } else if coverage?.state == .unsupported {
+            message = "Unsupported history format."
+        } else if coverage?.state == .unavailable {
+            message = "History could not be read."
+        } else if coverage?.issues.contains(.staleFile) == true {
+            message = "Incomplete history. Includes older readings."
+        } else {
+            return coverage?.warning
+        }
+        return [message, coverage?.accountingWarning].compactMap { $0 }.joined(separator: " ")
+    }
 }

@@ -1,0 +1,234 @@
+import Foundation
+import XCTest
+
+@testable import AgentUsage
+
+final class CodexHistoryParserTests: XCTestCase {
+    private typealias F = CodexHistoryFixtures
+
+    func testLegacyCountersCountActivityOnceIncludingCacheAndReasoningSubsets() {
+        let parser = F.parse([
+            F.header(), F.start(), F.counter(), F.counter(),
+            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testDurableRecordsSuppressOnlyTheirPairedFallbackInTheSameTurn() {
+        let parser = F.parse([
+            F.header(), F.start("old"), F.counter(),
+            F.start(), F.durable(input: 50, output: 10),
+            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens).sorted(), [60, 120])
+        XCTAssertEqual(parser.observations.count, 2)
+    }
+
+    func testCopiedForkPrefixAndNestedParentSettingsAreExcludedButChildSpendingCounts() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.header(),
+            F.settings("thread-a"), F.start(), F.counter(), F.durable(),
+            F.settings("child"), F.start("child-turn"),
+            F.durable("child-response", thread: "child", turn: "child-turn", input: 50, output: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [60])
+    }
+
+    func testIncompleteResponsesCountCumulativeAdvancesWhileLastUsageStaysUnchanged() {
+        // SpendingOnly updates cumulative usage but preserves the stored last_token_usage.
+        let parser = F.parse([
+            F.header(), F.start(), F.durable(), F.counter(),
+            F.counter(150, 30, lastInput: 100, lastOutput: 20),
+            F.counter(200, 40, lastInput: 100, lastOutput: 20),
+            F.counter(200, 40, lastInput: 100, lastOutput: 20),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60, 60])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testZeroUsageResponseDoesNotSuppressLaterIncompleteSpending() {
+        let parser = F.parse([
+            F.header(), F.start(), F.durable(), F.counter(),
+            F.durable("zero", input: 0, output: 0),
+            F.counter(100, 20, lastInput: 0, lastOutput: 0),
+            F.counter(150, 30, lastInput: 0, lastOutput: 0),
+            F.durable("next", input: 25, output: 5),
+            F.counter(175, 35, lastInput: 25, lastOutput: 5),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 0, 60, 30])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testReferencedForkEstablishesBaselineBeforeCountingProvenAdvances() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.settings("child"),
+            F.start("child-turn"), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            F.counter(200, 40, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [60])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testReferencedForkReplayIsNotSpendingButDurableChildResponseStillCounts() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.settings("child"), F.start("child-turn"),
+            F.counter(), F.counter(),
+            F.durable("child-response", thread: "child", turn: "child-turn", input: 50, output: 10),
+            F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [60])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testReferencedForkWithZeroBaselineCanCountLaterActivityWithoutAmbiguity() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.settings("child"), F.start("child-turn"),
+            F.counter(0, 0), F.counter(),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testResumeReplayWithoutActiveTurnDoesNotCreateSpending() {
+        let parser = F.parse([
+            F.header(), F.start(), F.counter(),
+            F.line("event_msg", ["type": "task_complete", "turn_id": "turn-a"]),
+            F.counter(), F.start("resumed"), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+    }
+
+    func testCounterResetIsNotSpendingAndLaterConsistentReportsRecover() {
+        let parser = F.parse([
+            F.header(), F.start(), F.counter(), F.counter(10, 2),
+            F.counter(20, 4, lastInput: 10, lastOutput: 2),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 12])
+        XCTAssertTrue(parser.issues.contains(.invalidUsage))
+    }
+
+    func testInvalidCountersPreserveBaselineForReplaysAndLaterSpending() {
+        let invalidReports = [
+            F.counter(-1, 0),
+            F.line("event_msg", ["type": "token_count", "info": [:]]),
+        ]
+        for invalid in invalidReports {
+            for (next, expected): (String, [Int64]) in [
+                (F.counter(), [120]),
+                (F.counter(150, 30, lastInput: 100, lastOutput: 20), [120, 60]),
+            ] {
+                let parser = F.parse([
+                    F.header(), F.start(), F.counter(), invalid, next,
+                ])
+                XCTAssertEqual(parser.observations.map(\.tokens), expected)
+                XCTAssertEqual(parser.issues, [.invalidUsage])
+            }
+        }
+    }
+
+    func testInvalidUsageUnsupportedHeaderLimitsAndPartialLinesAreReported() {
+        XCTAssertFalse(F.parse([F.start(), F.counter()]).isSupported)
+        let invalid = F.line(
+            "token_usage_record",
+            [
+                "thread_id": "thread-a", "turn_id": "turn-a", "response_id": "r",
+                "usage": F.tokens(-1, 5),
+            ]
+        )
+        XCTAssertTrue(F.parse([F.header(), invalid]).issues.contains(.invalidUsage))
+        let limited = F.parse([F.header(), F.durable(), F.durable("other")], max: 1)
+        XCTAssertEqual(limited.observations.count, 1)
+        XCTAssertTrue(limited.issues.contains(.scanLimit))
+        var partial = F.parse([F.header()])
+        partial.consume(Data("{\"type\":".utf8), terminated: false)
+        XCTAssertTrue(partial.issues.contains(.incompleteLine))
+    }
+
+    func testWorldStateSnapshotsAndPatchesDoNotAffectAccountingOrCoverage() {
+        let parser = F.parse([
+            F.header(),
+            F.line("world_state", ["full": true, "state": ["cwd": "/invented"]]),
+            F.start(), F.durable(),
+            F.line("world_state", ["full": false, "state": ["cwd": "/invented/child"]]),
+            F.counter(), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+        XCTAssertEqual(parser.issues, [])
+    }
+
+    func testKnownNonAccountingRecordsDoNotAffectUsageOrCounterPairing() {
+        let records: [(String, [String: Any])] = [
+            (
+                "retained_context",
+                [
+                    "type": "verified_answer", "turn_id": "turn-a", "call_id": "call-a",
+                    "questions": [["question": "Continue?", "answer": "Yes"]],
+                ]
+            ),
+            ("security_risk_score", ["scores": ["risk": 0.1], "call_id": "call-a"]),
+            (
+                "inter_agent_communication",
+                [
+                    "author": "root", "recipient": "root/reviewer", "content": "Review complete",
+                    "trigger_turn": false,
+                ]
+            ),
+            ("inter_agent_communication_metadata", ["trigger_turn": false]),
+            (
+                "realtime_item",
+                [
+                    "id": "item-a", "realtime_session_id": "realtime-a",
+                    "type": "transcript_segment", "role": "assistant", "text": "Hello",
+                ]
+            ),
+        ]
+        for (type, payload) in records {
+            let parser = F.parse([
+                F.header(), F.start(), F.durable(), F.line(type, payload), F.counter(),
+                F.counter(150, 30, lastInput: 50, lastOutput: 10),
+            ])
+            XCTAssertEqual(parser.observations.map(\.tokens), [120, 60], type)
+            XCTAssertEqual(parser.issues, [], type)
+        }
+    }
+
+    func testLocalSettingsDoNotEndTheActiveTurnOrBreakCounterPairing() {
+        for durable in [true, false] {
+            var lines = [F.header(), F.start(), F.settings("thread-a")]
+            if durable { lines.append(F.durable()) }
+            lines += [F.counter(), F.counter(150, 30, lastInput: 50, lastOutput: 10)]
+            let parser = F.parse(lines)
+            XCTAssertEqual(parser.observations.map(\.tokens), [120, 60])
+            XCTAssertEqual(parser.issues, [])
+        }
+    }
+
+    func testChildSettingsDoNotCarryAnInheritedTurnIntoLocalCounterAccounting() {
+        let parser = F.parse([
+            F.header("child", fork: "thread-a"), F.header(), F.start(), F.counter(),
+            F.settings("child"), F.counter(150, 30, lastInput: 50, lastOutput: 10),
+        ])
+        XCTAssertEqual(parser.observations, [])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testUnknownRolloutRecordsStillReportIncompleteCoverage() {
+        let parser = F.parse([
+            F.header(), F.line("unknown_record", [:]), F.durable(),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120])
+        XCTAssertEqual(parser.issues, [.unsupportedRecord])
+    }
+
+    func testNonUsagePayloadsAndCompactionSnapshotsAreNotAdditionalSpending() {
+        let parser = F.parse([
+            F.header(), F.line("response_item", ["type": "message", "content": "invented"]),
+            F.line("compacted", ["latest_token_usage_record": ["usage": F.tokens(500, 10)]]),
+            F.line("event_msg", ["type": "token_count", "info": NSNull()]), F.durable(),
+        ])
+        XCTAssertEqual(parser.observations.map(\.tokens), [120])
+        XCTAssertEqual(parser.issues, [])
+    }
+}

@@ -4,7 +4,7 @@ import Foundation
 /// they must resolve conflicting records before aggregation. No transcripts or credentials.
 struct UsageObservation: Equatable, Sendable {
     let operationID: String
-    let timestamp: Date
+    var timestamp: Date
     let tokens: Int64
 }
 

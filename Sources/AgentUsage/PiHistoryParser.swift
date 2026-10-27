@@ -9,8 +9,8 @@ import Foundation
 /// Subsets: https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/docs/message-types.md
 /// Canonical sources: message.usage, usage.usage, compaction.usage, branch_summary.usage.
 /// Never decode transcript fields. Tool nestedCalls/details are not additional usage.
-/// Returns candidates: the index must deduplicate IDs and exclude conflicting copies.
-struct PiHistoryParser {
+/// Returns candidates: the adapter must deduplicate IDs and exclude conflicting copies.
+struct PiHistoryParser: HistoryLineParser {
     private(set) var observations: [UsageObservation] = []
     private(set) var issues: Set<HistoryIssue> = []
     private(set) var isSupported = false
@@ -118,7 +118,13 @@ struct PiHistoryParser {
         encoder.outputFormatting = .sortedKeys
         guard let encoded = try? encoder.encode(identity) else { return }
         let key = SHA256.hash(data: encoded).map { String(format: "%02x", $0) }.joined()
-        observations.append(UsageObservation(operationID: key, timestamp: timestamp, tokens: total))
+        observations.append(
+            UsageObservation(
+                operationID: key,
+                timestamp: timestamp,
+                tokens: total
+            )
+        )
     }
 
     mutating func finish() {

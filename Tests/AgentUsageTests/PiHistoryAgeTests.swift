@@ -13,7 +13,7 @@ final class PiHistoryAgeTests: XCTestCase {
     }
 
     func testOldArchiveIsAnEmptyReadingWithoutParsingOrSpendingTheByteBudget() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write(lines: [F.header(), F.message()])
         let before = try Data(contentsOf: file)
@@ -49,7 +49,7 @@ final class PiHistoryAgeTests: XCTestCase {
     }
 
     func testOldFilesLeaveTheReadBudgetAvailableForRecentUsage() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let now = future
         try fixture.write(
@@ -86,7 +86,7 @@ final class PiHistoryAgeTests: XCTestCase {
     }
 
     func testOldArchiveDoesNotHideOtherCoverageGaps() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         try fixture.write(lines: [F.header(), F.message()])
         try fixture.write("unknown.txt", lines: ["not a session"])
@@ -105,7 +105,7 @@ final class PiHistoryAgeTests: XCTestCase {
     }
 
     func testRecentCtimeKeepsAFileWhoseMtimeWasBackdated() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let now = Date()
         let since = HistoryPeriod.month.start(at: now, calendar: F.calendar)
@@ -135,7 +135,7 @@ final class PiHistoryAgeTests: XCTestCase {
         let now = future
         let since = HistoryPeriod.month.start(at: now, calendar: calendar)
         for offset in [-0.001, 0, 0.001, 3_600] {
-            let fixture = try PiHistoryFixtureRoot()
+            let fixture = try HistoryFixtureRoot()
             defer { fixture.remove() }
             let file = try fixture.write(lines: [
                 F.header(), F.message(time: Int64(since.timeIntervalSince1970 * 1_000)),
@@ -158,7 +158,7 @@ final class PiHistoryAgeTests: XCTestCase {
     }
 
     func testResumingAnExcludedSessionMakesItEligibleOnTheNextRefresh() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let file = try fixture.write(lines: [F.header(), F.message()])
         let source = PiHistorySource(root: fixture.root)
@@ -195,7 +195,7 @@ final class PiHistoryAgeTests: XCTestCase {
     }
 
     func testCachedSessionAgesOutAndBecomesReadableAgainWhenTheClockMovesBack() async throws {
-        let fixture = try PiHistoryFixtureRoot()
+        let fixture = try HistoryFixtureRoot()
         defer { fixture.remove() }
         let now = Date()
         try fixture.write(lines: [
