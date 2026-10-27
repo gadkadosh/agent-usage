@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 
 @testable import AgentUsage
@@ -5,24 +6,38 @@ import XCTest
 @MainActor
 final class HistoryPanelLifecycleTests: XCTestCase {
     func testHiddenPanelDoesNotScanAndDuplicateVisibleNotificationsDoNotRescan() async {
-        let fetched = expectation(description: "Panel opens")
+        let unexpectedFetch = expectation(description: "Duplicate visibility must not fetch")
+        unexpectedFetch.isInverted = true
         let readings = DashboardReadings()
         let history = HistoryStore(fetch: {
             let value = try await readings.history()
-            fetched.fulfill()
+            let counts = await readings.counts
+            if counts[1] > 1 { unexpectedFetch.fulfill() }
             return value
         })
+        let finished = expectation(description: "Panel's first scan finishes")
+        let subscription = history.$isRefreshing.dropFirst().first { !$0 }.sink { _ in
+            finished.fulfill()
+        }
+        defer { subscription.cancel() }
         let view = HistoryPanelLifecycle.TrackingView(history: history)
         view.setVisible(false)
         let before = await readings.counts
         XCTAssertEqual(before, [0, 0])
         view.setVisible(true)
-        view.setVisible(true)
-        let result = await XCTWaiter.fulfillment(of: [fetched], timeout: 5)
+        let result = await XCTWaiter.fulfillment(of: [finished], timeout: 5)
         XCTAssertEqual(result, .completed)
+        guard result == .completed else { return }
+        XCTAssertEqual(history.summary?.tokens, 18_420)
+        XCTAssertFalse(history.isRefreshing)
+
+        // A completed scan cannot mask a missing visibility guard by joining in-flight work.
+        view.setVisible(true)
+        view.setVisible(true)
+        view.setVisible(false)
+        await fulfillment(of: [unexpectedFetch], timeout: 0.1)
         let after = await readings.counts
         XCTAssertEqual(after, [0, 1])
-        view.setVisible(false)
     }
 
     func testClosingPanelDoesNotCancelManualRefresh() async {

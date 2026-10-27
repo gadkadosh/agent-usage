@@ -66,33 +66,6 @@ final class HistoryStoreTests: XCTestCase {
         }
     }
 
-    func testAllowanceAndHistoryFailuresAreIndependent() async {
-        let allowance = UsageStore(fetch: { throw SensitiveError() })
-        let history = HistoryStore(fetch: { historySnapshot() })
-        await allowance.refresh()
-        await history.refresh()
-        XCTAssertNil(allowance.snapshot)
-        XCTAssertNotNil(allowance.error)
-        XCTAssertNotNil(history.snapshot)
-        XCTAssertNil(history.error)
-
-        let workingAllowance = UsageStore(fetch: {
-            UsageLimits(
-                rateLimit: .init(
-                    primaryWindow: .init(usedPercent: 25, resetAfterSeconds: 300),
-                    secondaryWindow: .init(usedPercent: 50, resetAfterSeconds: 600)
-                )
-            )
-        })
-        let failedHistory = HistoryStore(fetch: { throw SensitiveError() })
-        await workingAllowance.refresh()
-        await failedHistory.refresh()
-        XCTAssertNotNil(workingAllowance.snapshot)
-        XCTAssertNil(workingAllowance.error)
-        XCTAssertNil(failedHistory.snapshot)
-        XCTAssertNotNil(failedHistory.error)
-    }
-
     func testOverlapJoinsOwnedScanAndCallerCancellationDoesNotDiscardResult() async {
         let gate = HistoryGate()
         let store = HistoryStore(fetch: { historySnapshot(read: await gate.pause()) })

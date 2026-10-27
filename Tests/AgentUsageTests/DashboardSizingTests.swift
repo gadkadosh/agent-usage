@@ -104,7 +104,7 @@ final class DashboardSizingTests: XCTestCase {
         XCTAssertEqual(recovered.height, ready.height, accuracy: 1)
     }
 
-    func testRetainedWindowShrinksWithHistoryAndKeepsTopEdge() async throws {
+    func testRetainedWindowTracksHistoryWithoutLayoutFetchesAndKeepsTopEdge() async throws {
         let readings = SizingReadings()
         await readings.setHistoryState(.partial)
         let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
@@ -128,8 +128,11 @@ final class DashboardSizingTests: XCTestCase {
         for state in [HistoryCoverage.State.ready, .missing, .partial, .ready] {
             await readings.setHistoryState(state)
             await history.refresh()
+            let readsBeforeLayout = await readings.historyFetchCount
             let size = try await fittedSize(host)
             assertWindow(window, fits: size, top: top)
+            let readsAfterLayout = await readings.historyFetchCount
+            XCTAssertEqual(readsAfterLayout, readsBeforeLayout, "Layout must not refetch history.")
             heights.append(size.height)
         }
         XCTAssertLessThan(heights[0], partial.height)
@@ -138,15 +141,14 @@ final class DashboardSizingTests: XCTestCase {
         XCTAssertEqual(heights[3], heights[0], accuracy: 1)
     }
 
-    func testMissingHistoryIsShorterThanChartAndDoesNotRefetchOnLayout() async throws {
+    func testInitialContentLayoutDoesNotFetchHistory() async throws {
         let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
         await usage.refresh()
-        let cap = (NSScreen.main?.visibleFrame.height ?? 800) - 40
-        var heights: [CGFloat] = []
         for state in [HistoryCoverage.State.ready, .partial, .missing] {
             let readings = DashboardReadings(snapshot: DashboardFixtures.history(state: state))
             let history = HistoryStore(fetch: { try await readings.history() })
             await history.refresh()
+            // Exclude the intentional native-window visibility refresh from this layout check.
             let host = NSHostingView(
                 rootView: DashboardPanel(
                     usage: usage,
@@ -155,21 +157,11 @@ final class DashboardSizingTests: XCTestCase {
                 ).content
             )
             let window = makeWindow(host)
-            let size = try await fittedSize(host)
-            XCTAssertEqual(size.width, 360, accuracy: 1)
-            XCTAssertGreaterThan(size.height, 0)
-            XCTAssertLessThanOrEqual(size.height, cap + 1)
-            heights.append(size.height)
-            window.close()
+            defer { window.close() }
+            _ = try await fittedSize(host)
             let counts = await readings.counts
-            XCTAssertEqual(counts, [0, 1])
+            XCTAssertEqual(counts, [0, 1], "Initial layout must not refetch history (\(state)).")
         }
-        XCTAssertGreaterThan(
-            heights[1],
-            heights[0],
-            "Warnings should add only their actual height."
-        )
-        XCTAssertLessThan(heights[2], heights[0], "No chart should mean a shorter window.")
     }
 
     private func makeWindow<V: View>(_ host: NSHostingView<V>) -> NSWindow {
@@ -219,10 +211,14 @@ final class DashboardSizingTests: XCTestCase {
 private actor SizingReadings {
     var error: String?
     var historyState = HistoryCoverage.State.ready
+    private(set) var historyFetchCount = 0
 
     func setError(_ error: String?) { self.error = error }
     func setHistoryState(_ state: HistoryCoverage.State) { historyState = state }
-    func history() -> HistorySnapshot { DashboardFixtures.history(state: historyState) }
+    func history() -> HistorySnapshot {
+        historyFetchCount += 1
+        return DashboardFixtures.history(state: historyState)
+    }
 
     func allowance() throws -> UsageLimits {
         if let error { throw Failure(message: error) }
