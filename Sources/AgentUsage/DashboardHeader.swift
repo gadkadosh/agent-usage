@@ -11,10 +11,6 @@ struct DashboardHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "terminal")
-                .font(.system(size: 28))
-                .foregroundStyle(Color.accentColor)
-                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Agent Usage")
                     .font(.title2.weight(.semibold))
