@@ -49,7 +49,7 @@ final class OpenCodeHistorySourceTests: XCTestCase {
         // The compaction projection is not additional spending.
         try fixture.message("msg_summary", type: "compaction")
         try fixture.message("msg_user", type: "user")
-        try fixture.event("evt_response", type: "session.step.ended.1")  // paired durable event
+        try fixture.event("evt_response", type: "session.step.ended.1", message: "msg_response")
         try fixture.message("msg_unfinished", usage: nil)
         try fixture.message("msg_old", at: request.since.addingTimeInterval(-1))
         try fixture.event("evt_future", at: request.now.addingTimeInterval(1))
@@ -73,6 +73,145 @@ final class OpenCodeHistorySourceTests: XCTestCase {
         )
         XCTAssertFalse(result.hasMore)
         XCTAssertEqual(result.fetchedAt, request.now)
+    }
+
+    func testCommittedUndoRetainsSpendingWithoutDoubleCountingItsMessage() async throws {
+        for type in [
+            "session.step.ended", "session.step.ended.1", "session.step.failed",
+            "session.step.failed.1",
+        ] {
+            let fixture = try F()
+            try fixture.message()
+            try fixture.event("evt_response", type: type, message: "msg_response")
+            let source = OpenCodeHistorySource(database: fixture.database)
+            let before = try await source.read(request)
+            XCTAssertEqual(total(before), 200)
+            XCTAssertEqual(before.observations.map(\.operationID), ["message:msg_response"])
+
+            // Committing undo deletes projections, but keeps the spending event and session.
+            try fixture.execute("DELETE FROM session_message;")
+            let after = try await source.read(request)
+            XCTAssertEqual(total(after), 200, type)
+            XCTAssertEqual(after.coverage.state, .ready)
+            XCTAssertEqual(after.observations, before.observations)
+        }
+    }
+
+    func testDurableResponsesOverrideProjectionsAndFailuresMayHaveNoUsage() async throws {
+        let fixture = try F()
+        try fixture.message()
+        try fixture.event(
+            "evt_response",
+            type: "session.step.ended.1",
+            usage: F.tokens(input: 300),
+            message: "msg_response"
+        )
+        try fixture.message("msg_failed")
+        try fixture.event(
+            "evt_failed",
+            type: "session.step.failed.1",
+            usage: nil,
+            message: "msg_failed"
+        )
+        let result = try await OpenCodeHistorySource(database: fixture.database).read(request)
+        XCTAssertEqual(total(result), 400)
+        XCTAssertEqual(result.observations.map(\.operationID), ["message:msg_response"])
+        XCTAssertEqual(result.coverage.state, .ready)
+    }
+
+    func testCompletionTimeControlsRetentionAndFutureEventsSuppressFallbacks() async throws {
+        for date in [request.since.addingTimeInterval(-1), request.now.addingTimeInterval(1)] {
+            let fixture = try F()
+            try fixture.message()
+            try fixture.event(
+                "evt_response",
+                type: "session.step.ended.1",
+                at: date,
+                message: "msg_response"
+            )
+            let result = try await OpenCodeHistorySource(database: fixture.database).read(request)
+            XCTAssertEqual(total(result), 0)
+            XCTAssertEqual(
+                result.coverage,
+                HistoryCoverage(state: .ready, hasReadings: true, issues: [])
+            )
+        }
+        let fixture = try F()
+        try fixture.message(at: request.since.addingTimeInterval(-1))
+        try fixture.event("evt_response", type: "session.step.ended.1", message: "msg_response")
+        let result = try await OpenCodeHistorySource(database: fixture.database).read(request)
+        XCTAssertEqual(total(result), 200)
+        XCTAssertEqual(result.observations.first?.timestamp, request.now)
+    }
+
+    func testDuplicateResponseEventsCountOnceAndConflictsAreExcluded() async throws {
+        let fixture = try F()
+        try fixture.message()
+        try fixture.event("evt_response", type: "session.step.ended.1", message: "msg_response")
+        try fixture.event(
+            "evt_repeat",
+            type: "session.step.ended.1",
+            at: request.now.addingTimeInterval(-1),
+            message: "msg_response"
+        )
+        let source = OpenCodeHistorySource(database: fixture.database)
+        let repeated = try await source.read(request)
+        XCTAssertEqual(total(repeated), 200)
+        XCTAssertEqual(repeated.observations.count, 1)
+        XCTAssertEqual(repeated.observations.first?.timestamp, request.now.addingTimeInterval(-1))
+        try fixture.event(
+            "evt_conflict",
+            type: "session.step.failed.1",
+            usage: F.tokens(input: 500),
+            message: "msg_response"
+        )
+        let conflicting = try await source.read(request)
+        XCTAssertTrue(conflicting.observations.isEmpty)
+        XCTAssertEqual(conflicting.coverage.state, .partial)
+        XCTAssertEqual(conflicting.coverage.issues, [.conflictingOperation])
+    }
+
+    func testUnknownOrInvalidResponseEventsDoNotFallThroughToTheirProjection() async throws {
+        for (type, usage, issue) in [
+            ("session.step.ended.2", F.usage, HistoryIssue.unsupportedVersion),
+            ("session.step.ended.1", "{}", HistoryIssue.invalidUsage),
+        ] {
+            let fixture = try F()
+            try fixture.message()
+            try fixture.event("evt_response", type: type, usage: usage, message: "msg_response")
+            let result = try await OpenCodeHistorySource(database: fixture.database).read(request)
+            XCTAssertTrue(result.observations.isEmpty)
+            XCTAssertEqual(
+                result.coverage,
+                HistoryCoverage(state: .partial, hasReadings: false, issues: [issue])
+            )
+        }
+    }
+
+    func testUnrelatedArchivedEventsAndMessagesDoNotConsumeTheReadBudget() async throws {
+        let fixture = try F()
+        try fixture.message()
+        try fixture.event("evt_response", type: "session.step.ended.1", message: "msg_response")
+        try fixture.execute(
+            """
+            UPDATE session_v2 SET time_created = 0;
+            WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 40000)
+            INSERT INTO event(id, aggregate_id, seq, created, type, data)
+            SELECT 'evt_old' || i, 'session', i, 0, 'session.text.ended.1', '{}' FROM n;
+            WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 40000)
+            INSERT INTO session_message(id, session_id, seq, time_created, type, data)
+            SELECT 'msg_old' || i, 'session', i, 0, 'user', '{}' FROM n;
+            """
+        )
+        let result = try await OpenCodeHistorySource(
+            database: fixture.database,
+            limits: .init(maxSteps: 50_000)
+        ).read(request)
+        XCTAssertEqual(total(result), 200)
+        XCTAssertEqual(
+            result.coverage,
+            HistoryCoverage(state: .ready, hasReadings: true, issues: [])
+        )
     }
 
     func testForkCopiesStayExcludedAfterOriginalDeletionAndReimport() async throws {

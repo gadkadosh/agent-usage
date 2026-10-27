@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 
-/// OpenCode 2.x: response projections plus separately recorded title/compaction usage.
+/// OpenCode 2.x: durable spending events, with response projections as a fallback.
 /// SQLite owns snapshot consistency; no transcript data crosses this reader.
 actor OpenCodeHistorySource: HistoryAdapter {
     nonisolated let id = HistoryAgentID.openCode
@@ -130,7 +130,9 @@ private final class OpenCodeDatabase {
             guard Set(required).isSubset(of: columns) else { throw Failure.schema }
         }
 
-        var observations: [UsageObservation] = []
+        var observations: [String: UsageObservation] = [:]
+        var recordedResponses: Set<String> = []
+        var conflicts: Set<String> = []
         var issues: Set<HistoryIssue> = []
         var records = 0
         var readable = false
@@ -138,104 +140,132 @@ private final class OpenCodeDatabase {
         let since = request.since.timeIntervalSince1970 * 1_000
         let now = request.now.timeIntervalSince1970 * 1_000
 
-        func accept(_ row: OpaquePointer, event: Bool) {
+        func accept(_ row: OpaquePointer, kind: SpendingEvent? = nil) {
             records += 1
             guard records <= maxRecords else {
                 issues.insert(.scanLimit)
                 return
             }
-            guard let id = text(row, 0), !id.isEmpty,
-                sqlite3_column_type(row, 1) == SQLITE_INTEGER,
-                sqlite3_column_int(row, 2) == 1
-            else {
+            let responseID = kind?.isResponse == true ? text(row, 7) : nil
+            // Inspect response identities even outside the window: a projection must not
+            // re-date spending whose authoritative completion is old or still in the future.
+            if let responseID { recordedResponses.insert(responseID) }
+            guard sqlite3_column_type(row, 1) == SQLITE_INTEGER else {
                 issues.insert(.malformedRecord)
                 return
             }
-            // Fork projections use msg_<fork-event-id>_<sequence>, including reimported
-            // forks whose session metadata no longer identifies them as forks. They are
-            // copies, not spending, even after their original session is deleted.
-            if !event, isForkCopy(id) { return }
-            // An interrupted/failed assistant can legitimately have no usage yet.
-            if !event, sqlite3_column_type(row, 4) == SQLITE_NULL {
-                readable = true
+            let milliseconds = Double(sqlite3_column_int64(row, 1))
+            guard milliseconds >= since, milliseconds <= now else { return }
+            guard let id = text(row, 0), !id.isEmpty else {
+                issues.insert(.malformedRecord)
                 return
             }
-            guard text(row, 4) == "object", let encoded = text(row, 3) else {
+            if kind == nil, recordedResponses.contains(id) || isForkCopy(id) { return }
+            guard sqlite3_column_int(row, 2) == 1 else {
+                issues.insert(.malformedRecord)
+                return
+            }
+            if let kind {
+                guard let type = text(row, 5), type == kind.rawValue || type == kind.rawValue + ".1"
+                else {
+                    issues.insert(.unsupportedVersion)
+                    return
+                }
+                if kind.isResponse {
+                    guard let responseID, !responseID.isEmpty else {
+                        issues.insert(.malformedRecord)
+                        return
+                    }
+                    if isForkCopy(responseID) { return }
+                } else {
+                    guard let source = text(row, 6), source == "title" || source == "compaction"
+                    else {
+                        issues.insert(.unsupportedRecord)
+                        return
+                    }
+                }
+            }
+            // Failed calls and unfinished/imported projections may have no recorded usage.
+            if kind != .ended, sqlite3_column_type(row, 4) == SQLITE_NULL {
+                if kind != .usage { readable = true } else { issues.insert(.invalidUsage) }
+                return
+            }
+            guard text(row, 4) == "object", let encoded = text(row, 3),
+                let usage = try? JSONDecoder().decode(Tokens.self, from: Data(encoded.utf8)),
+                let tokens = usage.total
+            else {
                 issues.insert(.invalidUsage)
                 return
             }
-            guard let usage = try? JSONDecoder().decode(Tokens.self, from: Data(encoded.utf8)),
-                let tokens = usage.total,
-                !total.addingReportingOverflow(tokens).overflow
-            else {
+            let operationID = kind == .usage ? "event:\(id)" : "message:\(responseID ?? id)"
+            guard !conflicts.contains(operationID) else { return }
+            let timestamp = Date(timeIntervalSince1970: milliseconds / 1_000)
+            if let prior = observations[operationID] {
+                guard prior.tokens == tokens else {
+                    total -= prior.tokens
+                    observations.removeValue(forKey: operationID)
+                    conflicts.insert(operationID)
+                    issues.insert(.conflictingOperation)
+                    return
+                }
+                observations[operationID]?.timestamp = min(prior.timestamp, timestamp)
+                return
+            }
+            guard !total.addingReportingOverflow(tokens).overflow else {
                 issues.insert(.invalidUsage)
                 return
             }
             readable = true
             total += tokens
-            if tokens > 0 {
-                observations.append(
-                    UsageObservation(
-                        operationID: "\(event ? "event" : "message"):\(id)",
-                        timestamp: Date(
-                            timeIntervalSince1970: Double(sqlite3_column_int64(row, 1)) / 1_000
-                        ),
-                        tokens: tokens
-                    )
-                )
-            }
+            observations[operationID] = UsageObservation(
+                operationID: operationID,
+                timestamp: timestamp,
+                tokens: tokens
+            )
         }
 
-        // Select usage only, never content. A transaction keeps both queries on one WAL
-        // snapshot, including while OpenCode is writing or deleting a session.
-        try rows(
-            """
-            SELECT m.id, m.time_created,
-                CASE WHEN json_valid(m.data) THEN json_type(m.data) = 'object' ELSE 0 END,
-                CASE WHEN json_valid(m.data) THEN json_extract(m.data, '$.tokens') END,
-                CASE WHEN json_valid(m.data) THEN json_type(m.data, '$.tokens') END
-            FROM session_message AS m JOIN session_v2 AS s ON s.id = m.session_id
-            WHERE m.type = 'assistant'
-                AND (m.time_created BETWEEN ? AND ? OR typeof(m.time_created) != 'integer')
-                AND (s.fork_session_id IS NULL OR m.time_created >= s.time_created)
-            LIMIT ?
-            """,
-            since: since,
-            now: now,
-            limit: maxRecords + 1
-        ) { accept($0, event: false) }
-
+        // CROSS JOIN keeps sessions first, allowing upstream's (aggregate_id, type, seq)
+        // index to seek each accounting type. Separate bare/versioned lookups avoid an OR
+        // that would scan every unrelated event in a session. Only usage metadata is selected.
+        for kind in SpendingEvent.allCases {
+            for predicate in ["e.type = '\(kind.rawValue)'", "e.type GLOB '\(kind.rawValue).*'"] {
+                guard records <= maxRecords else { break }
+                try rows(
+                    """
+                    SELECT e.id, e.created,
+                        CASE WHEN json_valid(e.data) THEN json_type(e.data) = 'object' ELSE 0 END,
+                        CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.tokens') END,
+                        CASE WHEN json_valid(e.data) THEN json_type(e.data, '$.tokens') END,
+                        e.type,
+                        CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.source') END,
+                        CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.assistantMessageID') END
+                    FROM session_v2 AS s CROSS JOIN event AS e ON e.aggregate_id = s.id
+                    WHERE \(predicate)
+                    LIMIT ?3
+                    """,
+                    limit: maxRecords - records + 1
+                ) { accept($0, kind: kind) }
+            }
+        }
+        // Fallbacks cover imported/projection-only histories. Spending events take priority,
+        // including after undo has deleted their projection. The transaction covers both reads.
         if records <= maxRecords {
             try rows(
                 """
-                SELECT e.id, e.created, json_valid(e.data),
-                    CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.tokens') END,
-                    CASE WHEN json_valid(e.data) THEN json_type(e.data, '$.tokens') END,
-                    e.type,
-                    CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.source') END
-                FROM event AS e JOIN session_v2 AS s ON s.id = e.aggregate_id
-                WHERE (e.type = 'session.usage.recorded' OR e.type GLOB 'session.usage.recorded.*')
-                    AND (e.created BETWEEN ? AND ? OR typeof(e.created) != 'integer')
-                LIMIT ?
+                SELECT m.id, m.time_created,
+                    CASE WHEN json_valid(m.data) THEN json_type(m.data) = 'object' ELSE 0 END,
+                    CASE WHEN json_valid(m.data) THEN json_extract(m.data, '$.tokens') END,
+                    CASE WHEN json_valid(m.data) THEN json_type(m.data, '$.tokens') END
+                FROM session_v2 AS s CROSS JOIN session_message AS m ON m.session_id = s.id
+                WHERE m.type = 'assistant'
+                    AND (m.time_created BETWEEN ?1 AND ?2 OR typeof(m.time_created) != 'integer')
+                    AND (s.fork_session_id IS NULL OR m.time_created >= s.time_created)
+                LIMIT ?3
                 """,
                 since: since,
                 now: now,
                 limit: maxRecords - records + 1
-            ) { row in
-                guard let type = text(row, 5),
-                    type == "session.usage.recorded" || type == "session.usage.recorded.1"
-                else {
-                    records += 1
-                    issues.insert(.unsupportedVersion)
-                    return
-                }
-                guard let source = text(row, 6), source == "title" || source == "compaction" else {
-                    records += 1
-                    issues.insert(.unsupportedRecord)
-                    return
-                }
-                accept(row, event: true)
-            }
+            ) { accept($0) }
         }
         if records > maxRecords { issues.insert(.scanLimit) }
         try execute("COMMIT")
@@ -243,7 +273,7 @@ private final class OpenCodeDatabase {
         // bounded reads cannot erase an earlier accepted contribution with a guessed zero.
         let hasReadings = readable || issues.isEmpty
         return HistoryAdapterResult(
-            observations: observations,
+            observations: observations.values.filter { $0.tokens > 0 },
             coverage: HistoryCoverage(
                 state: issues.isEmpty ? .ready : .partial,
                 hasReadings: hasReadings,
@@ -251,6 +281,14 @@ private final class OpenCodeDatabase {
             ),
             fetchedAt: request.now
         )
+    }
+
+    private enum SpendingEvent: String, CaseIterable {
+        case ended = "session.step.ended"
+        case failed = "session.step.failed"
+        case usage = "session.usage.recorded"
+
+        var isResponse: Bool { self != .usage }
     }
 
     private func isForkCopy(_ id: String) -> Bool {

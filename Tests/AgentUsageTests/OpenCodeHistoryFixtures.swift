@@ -32,6 +32,7 @@ final class OpenCodeHistoryFixture {
                 time_updated INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL
             );
             CREATE INDEX session_message_time_created_idx ON session_message(time_created);
+            CREATE INDEX session_message_session_type_seq_idx ON session_message(session_id, type, seq);
             CREATE TABLE event (
                 id TEXT PRIMARY KEY, aggregate_id TEXT NOT NULL, seq INTEGER NOT NULL DEFAULT 0,
                 created INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL
@@ -97,10 +98,15 @@ final class OpenCodeHistoryFixture {
         source: String = "title",
         type: String = "session.usage.recorded.1",
         at date: Date = HistoryFixtures.now,
-        usage: String = usage
+        usage: String? = usage,
+        message: String? = nil
     ) throws {
-        let data =
-            "{\"sessionID\":\(quoteJSON(session)),\"source\":\(quoteJSON(source)),\"tokens\":\(usage)}"
+        let fields = [
+            "\"sessionID\":\(quoteJSON(session))", "\"source\":\(quoteJSON(source))", "\"cost\":0",
+            usage.map { "\"tokens\":\($0)" },
+            message.map { "\"assistantMessageID\":\(quoteJSON($0))" },
+        ].compactMap { $0 }
+        let data = "{" + fields.joined(separator: ",") + "}"
         try execute(
             """
             INSERT INTO event(id, aggregate_id, created, type, data)
