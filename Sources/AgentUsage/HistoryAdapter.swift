@@ -16,7 +16,6 @@ struct HistoryAgentID: Hashable, Sendable {
         default: rawValue
         }
     }
-    var symbol: String { self == .pi ? "π" : self == .openCode ? ">_" : "⌘" }
 }
 
 struct HistoryRequest: Sendable {
