@@ -14,7 +14,7 @@ Allowance refreshes about once a minute, independently of local history. The Cha
 
 ## Local history
 
-Choose **Today / 7 days / 30 days** for combined Pi, Codex, and OpenCode token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket changes only the large number, not the period totals in the rows. API cost estimates are outside scope.
+Choose **Today / 7 days / 30 days** for combined Pi, Codex, and OpenCode token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket temporarily shows that hour's or day's tokens in both the large total and the agent rows, keeping row order and visibility unchanged. Leaving the chart restores the full-period totals. API cost estimates are outside scope.
 
 Missing or unreadable histories are not presented as zero usage. Failed refreshes preserve the last readable observations. An unreadable agent with no accepted readings shows Unavailable/Failed, rather than a numeric zero. Warnings belong to the affected agent row; the combined chart shows available contributions. Healthy agents with no recorded activity in the last 30 days stay hidden. An agent remains visible with zero usage for a shorter selected period when it has activity in the 30-day window. The footer shows loading progress during catch-up, otherwise the oldest accepted contribution's update time. An unusable Codex root retains its accepted update time; cached-file fallbacks within a usable root can still carry the latest attempt time.
 

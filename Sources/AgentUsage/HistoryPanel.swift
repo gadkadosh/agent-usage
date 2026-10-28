@@ -32,8 +32,8 @@ struct HistoryPanel: View {
             }
 
             if let snapshot = history.snapshot {
+                let hoveredBucket = history.summary?.buckets.first { $0.id == hoveredBucketID }
                 if snapshot.coverage.hasReadings, let summary = history.summary {
-                    let hoveredBucket = summary.buckets.first { $0.id == hoveredBucketID }
                     HStack(alignment: .firstTextBaseline) {
                         Text(
                             (hoveredBucket?.tokens ?? summary.tokens)
@@ -72,7 +72,11 @@ struct HistoryPanel: View {
                                     Text(source.id.name).fontWeight(.medium)
                                     Spacer()
                                     if source.coverage?.hasReadings == true {
-                                        let tokens = source.summaries[history.period]?.tokens ?? 0
+                                        let summary = source.summaries[history.period]
+                                        let tokens =
+                                            hoveredBucket.map { bucket in
+                                                summary?.bucket(at: bucket.start)?.tokens ?? 0
+                                            } ?? summary?.tokens ?? 0
                                         Text(
                                             "\(tokens.formatted(.number.notation(.compactName))) tokens"
                                         )
