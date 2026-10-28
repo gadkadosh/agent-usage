@@ -91,7 +91,13 @@ AGENT_USAGE_RENDER_DIR=/tmp/agent-usage-captures \
   swift test --filter DashboardRenderingTests
 ```
 
-It captures combined-agent and single-agent dashboards, all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode. See the [native UI review guide](../scripts/ui-review.md) for isolated packaged-app verification.
+The README uses `ready-light-week.png`: all three agents, synthetic allowance, and token totals. Use a light, en_US desktop with at least 900 points of screen height so the full dashboard fits without scrolling; a 2× display produces the 720-pixel-wide image. After inspecting it for clipping, copy it into place:
+
+```sh
+cp /tmp/agent-usage-captures/ready-light-week.png docs/images/dashboard.png
+```
+
+It also captures single-agent dashboards, all periods, light/dark, partial/missing/stale/unsupported history, zero recorded usage, loading, and unavailable allowance. This test is skipped normally and does not replace ordinary menu-bar launch/interaction validation. There is no shipped demo mode. See the [native UI review guide](../scripts/ui-review.md) for isolated packaged-app verification.
 
 ### Formatting
 

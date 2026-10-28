@@ -37,7 +37,7 @@ final class DashboardRenderingTests: XCTestCase {
                     zero: name == "zero-light",
                     agents: name == "pi-only-light"
                         ? [.pi]
-                        : name == "codex-only-light" ? [.codex] : [.codex, .pi]
+                        : name == "codex-only-light" ? [.codex] : [.codex, .openCode, .pi]
                 )
             )
             let history = HistoryStore(fetch: { try await readings.history() })
