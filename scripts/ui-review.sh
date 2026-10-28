@@ -78,7 +78,6 @@ if [[ ! -e $session && $command == launch ]]; then
     session=$(cd "$session" && pwd -P)
     state="$session/session.plist"
     /usr/bin/plutil -create xml1 "$state"
-    put version 3
     put source "$app"
     put pi_fixtures "$pi_fixtures"
     put codex_fixtures "$codex_fixtures"
@@ -96,7 +95,6 @@ if [[ ! -e $session && $command == launch ]]; then
     plist="$bundle/Contents/Info.plist"
     original=$(/usr/bin/plutil -extract CFBundleExecutable raw -o - "$plist")
     [[ $original == AgentUsage ]] || fail 'Expected an AgentUsage packaged app.'
-    source_hash=$(/usr/bin/shasum -a 256 "$bundle/Contents/MacOS/$original" | cut -d ' ' -f1)
     mv "$bundle/Contents/MacOS/$original" "$executable"
     /usr/bin/plutil -replace CFBundleExecutable -string "$process" "$plist"
     /usr/bin/plutil -replace CFBundleName -string "$process" "$plist"
@@ -117,20 +115,6 @@ if [[ ! -e $session && $command == launch ]]; then
     if [[ -n $opencode_fixtures ]]; then
         /usr/bin/ditto "$opencode_fixtures" "$session/xdg-data/opencode/opencode.db"
     fi
-    {
-        printf 'Source app: %s\nSource executable SHA-256: %s\n' "$app" "$source_hash"
-        printf 'Isolated executable SHA-256: '
-        /usr/bin/shasum -a 256 "$executable" | cut -d ' ' -f1
-        printf 'Prepared UTC: %s\n' "$(date -u +%FT%TZ)"
-        /usr/bin/sw_vers
-        printf 'Synthetic Pi history source: %s\n' "${pi_fixtures:-empty}"
-        printf 'Snapshot hashes (relative to pi/sessions):\n'
-        (cd "$session/pi/sessions" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
-        printf 'Synthetic Codex history source: %s\nSnapshot hashes (relative to codex):\n' "${codex_fixtures:-empty}"
-        (cd "$session/codex" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
-        printf 'Synthetic OpenCode history source: %s\nSnapshot hashes (relative to xdg-data/opencode):\n' "${opencode_fixtures:-empty}"
-        (cd "$session/xdg-data/opencode" && find . -type f -exec /usr/bin/shasum -a 256 {} \;)
-    } > "$session/provenance.txt"
     put ready yes
 else
     [[ -d $session ]] || fail 'Session directory does not exist.'
@@ -138,8 +122,6 @@ else
     state="$session/session.plist"
 fi
 [[ -f $state ]] || fail 'Not a ui-review session.'
-version=$(get version)
-[[ $version == 1 || $version == 2 || $version == 3 ]] || fail 'Not a ui-review session.'
 # Partial preparation is never silently reused.
 [[ $(get ready 2>/dev/null || true) == yes ]] || fail 'Incomplete preparation; inspect the session and use a new directory.'
 process=$(get process)
@@ -179,7 +161,6 @@ APPLESCRIPT
 
 case "$command" in
     launch)
-        [[ $version == 3 ]] || fail 'Legacy review session; status, capture and cleanup remain supported. Use a new session directory to launch.'
         [[ $(get source) == "$app" ]] || fail 'Source app differs; use a new session directory.'
         [[ $(get pi_fixtures) == "$pi_fixtures" ]] || fail 'Pi session inputs differ; use a new session directory.'
         [[ $(get codex_fixtures) == "$codex_fixtures" ]] || fail 'Codex session inputs differ; use a new session directory.'
@@ -228,8 +209,7 @@ case "$command" in
         {
             printf 'Capture UTC: %s\nPID: %s\nProcess: %s\nBounds (screen points): %s\n' "$(date -u +%FT%TZ)" "$pid" "$process" "$bounds"
             printf 'Command: screencapture -x -R%s <output.png>\n' "$bounds"
-            printf 'Region capture: keep the review window unobscured. This is not a behavioral assertion.\n\n'
-            /bin/cat "$session/provenance.txt"
+            printf 'Region capture: keep the review window unobscured. This is not a behavioral assertion.\n'
         } > "$note"
         printf '%s\n%s\n' "$image" "$note"
         ;;

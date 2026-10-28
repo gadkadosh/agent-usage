@@ -1,11 +1,14 @@
-# Native UI review sessions
+# Native UI review
 
-`ui-review.sh` owns preparation, process lifecycle, and capture for the packaged app.
-It does not interact with controls, assert behavior, build the app, or publish evidence.
-Use it on a logged-in macOS desktop with Accessibility permission for the process
-driving the review. Capture also requires Screen Recording permission. These
-permissions are not changed by the harness. The quick start below targets the
-current desktop; see `AGENTS.md` for the VM preference and host-review coordination.
+Use a prepared macOS VM where possible; coordinate before using the host desktop
+(see `AGENTS.md`). The desktop must be logged in and unlocked, with Accessibility
+and automation permission for the process driving the review. Screenshots also need
+Screen Recording permission. Check permissions through the actual execution path:
+guest Terminal permissions may not apply over SSH. You can build on the host and
+copy the app, helper, and fixtures into the guest. Run the app, helper, and UI
+interactions there, then retrieve and inspect the evidence.
+
+## Prepare and launch
 
 ```sh
 make app
@@ -13,60 +16,27 @@ scripts/ui-review.sh launch .scratch/review-after --app '.build/Agent Usage.app'
 scripts/ui-review.sh status .scratch/review-after
 ```
 
-Launch prints a unique process name and PID. The copied `.app` is renamed and ad-hoc
-re-signed, leaving the source bundle and existing app instances alone. It runs the
-copied bundle executable directly to retain its exact PID. Each agent's environment
-points into the session, even when no history is supplied. Pi uses `SESSION/pi`
-(`PI_CODING_AGENT_DIR`) and `SESSION/pi/sessions` (`PI_CODING_AGENT_SESSION_DIR`);
-Codex uses `SESSION/codex` (`CODEX_HOME`). OpenCode uses
-`SESSION/xdg-data/opencode/opencode.db` (`XDG_DATA_HOME=SESSION/xdg-data`,
-`OPENCODE_DB=opencode.db`), overriding any inherited database selection. Credentials are empty; no provider requests
-can be authenticated.
+The helper copies and re-signs the packaged app with a unique process identity,
+leaving existing app instances alone. It prints the review process name and PID.
+Credentials and history paths point into the review directory, so authenticated
+provider requests are unavailable. Optional inputs must be invented, non-sensitive
+history; they are copied once, without credentials:
 
-Supply any combination of optional history inputs:
-
-| Option | Synthetic input layout | Isolated destination |
+| Option | Input | Copied destination |
 | --- | --- | --- |
-| `--pi-history /path/to/pi-sessions` | Pi sessions directory containing JSONL files and project subdirectories | `SESSION/pi/sessions` |
-| `--codex-history /path/to/codex-home` | Codex home containing `sessions` and/or `archived_sessions` | `SESSION/codex/sessions` and `SESSION/codex/archived_sessions` |
-| `--opencode-history /path/to/synthetic.db` | Closed, checkpointed synthetic OpenCode v2 SQLite database (no `-wal` or `-shm` sidecars) | `SESSION/xdg-data/opencode/opencode.db` |
+| `--pi-history PATH` | Pi sessions directory, not an agent home | `SESSION/pi/sessions` |
+| `--codex-history PATH` | Codex home with `sessions` and/or `archived_sessions` | `SESSION/codex/{sessions,archived_sessions}` |
+| `--opencode-history PATH` | Closed, checkpointed OpenCode v2 SQLite database; no `-wal`/`-shm` sidecars | `SESSION/xdg-data/opencode/opencode.db` |
 
-Other Codex files, including credentials and SQLite state, are not copied.
-Only the supplied OpenCode database file is copied, not its containing directory.
-Close all synthetic database connections before supplying it; sidecars are rejected
-to avoid a snapshot that silently omits WAL writes. Pi's
-input must contain only invented history, not an agent home or credentials.
-Provenance labels each agent's input path and snapshot hashes. Inputs are copied
-once; symlinks are rejected. The harness does not generate fixtures or freeze the
-app's clock. Only use invented, non-sensitive input.
+Symlinks are rejected. The helper does not generate fixtures or freeze the clock.
+Repeating launch with the same arguments reuses the prepared copy and inputs, even
+if their sources changed. Use a fresh directory for each new build/input or after
+changing the helper. Do not move directories or run concurrent commands on one
+session. If preparation fails, inspect the artifacts and start with a new directory.
 
-Launch again with the same arguments to reuse the running instance or restart the
-same prepared copy. Changes to the source app or any fixture input are **not**
-recopied. Use a new session for a new build/input. Do not move session directories
-or run concurrent commands against the same session.
+## Interact and capture
 
-`--pi-history` replaces the former `--sessions` flag. Pre-OpenCode review sessions (versions 1 and 2) retain
-support for status, capture, and cleanup, but cannot be relaunched with this harness
-because they lack OpenCode isolation;
-use a new session directory for the new layout. Existing evidence is not migrated.
-
-## Reviewing inside a VM
-
-The harness runs unchanged inside a prepared macOS guest. You can build the packaged
-app on the host, then copy it, the harness, and any synthetic fixtures into the guest.
-Run the app, harness, and all UI interactions there; retrieve and inspect the
-screenshots and accessible artifacts afterward. A successful capture is not proof
-that the interaction worked.
-
-The guest needs a logged-in, unlocked desktop, SSH access, and Accessibility,
-automation, and Screen Recording permissions for the process driving the review.
-Verify those prerequisites through the actual guest execution path; permissions
-granted to a guest Terminal may not apply to commands run over SSH.
-
-## Interaction and capture
-
-Use direct `osascript` with the printed PID or process name. For example, substituting
-`12345` with the actual PID:
+Use direct `osascript` with the printed PID, for example:
 
 ```sh
 osascript - 12345 <<'APPLESCRIPT'
@@ -80,8 +50,8 @@ APPLESCRIPT
 ```
 
 Open the review instance's menu-bar window manually or with native tools. SwiftUI's
-menu-bar item may not respond to an Accessibility `click`; a native pointer event
-can be needed. Control-specific scripts and pointer helpers stay outside the harness.
+menu-bar item may need a pointer event rather than an Accessibility `click`.
+Control-specific interactions stay outside the helper.
 
 ```sh
 scripts/ui-review.sh status .scratch/review-after
@@ -89,32 +59,29 @@ scripts/ui-review.sh capture .scratch/review-after idle
 scripts/ui-review.sh cleanup .scratch/review-after
 ```
 
-Status reports the process and either native bounds or the window count. A closed
-window is normal; an Accessibility error is not. Capture requires exactly one open
-window and uses its current Accessibility bounds with `screencapture -R`. Keep it
-unobscured: this is a screen-region capture, not an offscreen window render. It rejects
-closed/ambiguous windows, unsafe names, overwritten evidence, and changed bounds.
-It cannot detect every overlap or a close/reopen at identical bounds. Inspect the image.
+Status reports the window count or bounds; a closed window is normal, an
+Accessibility error is not. Capture requires exactly one open window and uses its
+Accessibility bounds with `screencapture -R`. Keep it unobscured: this captures a
+screen region, not an offscreen render. The helper rejects overwritten evidence
+and discards captures if the window closes or moves, but cannot detect every overlap
+or a close/reopen at identical bounds. Inspect the image; capture is not a behavior test.
 
-Evidence lives in `SESSION/evidence/NAME.png` and `NAME.txt`. The sidecar records the
-capture time, bounds, command, process, source/isolated binary hashes, macOS version,
-and fixture snapshot hashes. Binary hashes identify the artifact, not its Git revision;
-record the corresponding revision and UI setup separately on the PR. For matched
-before/after checks, use separate sessions with the same synthetic inputs, appearance,
-locale, selection, and pointer placement.
+Evidence is saved as `SESSION/evidence/NAME.png` and `NAME.txt`. The text records the
+capture time, process, bounds, and command. Publish matched before/after evidence
+with the build revisions, relevant OS details, synthetic setup, actions, and expected
+versus observed results. Match appearance, locale, selection, and pointer placement.
+Cleanup checks executable path and process start time before stopping only that
+instance; it is safe to repeat and preserves evidence. Remove the directory yourself
+when no longer needed.
 
-Cleanup checks both executable path and process start time before sending SIGTERM.
-It is safe to repeat, does not force-kill, and preserves the session and evidence.
-After cleanup, remove the session directory yourself when no longer needed. Failed
-preparation leaves artifacts for inspection; use a new directory rather than reusing it.
-
-## Integration checks
-
-These launch two real isolated apps and need Accessibility permission. They do not
-capture an open window; manually exercise capture and inspect the resulting image too.
+## Check changes to the helper
 
 ```sh
-scripts/test-ui-review.sh '.build/Agent Usage.app'
 bash -n scripts/ui-review.sh scripts/test-ui-review.sh
 shellcheck scripts/ui-review.sh scripts/test-ui-review.sh
+scripts/test-ui-review.sh '.build/Agent Usage.app'
 ```
+
+The integration checks launch two real isolated apps and need Accessibility. They
+check lifecycle and safety, not UI behavior. Also open the actual menu-bar window,
+capture it, and inspect the image when changing capture behavior.

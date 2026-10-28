@@ -32,10 +32,7 @@ printf '{"invented":"must not copy credentials"}\n' > "$root/codex-fixtures/auth
 pid=$(value "$first" pid)
 [[ $(value "$first" pi_fixtures) == "$(cd "$root/pi-fixtures" && pwd -P)" ]] || fail 'Pi input path was not recorded.'
 [[ $(value "$first" codex_fixtures) == "$(cd "$root/codex-fixtures" && pwd -P)" ]] || fail 'Codex input path was not recorded.'
-grep -q 'Synthetic Pi history source:' "$first/provenance.txt" || fail 'Pi provenance is unlabeled.'
-grep -q 'Synthetic Codex history source:' "$first/provenance.txt" || fail 'Codex provenance is unlabeled.'
 [[ $(value "$first" opencode_fixtures) == "$root/opencode-fixtures.db" ]] || fail 'OpenCode input path was not recorded.'
-grep -q 'Synthetic OpenCode history source:' "$first/provenance.txt" || fail 'OpenCode provenance is unlabeled.'
 cmp "$root/opencode-fixtures.db" "$first/xdg-data/opencode/opencode.db" || fail 'OpenCode snapshot differs.'
 /usr/bin/sqlite3 "$root/opencode-fixtures.db" 'INSERT INTO synthetic VALUES (456);'
 [[ $(/usr/bin/sqlite3 -readonly "$first/xdg-data/opencode/opencode.db" 'SELECT sum(tokens) FROM synthetic;') == 123 ]] || fail 'OpenCode snapshot follows source changes.'
@@ -103,21 +100,7 @@ grep -q 'State: stopped' "$root/stopped.txt" || fail 'Status missed stopped proc
 [[ $(wc -l < "$first/pi/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Relaunch replaced the Pi snapshot.'
 "$harness" status "$second" > "$root/other.txt"
 grep -q 'State: running' "$root/other.txt" || fail 'Other session stopped.'
-# Pre-OpenCode sessions cannot safely relaunch a newer app with incomplete isolation.
-/usr/bin/plutil -replace version -string 2 "$second/session.plist"
-reject "$harness" launch "$second" --app "$app"
-grep -q 'Legacy review session' "$root/rejected.log" || fail 'Version 2 launch did not explain isolation migration.'
-# Legacy sessions keep their old Pi layout/key, but can still be inspected and stopped.
-mv "$second/pi" "$second/agent"
-/usr/bin/plutil -replace version -string 1 "$second/session.plist"
-/usr/bin/plutil -replace fixtures -string '' "$second/session.plist"
-/usr/bin/plutil -remove pi_fixtures "$second/session.plist"
-"$harness" status "$second" > "$root/legacy.txt"
-grep -q 'State: running' "$root/legacy.txt" || fail 'Legacy status missed the running process.'
-reject "$harness" launch "$second" --app "$app"
-grep -q 'Legacy review session' "$root/rejected.log" || fail 'Legacy launch did not explain how to proceed.'
 "$harness" cleanup "$second"
 "$harness" cleanup "$second"
-if /bin/kill -0 "$other_pid" 2>/dev/null; then fail 'Legacy cleanup did not stop its process.'; fi
-[[ -f $second/provenance.txt ]] || fail 'Legacy cleanup deleted evidence.'
-printf 'PASS: real-app lifecycle, isolation, snapshot reuse, capture guards, cleanup ownership, and legacy sessions.\nArtifacts: %s\n' "$root"
+if /bin/kill -0 "$other_pid" 2>/dev/null; then fail 'Cleanup did not stop the second review process.'; fi
+printf 'PASS: real-app lifecycle, isolation, snapshot reuse, capture guards, and cleanup ownership.\nArtifacts: %s\n' "$root"
