@@ -69,11 +69,6 @@ struct HistoryPanel: View {
                         ForEach(sources, id: \.id) { source in
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 8) {
-                                    Text(source.id.symbol)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 20)
-                                        .accessibilityHidden(true)
                                     Text(source.id.name).fontWeight(.medium)
                                     Spacer()
                                     if source.coverage?.hasReadings == true {
