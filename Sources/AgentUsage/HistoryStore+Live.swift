@@ -6,6 +6,7 @@ extension HistoryStore {
         live(adapters: [
             PiHistorySource(root: PiHistorySource.defaultRoot()),
             CodexHistorySource(home: CodexHistorySource.defaultHome()),
+            OpenCodeHistorySource(database: OpenCodeHistorySource.defaultDatabaseURL()),
         ])
     }
 

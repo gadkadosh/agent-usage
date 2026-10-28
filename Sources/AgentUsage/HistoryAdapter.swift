@@ -6,9 +6,17 @@ struct HistoryAgentID: Hashable, Sendable {
     let rawValue: String
     static let pi = Self(rawValue: "pi")
     static let codex = Self(rawValue: "codex")
+    static let openCode = Self(rawValue: "opencode")
 
-    var name: String { self == .codex ? "Codex" : self == .pi ? "pi" : rawValue }
-    var symbol: String { self == .pi ? "π" : "⌘" }
+    var name: String {
+        switch self {
+        case .codex: "Codex"
+        case .pi: "pi"
+        case .openCode: "OpenCode"
+        default: rawValue
+        }
+    }
+    var symbol: String { self == .pi ? "π" : self == .openCode ? ">_" : "⌘" }
 }
 
 struct HistoryRequest: Sendable {
