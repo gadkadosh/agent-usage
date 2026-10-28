@@ -80,10 +80,11 @@ final class OpenCodeHistoryFixture {
         session: String = "session",
         at date: Date = HistoryFixtures.now,
         usage: String? = usage,
+        cost: String? = "0",
         type: String = "assistant"
     ) throws {
         let data =
-            "{\(usage.map { "\"tokens\":\($0)," } ?? "")\"content\":[{\"type\":\"text\",\"text\":\"SYNTHETIC TRANSCRIPT MUST NOT ESCAPE\"}]}"
+            "{\(usage.map { "\"tokens\":\($0)," } ?? "")\(cost.map { "\"cost\":\($0)," } ?? "")\"content\":[{\"type\":\"text\",\"text\":\"SYNTHETIC TRANSCRIPT MUST NOT ESCAPE\"}]}"
         try execute(
             """
             INSERT INTO session_message(id, session_id, type, time_created, data)
@@ -99,10 +100,12 @@ final class OpenCodeHistoryFixture {
         type: String = "session.usage.recorded.1",
         at date: Date = HistoryFixtures.now,
         usage: String? = usage,
+        cost: String? = "0",
         message: String? = nil
     ) throws {
         let fields = [
-            "\"sessionID\":\(quoteJSON(session))", "\"source\":\(quoteJSON(source))", "\"cost\":0",
+            "\"sessionID\":\(quoteJSON(session))", "\"source\":\(quoteJSON(source))",
+            cost.map { "\"cost\":\($0)" },
             usage.map { "\"tokens\":\($0)" },
             message.map { "\"assistantMessageID\":\(quoteJSON($0))" },
         ].compactMap { $0 }

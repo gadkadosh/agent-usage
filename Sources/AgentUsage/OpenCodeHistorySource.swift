@@ -133,6 +133,7 @@ private final class OpenCodeDatabase {
         var observations: [String: UsageObservation] = [:]
         var recordedResponses: Set<String> = []
         var conflicts: Set<String> = []
+        var conflictingCosts: Set<String> = []
         var issues: Set<HistoryIssue> = []
         var records = 0
         var readable = false
@@ -203,6 +204,9 @@ private final class OpenCodeDatabase {
                 issues.insert(.invalidUsage)
                 return
             }
+            let cost = text(row, kind == nil ? 5 : 8).flatMap {
+                try? JSONDecoder().decode(RecordedUSD.self, from: Data($0.utf8))
+            }?.value
             readable = readable || inWindow
             let operationID = kind == .usage ? "event:\(id)" : "message:\(responseID ?? id)"
             guard !conflicts.contains(operationID) else { return }
@@ -214,13 +218,19 @@ private final class OpenCodeDatabase {
                     issues.insert(.conflictingOperation)
                     return
                 }
+                if let old = prior.costUSD, let cost, old != cost {
+                    conflictingCosts.insert(operationID)
+                }
+                observations[operationID]?.costUSD =
+                    conflictingCosts.contains(operationID) ? nil : prior.costUSD ?? cost
                 observations[operationID]?.timestamp = min(prior.timestamp, timestamp)
                 return
             }
             observations[operationID] = UsageObservation(
                 operationID: operationID,
                 timestamp: timestamp,
-                tokens: tokens
+                tokens: tokens,
+                costUSD: cost
             )
         }
 
@@ -238,7 +248,8 @@ private final class OpenCodeDatabase {
                         CASE WHEN json_valid(e.data) THEN json_type(e.data, '$.tokens') END,
                         e.type,
                         CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.source') END,
-                        CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.assistantMessageID') END
+                        CASE WHEN json_valid(e.data) THEN json_extract(e.data, '$.assistantMessageID') END,
+                        CASE WHEN json_valid(e.data) THEN e.data -> '$.cost' END
                     FROM session_v2 AS s CROSS JOIN event AS e ON e.aggregate_id = s.id
                     WHERE \(predicate)
                     LIMIT ?3
@@ -255,7 +266,8 @@ private final class OpenCodeDatabase {
                 SELECT m.id, m.time_created,
                     CASE WHEN json_valid(m.data) THEN json_type(m.data) = 'object' ELSE 0 END,
                     CASE WHEN json_valid(m.data) THEN json_extract(m.data, '$.tokens') END,
-                    CASE WHEN json_valid(m.data) THEN json_type(m.data, '$.tokens') END
+                    CASE WHEN json_valid(m.data) THEN json_type(m.data, '$.tokens') END,
+                    CASE WHEN json_valid(m.data) THEN m.data -> '$.cost' END
                 FROM session_v2 AS s CROSS JOIN session_message AS m ON m.session_id = s.id
                 WHERE m.type = 'assistant'
                     AND (m.time_created BETWEEN ?1 AND ?2 OR typeof(m.time_created) != 'integer')
@@ -272,8 +284,7 @@ private final class OpenCodeDatabase {
         // Overflow checks apply to the retained total, not all historical accounting.
         var total: Int64 = 0
         let retained = observations.values.filter { observation in
-            guard observation.timestamp >= request.since, observation.timestamp <= request.now,
-                observation.tokens > 0
+            guard observation.timestamp >= request.since, observation.timestamp <= request.now
             else { return false }
             let next = total.addingReportingOverflow(observation.tokens)
             guard !next.overflow else {
