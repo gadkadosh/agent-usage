@@ -67,7 +67,7 @@ struct HistoryPanel: View {
                 if !sources.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(sources, id: \.id) { source in
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 8) {
                                     Text(source.id.name).fontWeight(.medium)
                                     Spacer()
@@ -88,6 +88,17 @@ struct HistoryPanel: View {
                                     }
                                 }
                                 .font(.subheadline)
+                                HStack {
+                                    Spacer()
+                                    Text(
+                                        "Recorded cost (\(history.period.title.lowercased())): \(source.recordedCost(for: history.period))"
+                                    )
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                                    .help(
+                                        "Locally recorded USD, not necessarily actual charges. Partial means some recorded activity has no usable cost."
+                                    )
+                                }
                                 if let status = source.status {
                                     Label(status, systemImage: "exclamationmark.triangle")
                                         .font(.caption).foregroundStyle(.secondary)
