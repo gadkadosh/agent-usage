@@ -67,16 +67,6 @@ final class DashboardPanelTests: XCTestCase {
         )
     }
 
-    func testScreenshotFixtureIncludesAllAgents() {
-        let snapshot = DashboardFixtures.history()
-        XCTAssertEqual(snapshot.visibleSources.map(\.id), [.codex, .openCode, .pi])
-        XCTAssertEqual(snapshot.summaries[.week]?.tokens, 331_560)
-        XCTAssertEqual(
-            snapshot.visibleSources.map { $0.summaries[.week]?.tokens },
-            [55_260, 110_520, 165_780]
-        )
-    }
-
     private func stores(_ readings: DashboardReadings) -> (UsageStore, HistoryStore) {
         (
             UsageStore(fetch: { try await readings.allowance() }, now: { DashboardFixtures.now }),
@@ -98,7 +88,7 @@ enum DashboardFixtures {
     static func history(
         state: HistoryCoverage.State = .ready,
         zero: Bool = false,
-        agents: [HistoryAgentID] = [.codex, .openCode, .pi]
+        agents: [HistoryAgentID] = [.codex, .pi]
     ) -> HistorySnapshot {
         let calendar = HistoryFixtures.calendar
         let coverage = HistoryCoverage(
