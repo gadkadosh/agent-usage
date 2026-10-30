@@ -54,7 +54,7 @@ struct HistoryPanel: View {
                         Spacer(minLength: 8)
                         if let cost = summary.cost.display {
                             Text(cost)
-                                .font(.system(size: 22, weight: .medium))
+                                .font(.system(size: 28, weight: .medium))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .lineLimit(1).fixedSize()
@@ -95,7 +95,8 @@ struct HistoryPanel: View {
                                         .monospacedDigit()
                                         .accessibilityLabel("\(tokens) tokens")
                                         if let cost = summary?.cost.display {
-                                            Text("· \(cost)")
+                                            Text(cost)
+                                                .padding(.leading, 8)
                                                 .foregroundStyle(.secondary)
                                                 .monospacedDigit().fixedSize()
                                                 .accessibilityLabel(
