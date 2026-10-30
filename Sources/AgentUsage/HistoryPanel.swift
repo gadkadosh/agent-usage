@@ -47,17 +47,15 @@ struct HistoryPanel: View {
                         .accessibilityLabel(
                             "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
                         )
-                        Text(
-                            hoveredBucket == nil
-                                ? "tokens processed"
-                                : history.period == .today ? "tokens this hour" : "tokens this day"
-                        )
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize()
+                        Text("tokens")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize()
                         Spacer(minLength: 8)
-                        if let cost = (hoveredBucket?.cost ?? summary.cost).display {
-                            Text(cost)
-                                .accessibilityLabel("\(costScope) cost: \(cost) USD")
+                        if let cost = (hoveredBucket?.cost ?? summary.cost).attributedDisplay {
+                            costTotal(cost)
+                                .accessibilityLabel(
+                                    "\(costScope) cost: \(String(cost.characters)) USD"
+                                )
                                 .help(
                                     "Available locally recorded costs for \(costScope) in USD. May be incomplete or estimated, not actual charges."
                                 )
@@ -142,6 +140,15 @@ struct HistoryPanel: View {
         }
         .onChange(of: history.period) { _ in hoveredBucketID = nil }
         .onDisappear { hoveredBucketID = nil }
+    }
+
+    private func costTotal(_ value: AttributedString) -> Text {
+        var text = value
+        for run in text.runs where run.numberSymbol == .currency {
+            text[run.range].font = .caption
+            text[run.range].foregroundColor = .secondary
+        }
+        return Text(text)
     }
 
     @ViewBuilder

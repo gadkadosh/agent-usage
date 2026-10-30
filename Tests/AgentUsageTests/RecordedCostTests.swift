@@ -200,7 +200,15 @@ final class RecordedCostTests: XCTestCase {
         )
         XCTAssertEqual(summaries[.today]?.tokens, 10)
         XCTAssertEqual(summaries[.today]?.cost.usd, decimal("0.001"))
-        XCTAssertEqual(summaries[.today]?.cost.display, "< $0.01")
+        XCTAssertEqual(
+            summaries[.today]?.cost.display,
+            "< " + decimal("0.01").formatted(.currency(code: "USD"))
+        )
+        XCTAssertEqual(
+            summaries[.today]?.cost.attributedDisplay?.runs.filter { $0.numberSymbol == .currency }
+                .count,
+            1
+        )
         XCTAssertEqual(summaries[.week]?.cost.usd, decimal("2.001"))
         XCTAssertEqual(summaries[.month]?.tokens, 60)
         XCTAssertEqual(summaries[.month]?.cost.recordedOperations, 2)
@@ -248,7 +256,13 @@ final class RecordedCostTests: XCTestCase {
         XCTAssertEqual(summary.cost.usd, decimal("0.001"))
         XCTAssertEqual(summary.cost.recordedOperations, 2)
         let costs = observations.map { summary.bucket(at: $0.timestamp)?.cost.display }
-        XCTAssertEqual(costs, [nil, Decimal.zero.formatted(.currency(code: "USD")), "< $0.01"])
+        XCTAssertEqual(
+            costs,
+            [
+                nil, Decimal.zero.formatted(.currency(code: "USD")),
+                "< " + decimal("0.01").formatted(.currency(code: "USD")),
+            ]
+        )
         XCTAssertNil(summary.bucket(at: request.now.addingTimeInterval(3_600))?.cost.display)
     }
 

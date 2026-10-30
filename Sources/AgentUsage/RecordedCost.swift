@@ -27,10 +27,14 @@ struct RecordedCostSummary: Equatable, Sendable {
         recordedOperations += other.recordedOperations
     }
 
-    var display: String? {
+    var display: String? { attributedDisplay.map { String($0.characters) } }
+
+    var attributedDisplay: AttributedString? {
         guard recordedOperations > 0 else { return nil }
-        // Preserve sub-cent usage instead of rounding a nonzero amount to $0.00.
-        return usd > 0 && usd < Decimal(string: "0.01")!
-            ? "< $0.01" : usd.formatted(.currency(code: "USD"))
+        // Keep currency metadata so the UI can style the unit separately from the amount.
+        let subcent = usd > 0 && usd < Decimal(string: "0.01")!
+        let amount = subcent ? Decimal(string: "0.01")! : usd
+        let formatted = amount.formatted(.currency(code: "USD").attributed)
+        return subcent ? AttributedString("< ") + formatted : formatted
     }
 }
