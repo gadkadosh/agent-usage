@@ -51,6 +51,17 @@ struct HistoryPanel: View {
                         )
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize()
+                        Spacer(minLength: 8)
+                        if let cost = summary.cost.display {
+                            Text(cost)
+                                .font(.title3).foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .lineLimit(1).fixedSize()
+                                .accessibilityLabel("\(history.period.title) cost: \(cost) USD")
+                                .help(
+                                    "Available locally recorded costs for \(history.period.title.lowercased()) in USD. May be incomplete or estimated, not actual charges."
+                                )
+                        }
                     }
                     historyChart(summary)
                 } else if snapshot.hasMore {
@@ -67,7 +78,7 @@ struct HistoryPanel: View {
                 if !sources.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(sources, id: \.id) { source in
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 8) {
                                     Text(source.id.name).fontWeight(.medium)
                                     Spacer()
@@ -88,17 +99,6 @@ struct HistoryPanel: View {
                                     }
                                 }
                                 .font(.subheadline)
-                                HStack {
-                                    Spacer()
-                                    Text(
-                                        "Recorded cost (\(history.period.title.lowercased())): \(source.recordedCost(for: history.period))"
-                                    )
-                                    .font(.caption).foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                                    .help(
-                                        "Locally recorded USD, not necessarily actual charges. Partial means some recorded activity has no usable cost."
-                                    )
-                                }
                                 if let status = source.status {
                                     Label(status, systemImage: "exclamationmark.triangle")
                                         .font(.caption).foregroundStyle(.secondary)

@@ -16,7 +16,6 @@ struct HistoryAgentID: Hashable, Sendable {
         default: rawValue
         }
     }
-    var recordsCost: Bool { self == .pi || self == .openCode }
 }
 
 struct HistoryRequest: Sendable {
@@ -62,13 +61,6 @@ struct HistorySourceSnapshot: Sendable {
     let fetchedAt: Date?
     let failed: Bool
     var isLoading = false
-
-    func recordedCost(for period: HistoryPeriod) -> String {
-        guard id.recordsCost, coverage?.hasReadings == true, let summary = summaries[period] else {
-            return "Unavailable"
-        }
-        return summary.cost.display
-    }
 }
 
 func historySummaries(

@@ -99,15 +99,21 @@ actor HistoryService {
                     now: request.now,
                     calendar: request.calendar
                 ).buckets
+                var cost = RecordedCostSummary()
                 for source in sources {
                     guard let summary = source.summaries[period] else { continue }
+                    cost.merge(summary.cost)
                     for index in buckets.indices {
                         buckets[index].tokens += summary.buckets[index].tokens
                     }
                 }
                 return (
                     period,
-                    PeriodSummary(tokens: buckets.reduce(0) { $0 + $1.tokens }, buckets: buckets)
+                    PeriodSummary(
+                        tokens: buckets.reduce(0) { $0 + $1.tokens },
+                        buckets: buckets,
+                        cost: cost
+                    )
                 )
             }
         )

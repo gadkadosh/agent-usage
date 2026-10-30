@@ -68,7 +68,7 @@ final class RecordedCostTests: XCTestCase {
         XCTAssertEqual(conflict.observations.map(\.tokens), [120])
         XCTAssertNil(conflict.observations.first?.costUSD)
         XCTAssertTrue(conflict.coverage.issues.isEmpty)
-        XCTAssertEqual(summary(conflict).cost.display, "Unavailable")
+        XCTAssertNil(summary(conflict).cost.display)
     }
 
     func testMissingCopyDoesNotOverrideKnownCost() {
@@ -133,7 +133,7 @@ final class RecordedCostTests: XCTestCase {
             XCTAssertEqual(result.observations.map(\.tokens), [200])
             XCTAssertNil(result.observations.first?.costUSD, "\(cost ?? "absent")")
             XCTAssertTrue(result.coverage.issues.isEmpty)
-            XCTAssertEqual(summary(result).cost.display, "Unavailable")
+            XCTAssertNil(summary(result).cost.display)
         }
     }
 
@@ -169,7 +169,7 @@ final class RecordedCostTests: XCTestCase {
         XCTAssertEqual(snapshot.sources.first?.summaries[.today]?.cost.usd, decimal("0.25"))
     }
 
-    func testPeriodCostsUseOperationDatesAndDistinguishPartialMissingAndZero() {
+    func testPeriodCostsUseOperationDatesAndOnlyDisplayRecordedAmounts() {
         let today = UsageObservation(
             operationID: "today",
             timestamp: request.now,
@@ -202,18 +202,20 @@ final class RecordedCostTests: XCTestCase {
         XCTAssertEqual(summaries[.today]?.cost.usd, decimal("0.001"))
         XCTAssertEqual(summaries[.today]?.cost.display, "< $0.01")
         XCTAssertEqual(summaries[.week]?.cost.usd, decimal("2.001"))
-        XCTAssertEqual(summaries[.week]?.cost.missingOperations, 0)
         XCTAssertEqual(summaries[.month]?.tokens, 60)
         XCTAssertEqual(summaries[.month]?.cost.recordedOperations, 2)
-        XCTAssertEqual(summaries[.month]?.cost.missingOperations, 1)
-        XCTAssertTrue(summaries[.month]!.cost.display.hasSuffix(" (partial)"))
+        XCTAssertEqual(
+            summaries[.month]?.cost.display,
+            decimal("2.001").formatted(.currency(code: "USD"))
+        )
 
         var zero = RecordedCostSummary()
         zero.add(0)
         XCTAssertEqual(zero.display, Decimal.zero.formatted(.currency(code: "USD")))
         var missing = RecordedCostSummary()
         missing.add(nil)
-        XCTAssertEqual(missing.display, "Unavailable")
+        XCTAssertNil(missing.display)
+        XCTAssertNil(RecordedCostSummary().display)
     }
 
     @MainActor
@@ -230,7 +232,7 @@ final class RecordedCostTests: XCTestCase {
         for period in HistoryPeriod.allCases {
             store.period = period
             XCTAssertEqual(
-                store.snapshot?.sources.first?.recordedCost(for: period),
+                store.summary?.cost.display,
                 decimal("2.5").formatted(.currency(code: "USD"))
             )
         }
@@ -240,32 +242,31 @@ final class RecordedCostTests: XCTestCase {
         await store.refresh()
         XCTAssertEqual(store.snapshot?.sources.first?.summaries[.today]?.cost.usd, decimal("2.5"))
         XCTAssertEqual(store.snapshot?.sources.first?.coverage?.state, .unavailable)
+        XCTAssertEqual(
+            store.summary?.cost.display,
+            decimal("2.5").formatted(.currency(code: "USD"))
+        )
     }
 
-    func testCodexAndUnreadableSourcesNeverDisplayZeroCost() {
-        let summary = PeriodSummary.aggregate(
-            [],
-            period: .today,
-            now: request.now,
-            calendar: request.calendar
-        )
-        for (id, hasReadings, expected) in [
-            (HistoryAgentID.codex, true, "Unavailable"),
-            (.pi, false, "Unavailable"),
-            (.openCode, true, Decimal.zero.formatted(.currency(code: "USD"))),
-        ] {
-            let source = HistorySourceSnapshot(
-                id: id,
-                summaries: [.today: summary],
-                coverage: HistoryCoverage(
-                    state: hasReadings ? .ready : .unavailable,
-                    hasReadings: hasReadings,
-                    issues: []
-                ),
-                fetchedAt: request.now,
-                failed: !hasReadings
+    func testCombinedCostIncludesAvailableSourcesWithoutInventingMissingCosts() async throws {
+        let pi = try HistoryFixtureRoot()
+        defer { pi.remove() }
+        try pi.write(lines: [F.header(), F.message(usage: piUsage(#"{"total":1.25}"#))])
+        let openCode = try OpenCodeHistoryFixture()
+        try openCode.event(cost: "2")
+        let snapshot = try await HistoryService(adapters: [
+            PiHistorySource(root: pi.root),
+            OpenCodeHistorySource(database: openCode.database),
+            CodexHistorySource(home: pi.root.appendingPathComponent("absent")),
+        ]).refresh(now: request.now, calendar: request.calendar)
+        for period in HistoryPeriod.allCases {
+            XCTAssertEqual(snapshot.summaries[period]?.tokens, 320)
+            XCTAssertEqual(snapshot.summaries[period]?.cost.usd, decimal("3.25"))
+            XCTAssertEqual(snapshot.summaries[period]?.cost.recordedOperations, 2)
+            XCTAssertEqual(
+                snapshot.summaries[period]?.cost.display,
+                decimal("3.25").formatted(.currency(code: "USD"))
             )
-            XCTAssertEqual(source.recordedCost(for: .today), expected)
         }
     }
 
