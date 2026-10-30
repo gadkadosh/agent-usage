@@ -3,16 +3,31 @@ import SwiftUI
 
 struct HistoryPanel: View {
     @ObservedObject var history: HistoryStore
+    var referenceDate: Date? = nil
     // Use the property wrapper, not the macOS 27 macro absent from Command Line Tools.
     private typealias HoverState = SwiftUI.State<Date?>
     @HoverState private var hoveredBucketID: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("HISTORY").font(.caption.weight(.semibold)).tracking(1)
-                Spacer()
-                Text("On this Mac").font(.caption)
+            HStack(alignment: .firstTextBaseline) {
+                Text("HISTORY · ON THIS MAC").font(.caption.weight(.semibold)).tracking(1)
+                Spacer(minLength: 8)
+                if let snapshot = history.snapshot {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .opacity(history.isRefreshing ? 1 : 0)
+                            .accessibilityLabel("Refreshing history")
+                            .accessibilityHidden(!history.isRefreshing)
+                            .allowsHitTesting(false)
+                        UpdatedTimestamp(
+                            date: snapshot.fetchedAt,
+                            isStale: history.error != nil,
+                            referenceDate: referenceDate
+                        )
+                    }
+                }
             }
             .foregroundStyle(.secondary)
 
@@ -130,7 +145,10 @@ struct HistoryPanel: View {
                     .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                     .padding(.top, 4)
                 }
-                historyFooter(snapshot)
+                if snapshot.hasMore && history.isRefreshing {
+                    Text("Loading history… Totals are still updating.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             } else if history.error == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -245,22 +263,6 @@ struct HistoryPanel: View {
             }
             .frame(height: 76)
             .onDisappear { hoveredBucketID = nil }
-        }
-    }
-
-    private func historyFooter(_ snapshot: HistorySnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                if snapshot.hasMore && history.isRefreshing {
-                    Text("Loading history… Totals are still updating.")
-                } else {
-                    Text(
-                        "Updated: \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .shortened))"
-                    )
-                }
-                if history.isRefreshing { ProgressView().controlSize(.mini) }
-            }
-            .font(.caption).foregroundStyle(.secondary)
         }
     }
 }

@@ -29,7 +29,7 @@ struct DashboardPanel: View {
                     referenceDate: referenceDate
                 )
                 Divider()
-                HistoryPanel(history: history)
+                HistoryPanel(history: history, referenceDate: referenceDate)
             }
             .padding(20)
             .frame(width: 360)
