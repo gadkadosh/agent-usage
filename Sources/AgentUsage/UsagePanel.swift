@@ -15,10 +15,14 @@ struct UsagePanel: View {
 
                 if let snapshot {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("CHATGPT · ACCOUNT-WIDE")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1)
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("CHATGPT · ACCOUNT-WIDE")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .tracking(1)
+                            Spacer(minLength: 8)
+                            refreshStatus
+                        }
 
                         limitRow(
                             title: "5-hour window",
@@ -46,8 +50,8 @@ struct UsagePanel: View {
                     .frame(maxWidth: .infinity, minHeight: 80)
                 }
 
-                if snapshot != nil || error != nil {
-                    footer
+                if snapshot == nil && error != nil {
+                    refreshStatus
                 }
             }
         }
@@ -115,16 +119,8 @@ struct UsagePanel: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var footer: some View {
+    private var refreshStatus: some View {
         HStack(spacing: 6) {
-            if let snapshot {
-                Text(
-                    "\(error == nil ? "Updated" : "Last updated"): \(snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))"
-                )
-            } else {
-                Text("Not updated yet")
-            }
-
             ProgressView()
                 .controlSize(.mini)
                 .opacity(isRefreshing ? 1 : 0)
@@ -132,7 +128,15 @@ struct UsagePanel: View {
                 .accessibilityHidden(!isRefreshing)
                 .allowsHitTesting(false)
 
-            Spacer(minLength: 0)
+            if let snapshot {
+                UpdatedTimestamp(
+                    date: snapshot.fetchedAt,
+                    isStale: error != nil,
+                    referenceDate: referenceDate
+                )
+            } else {
+                Text("Not updated yet")
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)

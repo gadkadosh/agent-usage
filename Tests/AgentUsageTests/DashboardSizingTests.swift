@@ -141,6 +141,48 @@ final class DashboardSizingTests: XCTestCase {
         XCTAssertEqual(heights[3], heights[0], accuracy: 1)
     }
 
+    func testHistoryCatchUpDoesNotChangePanelHeight() async throws {
+        let ready = DashboardFixtures.history()
+        let updates = AsyncStream<HistorySnapshot>.makeStream()
+        defer { updates.continuation.finish() }
+        let history = HistoryStore(fetchUpdates: { publish in
+            for await snapshot in updates.stream {
+                await publish(snapshot)
+            }
+            return ready
+        })
+        let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
+        await usage.refresh()
+        history.start()
+        updates.continuation.yield(ready)
+        let host = NSHostingView(
+            rootView: DashboardPanel(
+                usage: usage,
+                history: history,
+                referenceDate: DashboardFixtures.now
+            ).content
+        )
+        let window = makeWindow(host)
+        defer { window.close() }
+        let initial = try await fittedSize(host)
+        XCTAssertNotNil(history.snapshot)
+        XCTAssertTrue(history.isRefreshing)
+
+        var pending = ready
+        pending.hasMore = true
+        updates.continuation.yield(pending)
+        let catchingUp = try await fittedSize(host)
+        XCTAssertEqual(history.snapshot?.hasMore, true)
+        XCTAssertTrue(history.isRefreshing)
+        XCTAssertEqual(catchingUp.height, initial.height, accuracy: 1)
+
+        updates.continuation.finish()
+        await history.refresh()
+        let finished = try await fittedSize(host)
+        XCTAssertFalse(history.isRefreshing)
+        XCTAssertEqual(finished.height, initial.height, accuracy: 1)
+    }
+
     func testInitialContentLayoutDoesNotFetchHistory() async throws {
         let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
         await usage.refresh()
