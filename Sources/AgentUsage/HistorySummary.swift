@@ -32,13 +32,16 @@ struct HistoryBucket: Equatable, Identifiable, Sendable {
     let start: Date
     let end: Date
     var tokens: Int64 = 0
+    var cost = RecordedCostSummary()
     var id: Date { start }
 }
 
 struct PeriodSummary: Equatable, Sendable {
     let tokens: Int64
     let buckets: [HistoryBucket]
-    var cost = RecordedCostSummary()
+    var cost: RecordedCostSummary {
+        buckets.reduce(into: RecordedCostSummary()) { $0.merge($1.cost) }
+    }
 
     static func aggregate(
         _ observations: [UsageObservation],
@@ -60,7 +63,6 @@ struct PeriodSummary: Equatable, Sendable {
             buckets.append(HistoryBucket(start: cursor, end: next))
             cursor = next
         }
-        var cost = RecordedCostSummary()
         var seen: Set<String> = []
         for observation in observations {
             guard observation.timestamp >= start, observation.timestamp <= now,
@@ -81,8 +83,8 @@ struct PeriodSummary: Equatable, Sendable {
             let index = low - 1
             guard index >= 0, observation.timestamp < buckets[index].end else { continue }
             buckets[index].tokens += observation.tokens
-            cost.add(observation.costUSD)
+            buckets[index].cost.add(observation.costUSD)
         }
-        return Self(tokens: buckets.reduce(0) { $0 + $1.tokens }, buckets: buckets, cost: cost)
+        return Self(tokens: buckets.reduce(0) { $0 + $1.tokens }, buckets: buckets)
     }
 }

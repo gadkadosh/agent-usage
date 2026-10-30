@@ -204,6 +204,15 @@ final class RecordedCostTests: XCTestCase {
         XCTAssertEqual(summaries[.week]?.cost.usd, decimal("2.001"))
         XCTAssertEqual(summaries[.month]?.tokens, 60)
         XCTAssertEqual(summaries[.month]?.cost.recordedOperations, 2)
+        for period in HistoryPeriod.allCases {
+            XCTAssertEqual(
+                summaries[period]?.bucket(at: today.timestamp)?.cost.usd,
+                decimal("0.001")
+            )
+        }
+        XCTAssertEqual(summaries[.week]?.bucket(at: yesterday.timestamp)?.cost.usd, 2)
+        XCTAssertEqual(summaries[.month]?.bucket(at: old.timestamp)?.tokens, 30)
+        XCTAssertNil(summaries[.month]?.bucket(at: old.timestamp)?.cost.display)
         XCTAssertEqual(
             summaries[.month]?.cost.display,
             decimal("2.001").formatted(.currency(code: "USD"))
@@ -216,6 +225,31 @@ final class RecordedCostTests: XCTestCase {
         missing.add(nil)
         XCTAssertNil(missing.display)
         XCTAssertNil(RecordedCostSummary().display)
+    }
+
+    func testHourlyCostsDistinguishMissingZeroAndSubcentWithoutFallingBackToPeriodCost() {
+        let observations = ([nil, 0, decimal("0.001")] as [Decimal?]).enumerated().map {
+            index,
+            cost in
+            UsageObservation(
+                operationID: "hour-\(index)",
+                timestamp: request.now.addingTimeInterval(Double(index - 2) * 3_600),
+                tokens: 10,
+                costUSD: cost
+            )
+        }
+        let summary = PeriodSummary.aggregate(
+            observations + [observations[2]],
+            period: .today,
+            now: request.now,
+            calendar: request.calendar
+        )
+        XCTAssertEqual(summary.tokens, 30)
+        XCTAssertEqual(summary.cost.usd, decimal("0.001"))
+        XCTAssertEqual(summary.cost.recordedOperations, 2)
+        let costs = observations.map { summary.bucket(at: $0.timestamp)?.cost.display }
+        XCTAssertEqual(costs, [nil, Decimal.zero.formatted(.currency(code: "USD")), "< $0.01"])
+        XCTAssertNil(summary.bucket(at: request.now.addingTimeInterval(3_600))?.cost.display)
     }
 
     @MainActor
@@ -253,20 +287,27 @@ final class RecordedCostTests: XCTestCase {
         defer { pi.remove() }
         try pi.write(lines: [F.header(), F.message(usage: piUsage(#"{"total":1.25}"#))])
         let openCode = try OpenCodeHistoryFixture()
-        try openCode.event(cost: "2")
+        let timestamp = Date(timeIntervalSince1970: Double(F.milliseconds) / 1_000)
+        try openCode.event(at: timestamp, cost: "2")
+        let yesterday = request.now.addingTimeInterval(-86_400)
+        try openCode.event("yesterday", at: yesterday, cost: "3")
         let snapshot = try await HistoryService(adapters: [
             PiHistorySource(root: pi.root),
             OpenCodeHistorySource(database: openCode.database),
             CodexHistorySource(home: pi.root.appendingPathComponent("absent")),
         ]).refresh(now: request.now, calendar: request.calendar)
         for period in HistoryPeriod.allCases {
-            XCTAssertEqual(snapshot.summaries[period]?.tokens, 320)
-            XCTAssertEqual(snapshot.summaries[period]?.cost.usd, decimal("3.25"))
-            XCTAssertEqual(snapshot.summaries[period]?.cost.recordedOperations, 2)
-            XCTAssertEqual(
-                snapshot.summaries[period]?.cost.display,
-                decimal("3.25").formatted(.currency(code: "USD"))
-            )
+            let summary = try XCTUnwrap(snapshot.summaries[period])
+            XCTAssertEqual(summary.tokens, period == .today ? 320 : 520)
+            XCTAssertEqual(summary.cost.usd, decimal(period == .today ? "3.25" : "6.25"))
+            XCTAssertEqual(summary.cost.recordedOperations, period == .today ? 2 : 3)
+            let bucket = try XCTUnwrap(summary.bucket(at: timestamp))
+            XCTAssertEqual(bucket.cost.usd, decimal("3.25"))
+            XCTAssertEqual(bucket.cost.recordedOperations, 2)
+            XCTAssertEqual(bucket.tokens, 320)
+            if period != .today {
+                XCTAssertEqual(summary.bucket(at: yesterday)?.cost.usd, 3)
+            }
         }
     }
 

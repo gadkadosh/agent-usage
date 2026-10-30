@@ -33,14 +33,17 @@ struct HistoryPanel: View {
 
             if let snapshot = history.snapshot {
                 let hoveredBucket = history.summary?.buckets.first { $0.id == hoveredBucketID }
+                let costScope =
+                    hoveredBucket?.start.formatted(
+                        date: history.period == .today ? .omitted : .abbreviated,
+                        time: history.period == .today ? .shortened : .omitted
+                    ) ?? history.period.title
                 if snapshot.coverage.hasReadings, let summary = history.summary {
                     HStack(alignment: .firstTextBaseline) {
                         Text(
                             (hoveredBucket?.tokens ?? summary.tokens)
                                 .formatted(.number.notation(.compactName))
                         )
-                        .font(.system(size: 28, weight: .medium)).monospacedDigit()
-                        .lineLimit(1).minimumScaleFactor(0.5)
                         .accessibilityLabel(
                             "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
                         )
@@ -52,18 +55,16 @@ struct HistoryPanel: View {
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize()
                         Spacer(minLength: 8)
-                        if let cost = summary.cost.display {
+                        if let cost = (hoveredBucket?.cost ?? summary.cost).display {
                             Text(cost)
-                                .font(.system(size: 28, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .lineLimit(1).fixedSize()
-                                .accessibilityLabel("\(history.period.title) cost: \(cost) USD")
+                                .accessibilityLabel("\(costScope) cost: \(cost) USD")
                                 .help(
-                                    "Available locally recorded costs for \(history.period.title.lowercased()) in USD. May be incomplete or estimated, not actual charges."
+                                    "Available locally recorded costs for \(costScope) in USD. May be incomplete or estimated, not actual charges."
                                 )
                         }
                     }
+                    .font(.system(size: 28, weight: .medium)).foregroundStyle(.primary)
+                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                     historyChart(summary)
                 } else if snapshot.hasMore {
                     Text("Reading history…").font(.caption).foregroundStyle(.secondary)
@@ -85,22 +86,23 @@ struct HistoryPanel: View {
                                     Spacer()
                                     if source.coverage?.hasReadings == true {
                                         let summary = source.summaries[history.period]
+                                        let bucket = hoveredBucket.flatMap {
+                                            summary?.bucket(at: $0.start)
+                                        }
                                         let tokens =
-                                            hoveredBucket.map { bucket in
-                                                summary?.bucket(at: bucket.start)?.tokens ?? 0
-                                            } ?? summary?.tokens ?? 0
+                                            hoveredBucket == nil
+                                            ? summary?.tokens ?? 0 : bucket?.tokens ?? 0
+                                        let cost =
+                                            hoveredBucket == nil ? summary?.cost : bucket?.cost
                                         Text(
                                             "\(tokens.formatted(.number.notation(.compactName))) tokens"
                                         )
-                                        .monospacedDigit()
                                         .accessibilityLabel("\(tokens) tokens")
-                                        if let cost = summary?.cost.display {
+                                        if let cost = cost?.display {
                                             Text(cost)
                                                 .padding(.leading, 8)
-                                                .foregroundStyle(.secondary)
-                                                .monospacedDigit().fixedSize()
                                                 .accessibilityLabel(
-                                                    "\(source.id.name), \(history.period.title) cost: \(cost) USD"
+                                                    "\(source.id.name), \(costScope) cost: \(cost) USD"
                                                 )
                                         }
                                     } else {
@@ -108,7 +110,8 @@ struct HistoryPanel: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 }
-                                .font(.subheadline)
+                                .font(.subheadline).foregroundStyle(.primary)
+                                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                                 if let status = source.status {
                                     Label(status, systemImage: "exclamationmark.triangle")
                                         .font(.caption).foregroundStyle(.secondary)
