@@ -145,10 +145,6 @@ struct HistoryPanel: View {
                     .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                     .padding(.top, 4)
                 }
-                if snapshot.hasMore && history.isRefreshing {
-                    Text("Loading history… Totals are still updating.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
             } else if history.error == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
