@@ -54,7 +54,8 @@ struct HistoryPanel: View {
                         Spacer(minLength: 8)
                         if let cost = summary.cost.display {
                             Text(cost)
-                                .font(.title3).foregroundStyle(.secondary)
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .lineLimit(1).fixedSize()
                                 .accessibilityLabel("\(history.period.title) cost: \(cost) USD")
@@ -93,6 +94,14 @@ struct HistoryPanel: View {
                                         )
                                         .monospacedDigit()
                                         .accessibilityLabel("\(tokens) tokens")
+                                        if let cost = summary?.cost.display {
+                                            Text("· \(cost)")
+                                                .foregroundStyle(.secondary)
+                                                .monospacedDigit().fixedSize()
+                                                .accessibilityLabel(
+                                                    "\(source.id.name), \(history.period.title) cost: \(cost) USD"
+                                                )
+                                        }
                                     } else {
                                         Text(source.failed ? "Failed" : "Unavailable")
                                             .foregroundStyle(.secondary)
