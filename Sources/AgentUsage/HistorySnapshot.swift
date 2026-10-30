@@ -54,6 +54,7 @@ struct HistorySnapshot: Sendable {
                 || (source.coverage.map {
                     $0.state != .missing
                         && ((source.summaries[.month]?.tokens ?? 0) > 0
+                            || (source.summaries[.month]?.cost.usd ?? 0) > 0
                             || $0.state != .ready || source.isLoading)
                 } ?? false)
         }.sorted { $0.id.name.localizedCaseInsensitiveCompare($1.id.name) == .orderedAscending }

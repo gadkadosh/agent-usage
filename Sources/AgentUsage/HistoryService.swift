@@ -103,6 +103,7 @@ actor HistoryService {
                     guard let summary = source.summaries[period] else { continue }
                     for index in buckets.indices {
                         buckets[index].tokens += summary.buckets[index].tokens
+                        buckets[index].cost.merge(summary.buckets[index].cost)
                     }
                 }
                 return (

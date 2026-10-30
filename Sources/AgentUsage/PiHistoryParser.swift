@@ -122,7 +122,8 @@ struct PiHistoryParser: HistoryLineParser {
             UsageObservation(
                 operationID: key,
                 timestamp: timestamp,
-                tokens: total
+                tokens: total,
+                costUSD: usage.cost?.total
             )
         )
     }
@@ -162,12 +163,23 @@ struct PiHistoryParser: HistoryLineParser {
         let usage: Tokens?
     }
 
+    private struct Cost: Decodable {
+        let total: Decimal?
+        private enum CodingKeys: String, CodingKey { case total }
+
+        init(from decoder: any Decoder) {
+            let container = try? decoder.container(keyedBy: CodingKeys.self)
+            total = (try? container?.decode(RecordedUSD.self, forKey: .total))?.value
+        }
+    }
+
     private struct Tokens: Decodable {
         let input: Int64?
         let output: Int64?
         let cacheRead: Int64?
         let cacheWrite: Int64?
-        // These are subsets, not additional tokens. totalTokens/cost are deliberately ignored.
+        let cost: Cost?
+        // These are subsets, not additional tokens. totalTokens is deliberately ignored.
         let reasoning: Int64?
         let cacheWrite1h: Int64?
 
