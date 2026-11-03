@@ -55,17 +55,6 @@ struct HistoryPanel: View {
                     ) ?? history.period.title
                 if snapshot.coverage.hasReadings, let summary = history.summary {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(
-                            (hoveredBucket?.tokens ?? summary.tokens)
-                                .formatted(.number.notation(.compactName))
-                        )
-                        .accessibilityLabel(
-                            "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
-                        )
-                        Text("tokens")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize()
-                        Spacer(minLength: 8)
                         if let cost = (hoveredBucket?.cost ?? summary.cost).attributedDisplay {
                             costTotal(cost)
                                 .accessibilityLabel(
@@ -74,6 +63,19 @@ struct HistoryPanel: View {
                                 .help(
                                     "Available locally recorded costs for \(costScope) in USD. May be incomplete or estimated, not actual charges."
                                 )
+                        }
+                        Spacer(minLength: 8)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("tokens")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize()
+                            Text(
+                                (hoveredBucket?.tokens ?? summary.tokens)
+                                    .formatted(.number.notation(.compactName))
+                            )
+                            .accessibilityLabel(
+                                "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
+                            )
                         }
                     }
                     .font(.system(size: 28, weight: .medium)).foregroundStyle(.primary)
@@ -107,17 +109,17 @@ struct HistoryPanel: View {
                                             ? summary?.tokens ?? 0 : bucket?.tokens ?? 0
                                         let cost =
                                             hoveredBucket == nil ? summary?.cost : bucket?.cost
-                                        Text(
-                                            "\(tokens.formatted(.number.notation(.compactName))) tokens"
-                                        )
-                                        .accessibilityLabel("\(tokens) tokens")
                                         if let cost = cost?.display {
                                             Text(cost)
-                                                .padding(.leading, 8)
+                                                .padding(.trailing, 8)
                                                 .accessibilityLabel(
                                                     "\(source.id.name), \(costScope) cost: \(cost) USD"
                                                 )
                                         }
+                                        Text(
+                                            "\(tokens.formatted(.number.notation(.compactName))) tokens"
+                                        )
+                                        .accessibilityLabel("\(tokens) tokens")
                                     } else {
                                         Text(source.failed ? "Failed" : "Unavailable")
                                             .foregroundStyle(.secondary)
