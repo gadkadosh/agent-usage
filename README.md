@@ -16,7 +16,7 @@ make app
 
 Open `.build/Agent Usage.app`, or copy it to `/Applications` and open it there. It runs in the menu bar without a Dock icon; use its options menu to Refresh or Quit. The copied app doesn't need Swift or a terminal to run.
 
-For ChatGPT limits, sign into OpenAI with your ChatGPT subscription using `/login` in pi, then refresh Agent Usage.
+For ChatGPT limits, sign in with your ChatGPT subscription using `codex login` (file-based credentials), or `/login` in pi, then refresh Agent Usage. Codex is preferred; pi is the fallback. Codex logins stored only in Keychain are not supported.
 
 To run from source without creating an app bundle:
 
@@ -27,11 +27,11 @@ swift run
 ## Privacy and limitations
 
 - **History stays local.** The app reads Pi, Codex, and OpenCode histories without uploading or modifying them. Its in-memory index keeps usage metadata, not transcripts.
-- **ChatGPT access uses pi's login.** Allowance requests use pi's existing OpenAI credentials. The app never modifies credentials or refreshes tokens; if access expires, use OpenAI in pi or sign in again, then refresh.
+- **ChatGPT access uses your existing login.** Allowance requests prefer Codex's `auth.json`, with pi as fallback. An expired or rejected Codex login can fall back only to pi credentials for the same account. The app never modifies credentials or refreshes tokens; use the relevant agent or sign in again, then refresh.
 - **Limits and tokens measure different things.** ChatGPT limits are account-wide. The chart combines recorded Pi, Codex, and OpenCode activity on this Mac for today, the last 7 days, or the last 30 days, with a separate total for each agent below it.
 - **Cost isn't a bill.** The total above the history chart and amounts beside each agent's tokens show available locally recorded USD for the selected period, or the hovered hour/day. It may be incomplete or estimated rather than actual charges; Codex cost isn't available from the local history we read. No amount appears unless a cost was recorded. No cost lookup requests or pricing tables are used.
 - **History isn't a live counter.** Reopen the panel or choose Refresh to update it. Unused agents stay hidden. Missing or unreadable history isn't shown as zero usage; incomplete or stale readings carry a warning on the affected agent's row.
-- **The ChatGPT integration is unofficial.** Its endpoint and pi's credential format may change without notice.
+- **The ChatGPT integration is unofficial.** Its endpoint and the agents' credential formats may change without notice.
 - **The app isn't notarized.** Bundles are signed ad hoc for local use, not Developer ID signed. Downloaded or quarantined copies may be blocked by Gatekeeper.
 
 ## Detailed technical notes

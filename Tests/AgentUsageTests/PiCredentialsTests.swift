@@ -139,7 +139,11 @@ final class PiUsageClientTests: XCTestCase {
         for status in [301, 302, 303, 307, 308] {
             try fixture.write(validAuth(access: "redirect-\(status)"))
             do {
-                _ = try await UsageClient.fetch(credentials: fixture.source, session: session)
+                _ = try await UsageClient.fetch(
+                    codex: fixture.codexSource,
+                    pi: fixture.source,
+                    session: session
+                )
                 XCTFail("Expected HTTP \(status) to be rejected")
             } catch {
                 // Exact text excludes the destination, credentials and response body.
@@ -156,15 +160,27 @@ final class PiUsageClientTests: XCTestCase {
         let session = URLSession(configuration: config)
         defer { session.invalidateAndCancel() }
 
-        let first = try await UsageClient.fetch(credentials: fixture.source, session: session)
+        let first = try await UsageClient.fetch(
+            codex: fixture.codexSource,
+            pi: fixture.source,
+            session: session
+        )
         XCTAssertEqual(first.rateLimit.primaryWindow.usedPercent, 10)
         try fixture.write(validAuth(access: "second"))
-        let second = try await UsageClient.fetch(credentials: fixture.source, session: session)
+        let second = try await UsageClient.fetch(
+            codex: fixture.codexSource,
+            pi: fixture.source,
+            session: session
+        )
         XCTAssertEqual(second.rateLimit.primaryWindow.usedPercent, 20)
 
         try fixture.write(validAuth(access: "rejected"))
         do {
-            _ = try await UsageClient.fetch(credentials: fixture.source, session: session)
+            _ = try await UsageClient.fetch(
+                codex: fixture.codexSource,
+                pi: fixture.source,
+                session: session
+            )
             XCTFail("Expected a rejected login")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("401"))
@@ -178,6 +194,9 @@ private struct AuthFixture {
     let directory: URL
     var url: URL { directory.appendingPathComponent("auth.json") }
     var source: PiCredentialSource { PiCredentialSource(authURL: url) }
+    var codexSource: CodexCredentialSource {
+        CodexCredentialSource(authURL: directory.appendingPathComponent("missing-codex-auth.json"))
+    }
 
     init(_ content: String?) throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
