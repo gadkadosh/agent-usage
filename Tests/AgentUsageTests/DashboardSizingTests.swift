@@ -142,7 +142,9 @@ final class DashboardSizingTests: XCTestCase {
     }
 
     func testHistoryCatchUpDoesNotChangePanelHeight() async throws {
-        let ready = DashboardFixtures.history()
+        var snapshot = DashboardFixtures.history()
+        snapshot.sources += DashboardFixtures.history(zero: true, agents: [.openCode]).sources
+        let ready = snapshot
         let updates = AsyncStream<HistorySnapshot>.makeStream()
         defer { updates.continuation.finish() }
         let history = HistoryStore(fetchUpdates: { publish in
@@ -170,10 +172,12 @@ final class DashboardSizingTests: XCTestCase {
 
         var pending = ready
         pending.hasMore = true
+        pending.sources[2].isLoading = true
         updates.continuation.yield(pending)
         let catchingUp = try await fittedSize(host)
         XCTAssertEqual(history.snapshot?.hasMore, true)
         XCTAssertTrue(history.isRefreshing)
+        XCTAssertEqual(history.snapshot?.visibleSources.map(\.id), [.codex, .pi])
         XCTAssertEqual(catchingUp.height, initial.height, accuracy: 1)
 
         updates.continuation.finish()

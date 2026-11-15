@@ -55,7 +55,7 @@ struct HistorySnapshot: Sendable {
                     $0.state != .missing
                         && ((source.summaries[.month]?.tokens ?? 0) > 0
                             || (source.summaries[.month]?.cost.usd ?? 0) > 0
-                            || $0.state != .ready || source.isLoading)
+                            || $0.state != .ready)
                 } ?? false)
         }.sorted { $0.id.name.localizedCaseInsensitiveCompare($1.id.name) == .orderedAscending }
     }
