@@ -8,6 +8,12 @@ guest Terminal permissions may not apply over SSH. You can build on the host and
 copy the app, helper, and fixtures into the guest. Run the app, helper, and UI
 interactions there, then retrieve and inspect the evidence.
 
+Use the VM's configured SSH authentication for the preflight. On password-based
+test images, `ssh -o BatchMode=yes` disables password prompts: a rejected key does
+not prove the saved test-account login is unavailable. Use the configured test
+credentials through an askpass helper. The Tart Guest Agent is optional for this
+SSH-based workflow; `tart exec` failing does not imply SSH is unavailable.
+
 ## Prepare and launch
 
 ```sh

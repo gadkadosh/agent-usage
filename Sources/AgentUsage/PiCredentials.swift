@@ -1,10 +1,5 @@
 import Foundation
 
-struct PiCredentials: Sendable {
-    let accessToken: String
-    let accountID: String?
-}
-
 /// Reads pi's ChatGPT login without copying, refreshing, or modifying its credentials.
 struct PiCredentialSource: Sendable {
     let authURL: URL
@@ -33,7 +28,7 @@ struct PiCredentialSource: Sendable {
         return directory.appendingPathComponent("auth.json")
     }
 
-    func load(now: Date = Date()) throws -> PiCredentials {
+    func load(now: Date = Date()) throws -> ChatGPTCredentials {
         let data: Data
         do {
             data = try Data(contentsOf: authURL)
@@ -66,7 +61,7 @@ struct PiCredentialSource: Sendable {
         if let accountID, accountID.contains(where: { $0.isWhitespace || $0.isNewline }) {
             throw PiCredentialError.invalidFile
         }
-        return PiCredentials(
+        return ChatGPTCredentials(
             accessToken: access,
             accountID: accountID?.isEmpty == false ? accountID : nil
         )

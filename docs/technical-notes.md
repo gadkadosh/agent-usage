@@ -4,11 +4,15 @@
 
 ## ChatGPT allowance
 
-No access-token environment variable is required. Agent Usage reads only pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json` before each request, including its account ID when available. API keys and other agents' credentials are not used. The allowance is account-wide, not usage attributable only to pi.
+No access-token environment variable is required. Before each allowance refresh, Agent Usage reads Codex's ChatGPT login from `~/.codex/auth.json` first. If that file has no ChatGPT login (including an API-key-only login), it reads pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json`. Requests use the selected access token and optional account ID. API keys are never used. The allowance belongs to the selected ChatGPT account/workspace, not just the agent supplying its login; usage from the two sources is not added together.
 
-The app never modifies pi's credentials or refreshes tokens itself. If the token expires or is rejected, use OpenAI in pi so pi can refresh it, or sign in again with `/login`, then refresh. No app restart is needed. Pi's credential storage format is an unofficial integration point and may change.
+If Codex's access token has expired or the server rejects it with HTTP 401, pi is tried only when both logins contain the same nonempty account ID and pi has a valid, different token. Unknown or different account IDs prevent that fallback. Malformed or unreadable Codex files, network errors, other HTTP failures, and invalid responses do not trigger fallback. When Codex succeeds, pi's file is not read.
 
-If you use a custom pi directory, the optional `PI_CODING_AGENT_DIR` override is honored (including `~/` paths). A Finder-launched app uses the default location unless the override is present in its own environment; it does not inherit terminal-only variables.
+The Codex file contract is verified against [Codex 0.163.0 credential storage](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/login/src/auth/storage.rs) and [token data](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/login/src/token_data.rs): `tokens.access_token`, optional `tokens.account_id`, and an absent or `chatgpt` auth mode. Access-token JWT expiry is checked when present; ID-token expiry and `last_refresh` are not access-token expiry. Decoding JWT metadata does not authenticate the token; the server validates it. Codex logins stored only in Keychain or memory are not read; use pi's login for those installations.
+
+The app never modifies either agent's credentials or refreshes tokens itself. If access expires or is rejected, use the relevant agent so it can refresh its token, or sign in again with `codex login` or `/login` in pi, then refresh. No app restart is needed. Both credential storage formats are unofficial integration points and may change.
+
+Custom directories honor `CODEX_HOME` and `PI_CODING_AGENT_DIR`, including `~/` paths. A Finder-launched app uses default locations unless overrides are present in its own environment; it does not inherit terminal-only variables.
 
 Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
 
@@ -42,7 +46,7 @@ Pi cost comes from the same canonical operations as tokens: `usage.cost.total` o
 
 ### Codex discovery and accounting
 
-Codex reads `~/.codex/sessions` and `~/.codex/archived_sessions`, honoring `CODEX_HOME` (including `~/` paths). It does not read Codex credentials or SQLite state. This covers local CLI, app, extension, child, and background threads when their usage is persisted in those roots; remote/cloud-only, temporary, deleted, compressed, or otherwise unpersisted histories are outside coverage.
+Codex reads `~/.codex/sessions` and `~/.codex/archived_sessions`, honoring `CODEX_HOME` (including `~/` paths). The history adapter does not read Codex credentials or SQLite state; allowance authentication reads credentials separately as described above. This covers local CLI, app, extension, child, and background threads when their usage is persisted in those roots; remote/cloud-only, temporary, deleted, compressed, or otherwise unpersisted histories are outside coverage.
 
 The JSONL contract is verified against [OpenAI Codex 0.163.0](https://github.com/openai/codex/tree/83086188ae0614bd882818ff1aa23f3194962012):
 
