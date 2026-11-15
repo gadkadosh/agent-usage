@@ -148,6 +148,34 @@ final class AllowanceCredentialSelectionTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.pi.authURL), before)
     }
 
+    func testLegacyNonChatGPTLoginUsesPiDespiteLeftoverChatGPTTokens() async throws {
+        let fixture = try AllowanceAuthFixture()
+        defer { fixture.remove() }
+        try fixture.writePi()
+        let logins: [[String: Any]] = [
+            ["OPENAI_API_KEY": ""],
+            ["OPENAI_API_KEY": "synthetic-secret"],
+            ["personal_access_token": ""],
+            ["personal_access_token": "synthetic-pat"],
+            ["bedrock_api_key": ["api_key": "synthetic-secret", "region": "us-east-1"]],
+            [
+                "bedrock_access_keys": [
+                    "access_key_id": "synthetic-id", "secret_access_key": "synthetic-secret",
+                ]
+            ],
+        ]
+        for login in logins {
+            _ = try fixture.writeCodex(account: "inactive-account", mode: nil, otherLogins: login)
+            try await assertPercent(fixture, expected: 20)
+            // An explicit ChatGPT selection takes precedence over alternative logins.
+            _ = try fixture.writeCodex(mode: "chatgpt", otherLogins: login)
+            try await assertPercent(fixture, expected: 10)
+            // Null fields do not select an alternative login.
+            _ = try fixture.writeCodex(mode: nil, otherLogins: login.mapValues { _ in NSNull() })
+            try await assertPercent(fixture, expected: 10)
+        }
+    }
+
     func testFallbackCannotChangeOrGuessAccountAfterExpiryOrRejection() async throws {
         let fixture = try AllowanceAuthFixture()
         defer { fixture.remove() }
@@ -263,7 +291,8 @@ private struct AllowanceAuthFixture {
         expiry: Int? = 4_102_444_800,
         status: Int = 200,
         percent: Int = 10,
-        mode: String? = "chatgpt"
+        mode: String? = "chatgpt",
+        otherLogins: [String: Any] = [:]
     ) throws -> String {
         let access = try syntheticCodexToken(
             expiry: expiry,
@@ -278,6 +307,7 @@ private struct AllowanceAuthFixture {
         tokens["account_id"] = account
         var json: [String: Any] = ["tokens": tokens, "last_refresh": "2020-01-01T00:00:00Z"]
         json["auth_mode"] = mode
+        json.merge(otherLogins) { _, value in value }
         try JSONSerialization.data(withJSONObject: json).write(to: codex.authURL)
         return access
     }

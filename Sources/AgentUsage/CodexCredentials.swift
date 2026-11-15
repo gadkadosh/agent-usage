@@ -48,12 +48,7 @@ struct CodexCredentialSource: Sendable {
         }
 
         do {
-            let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            let auth = try decoder.decode(AuthFile.self, from: data)
-            guard auth.authMode == nil || auth.authMode == "chatgpt" else {
-                throw CodexCredentialError.missingLogin
-            }
+            let auth = try JSONDecoder().decode(AuthFile.self, from: data)
             guard let tokens = auth.tokens else { throw CodexCredentialError.missingLogin }
             let access = tokens.accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
             let accountID = tokens.accountId?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -88,13 +83,43 @@ struct CodexCredentialSource: Sendable {
     }
 
     private struct AuthFile: Decodable {
-        let authMode: String?
         let tokens: Tokens?
+
+        enum CodingKeys: String, CodingKey {
+            case authMode = "auth_mode"
+            case apiKey = "OPENAI_API_KEY"
+            case personalAccessToken = "personal_access_token"
+            case bedrockAPIKey = "bedrock_api_key"
+            case bedrockAccessKeys = "bedrock_access_keys"
+            case tokens
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if let mode = try container.decodeIfPresent(String.self, forKey: .authMode) {
+                guard mode == "chatgpt" else { throw CodexCredentialError.missingLogin }
+            } else {
+                // Legacy Codex files select any non-null alternative login before ChatGPT.
+                for key: CodingKeys in [
+                    .personalAccessToken, .bedrockAPIKey, .bedrockAccessKeys, .apiKey,
+                ] {
+                    if container.contains(key), try !container.decodeNil(forKey: key) {
+                        throw CodexCredentialError.missingLogin
+                    }
+                }
+            }
+            tokens = try container.decodeIfPresent(Tokens.self, forKey: .tokens)
+        }
     }
 
     private struct Tokens: Decodable {
         let accessToken: String
         let accountId: String?
+
+        enum CodingKeys: String, CodingKey {
+            case accessToken = "access_token"
+            case accountId = "account_id"
+        }
     }
 
     private struct Expiry: Decodable {
