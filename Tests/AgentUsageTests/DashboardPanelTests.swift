@@ -67,6 +67,17 @@ final class DashboardPanelTests: XCTestCase {
         )
     }
 
+    func testEmptyRefreshingSourceAppearsOnlyWhenActivityIsFound() {
+        var empty = DashboardFixtures.history(zero: true, agents: [.openCode])
+        empty.sources[0].isLoading = true
+        XCTAssertTrue(empty.visibleSources.isEmpty)
+
+        var active = DashboardFixtures.history(agents: [.openCode])
+        active.sources[0].isLoading = true
+        XCTAssertEqual(active.visibleSources.map(\.id), [.openCode])
+        XCTAssertGreaterThan(active.visibleSources[0].summaries[.month]?.tokens ?? 0, 0)
+    }
+
     private func stores(_ readings: DashboardReadings) -> (UsageStore, HistoryStore) {
         (
             UsageStore(fetch: { try await readings.allowance() }, now: { DashboardFixtures.now }),
