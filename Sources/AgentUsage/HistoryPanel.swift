@@ -69,13 +69,10 @@ struct HistoryPanel: View {
                             Text("tokens")
                                 .font(.caption).foregroundStyle(.secondary)
                                 .fixedSize()
-                            Text(
-                                (hoveredBucket?.tokens ?? summary.tokens)
-                                    .formatted(.number.notation(.compactName))
-                            )
-                            .accessibilityLabel(
-                                "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
-                            )
+                            Text(formattedTokens(hoveredBucket?.tokens ?? summary.tokens))
+                                .accessibilityLabel(
+                                    "\(hoveredBucket?.tokens ?? summary.tokens) observed tokens"
+                                )
                         }
                     }
                     .font(.system(size: 28, weight: .medium)).foregroundStyle(.primary)
@@ -116,10 +113,8 @@ struct HistoryPanel: View {
                                                     "\(source.id.name), \(costScope) cost: \(cost) USD"
                                                 )
                                         }
-                                        Text(
-                                            "\(tokens.formatted(.number.notation(.compactName))) tokens"
-                                        )
-                                        .accessibilityLabel("\(tokens) tokens")
+                                        Text("\(formattedTokens(tokens)) tokens")
+                                            .accessibilityLabel("\(tokens) tokens")
                                     } else {
                                         Text(source.failed ? "Failed" : "Unavailable")
                                             .foregroundStyle(.secondary)
@@ -156,6 +151,13 @@ struct HistoryPanel: View {
         }
         .onChange(of: history.period) { _ in hoveredBucketID = nil }
         .onDisappear { hoveredBucketID = nil }
+    }
+
+    private func formattedTokens(_ tokens: Int64) -> String {
+        let format = IntegerFormatStyle<Int64>.number.notation(.compactName)
+        return tokens.formatted(
+            tokens >= 1_000_000_000 ? format.precision(.fractionLength(2)) : format
+        )
     }
 
     private func costTotal(_ value: AttributedString) -> Text {
