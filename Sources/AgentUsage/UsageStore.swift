@@ -1,26 +1,41 @@
 import Foundation
 import SwiftUI
 
+struct AllowanceState: Identifiable, Equatable {
+    let provider: AllowanceProvider
+    var snapshot: UsageSnapshot?
+    var error: String?
+
+    var id: AllowanceProvider { provider }
+}
+
 @MainActor
 final class UsageStore: ObservableObject {
-    @Published private(set) var snapshot: UsageSnapshot?
-    @Published private(set) var error: String?
+    @Published private(set) var allowances: [AllowanceState]
     @Published private(set) var isRefreshing = false
 
+    /// The menu bar shows whichever provider is closest to its limit.
     var summary: String {
-        snapshot?.limits.summary ?? (error == nil ? "Agent Usage…" : "Usage unavailable")
+        let readings = allowances.compactMap(\.snapshot?.allowance)
+        if let tightest = readings.min(by: {
+            $0.lowestRemainingFraction < $1.lowestRemainingFraction
+        }) {
+            return tightest.summary
+        }
+        return allowances.contains { $0.error == nil } ? "Agent Usage…" : "Usage unavailable"
     }
 
-    private let fetch: @Sendable () async throws -> UsageLimits
+    private let sources: [AllowanceSource]
     private let now: () -> Date
     private var started = false
 
     init(
-        fetch: @escaping @Sendable () async throws -> UsageLimits = UsageClient.fetch,
+        sources: [AllowanceSource] = [.chatGPT],
         now: @escaping () -> Date = Date.init
     ) {
-        self.fetch = fetch
+        self.sources = sources
         self.now = now
+        allowances = sources.map { AllowanceState(provider: $0.provider) }
     }
 
     func start() {
@@ -39,13 +54,30 @@ final class UsageStore: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        do {
-            let limits = try await fetch()
-            snapshot = UsageSnapshot(limits: limits, fetchedAt: now())
-            error = nil
-        } catch {
-            // Keep the last successful reading, clearly marked as stale in the panel.
-            self.error = error.localizedDescription
+        await withTaskGroup(of: (Int, Result<Allowance, any Error>).self) { group in
+            for (index, source) in sources.enumerated() {
+                group.addTask {
+                    do {
+                        return (index, .success(try await source.fetch()))
+                    } catch {
+                        return (index, .failure(error))
+                    }
+                }
+            }
+            // Publish each provider as it arrives, so a slow one doesn't hold back the others.
+            for await (index, result) in group {
+                switch result {
+                case .success(let allowance):
+                    allowances[index].snapshot = UsageSnapshot(
+                        allowance: allowance,
+                        fetchedAt: now()
+                    )
+                    allowances[index].error = nil
+                case .failure(let error):
+                    // Keep the last successful reading, clearly marked as stale in the panel.
+                    allowances[index].error = error.localizedDescription
+                }
+            }
         }
     }
 }

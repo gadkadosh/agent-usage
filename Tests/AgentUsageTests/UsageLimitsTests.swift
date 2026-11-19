@@ -17,8 +17,17 @@ final class UsageLimitsTests: XCTestCase {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let limits = try decoder.decode(UsageLimits.self, from: Data(json.utf8))
 
-        XCTAssertEqual(limits.summary, "5h: 76%  7d: 87.5%")
-        XCTAssertEqual(limits.details, "5h: 76%  7d: 87.5% | 5h: 1h2m  7d: 1d1h")
+        let receivedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let allowance = limits.allowance(receivedAt: receivedAt)
+
+        XCTAssertEqual(allowance.summary, "5h: 76%  7d: 87.5%")
+        XCTAssertEqual(allowance.windows.map(\.title), ["5-hour window", "Weekly window"])
+        XCTAssertEqual(allowance.windows.map(\.subtitle), ["", "7 days"])
+        XCTAssertEqual(
+            allowance.windows.map(\.resetsAt),
+            [receivedAt.addingTimeInterval(3_720), receivedAt.addingTimeInterval(90_000)]
+        )
+        XCTAssertEqual(allowance.lowestRemainingFraction, 0.76)
     }
 
     func testRejectsMissingQuotaWindows() {

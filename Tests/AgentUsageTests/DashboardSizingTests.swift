@@ -107,7 +107,10 @@ final class DashboardSizingTests: XCTestCase {
     func testRetainedWindowTracksHistoryWithoutLayoutFetchesAndKeepsTopEdge() async throws {
         let readings = SizingReadings()
         await readings.setHistoryState(.partial)
-        let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
+        let usage = UsageStore(
+            fetch: { DashboardFixtures.allowance },
+            now: { DashboardFixtures.now }
+        )
         let history = HistoryStore(fetch: { await readings.history() })
         await usage.refresh()
         await history.refresh()
@@ -153,7 +156,10 @@ final class DashboardSizingTests: XCTestCase {
             }
             return ready
         })
-        let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
+        let usage = UsageStore(
+            fetch: { DashboardFixtures.allowance },
+            now: { DashboardFixtures.now }
+        )
         await usage.refresh()
         history.start()
         updates.continuation.yield(ready)
@@ -188,7 +194,10 @@ final class DashboardSizingTests: XCTestCase {
     }
 
     func testInitialContentLayoutDoesNotFetchHistory() async throws {
-        let usage = UsageStore(fetch: { DashboardFixtures.limits }, now: { DashboardFixtures.now })
+        let usage = UsageStore(
+            fetch: { DashboardFixtures.allowance },
+            now: { DashboardFixtures.now }
+        )
         await usage.refresh()
         for state in [HistoryCoverage.State.ready, .partial, .missing] {
             let readings = DashboardReadings(snapshot: DashboardFixtures.history(state: state))
@@ -266,9 +275,9 @@ private actor SizingReadings {
         return DashboardFixtures.history(state: historyState)
     }
 
-    func allowance() throws -> UsageLimits {
+    func allowance() throws -> Allowance {
         if let error { throw Failure(message: error) }
-        return DashboardFixtures.limits
+        return DashboardFixtures.allowance
     }
 
     private struct Failure: LocalizedError {

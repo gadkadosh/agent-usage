@@ -66,8 +66,8 @@ final class HistoryLiveTests: XCTestCase {
         await allowance.refresh()
         await history.refresh()
 
-        XCTAssertNotNil(allowance.error)
-        XCTAssertNil(allowance.snapshot)
+        XCTAssertNotNil(allowance.allowances[0].error)
+        XCTAssertNil(allowance.allowances[0].snapshot)
         XCTAssertNil(history.error)
         XCTAssertEqual(history.snapshot?.coverage.state, .ready)
         XCTAssertEqual(history.snapshot?.coverage.hasReadings, true)

@@ -1,10 +1,13 @@
 import SwiftUI
 
 struct UsagePanel: View {
-    let snapshot: UsageSnapshot?
-    let error: String?
+    let state: AllowanceState
     let isRefreshing: Bool
     var referenceDate: Date? = nil
+
+    private var snapshot: UsageSnapshot? { state.snapshot }
+    private var error: String? { state.error }
+    private static let meterColors: [Color] = [.orange, .blue, .purple, .teal]
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -16,7 +19,7 @@ struct UsagePanel: View {
                 if let snapshot {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text("CHATGPT · ACCOUNT-WIDE")
+                            Text("\(state.provider.title.uppercased()) · ACCOUNT-WIDE")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .tracking(1)
@@ -24,22 +27,14 @@ struct UsagePanel: View {
                             refreshStatus
                         }
 
-                        limitRow(
-                            title: "5-hour window",
-                            subtitle: "",
-                            color: .orange,
-                            window: snapshot.limits.rateLimit.primaryWindow,
-                            snapshot: snapshot,
-                            now: referenceDate ?? context.date
-                        )
-                        limitRow(
-                            title: "Weekly window",
-                            subtitle: "7 days",
-                            color: .blue,
-                            window: snapshot.limits.rateLimit.secondaryWindow,
-                            snapshot: snapshot,
-                            now: referenceDate ?? context.date
-                        )
+                        let windows = snapshot.allowance.windows
+                        ForEach(windows.indices, id: \.self) { index in
+                            limitRow(
+                                window: windows[index],
+                                color: Self.meterColors[index % Self.meterColors.count],
+                                now: referenceDate ?? context.date
+                            )
+                        }
                     }
                 } else if error == nil {
                     HStack(spacing: 10) {
@@ -57,19 +52,12 @@ struct UsagePanel: View {
         }
     }
 
-    private func limitRow(
-        title: String,
-        subtitle: String,
-        color: Color,
-        window: UsageLimits.Window,
-        snapshot: UsageSnapshot,
-        now: Date
-    ) -> some View {
+    private func limitRow(window: AllowanceWindow, color: Color, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).fontWeight(.medium)
-                if !subtitle.isEmpty {
-                    Text("· \(subtitle)")
+                Text(window.title).fontWeight(.medium)
+                if !window.subtitle.isEmpty {
+                    Text("· \(window.subtitle)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -88,10 +76,10 @@ struct UsagePanel: View {
             }
             .frame(height: 6)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(title) allowance remaining")
+            .accessibilityLabel("\(window.title) allowance remaining")
             .accessibilityValue("\(window.remaining) remaining")
 
-            Text(snapshot.resetDescription(for: window, at: now))
+            Text(window.resetDescription(at: now))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()

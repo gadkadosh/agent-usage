@@ -48,7 +48,7 @@ final class DashboardRenderingTests: XCTestCase {
             let usage = UsageStore(
                 fetch: {
                     if unavailable { throw SyntheticAllowanceError.unavailable }
-                    return DashboardFixtures.limits
+                    return DashboardFixtures.allowance
                 },
                 now: { DashboardFixtures.now }
             )
