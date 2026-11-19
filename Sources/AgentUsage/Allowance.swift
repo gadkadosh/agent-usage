@@ -11,7 +11,9 @@ enum AllowanceProvider: String, Sendable {
     }
 }
 
-/// Fetches one provider's allowance; each provider refreshes and fails independently.
+/// Fetches one provider's allowance; each provider fails independently.
+/// `fetch` must finish within a bounded time, such as a request timeout: a refresh waits for
+/// every provider, so one that never returns would stall refreshes for all of them.
 struct AllowanceSource: Sendable {
     let provider: AllowanceProvider
     let fetch: @Sendable () async throws -> Allowance
