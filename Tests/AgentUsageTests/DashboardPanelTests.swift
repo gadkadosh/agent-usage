@@ -11,7 +11,7 @@ final class DashboardPanelTests: XCTestCase {
         let before = await readings.counts
         XCTAssertEqual(before, [0, 0])
         await DashboardPanel(usage: usage, history: history).refresh()
-        XCTAssertNotNil(usage.snapshot)
+        XCTAssertNotNil(usage.allowances[0].snapshot)
         XCTAssertEqual(history.summary?.tokens, 18_420)
         history.period = .week
         XCTAssertEqual(history.summary?.tokens, 331_560)
@@ -25,8 +25,8 @@ final class DashboardPanelTests: XCTestCase {
         let readings = DashboardReadings(allowanceFails: true)
         let (usage, history) = stores(readings)
         await DashboardPanel(usage: usage, history: history).refresh()
-        XCTAssertNotNil(usage.error)
-        XCTAssertNil(usage.snapshot)
+        XCTAssertNotNil(usage.allowances[0].error)
+        XCTAssertNil(usage.allowances[0].snapshot)
         XCTAssertNil(history.error)
         XCTAssertEqual(history.summary?.tokens, 18_420)
     }
@@ -38,8 +38,8 @@ final class DashboardPanelTests: XCTestCase {
         await panel.refresh()
         let previous = history.snapshot
         await panel.refresh()
-        XCTAssertNil(usage.error)
-        XCTAssertNotNil(usage.snapshot)
+        XCTAssertNil(usage.allowances[0].error)
+        XCTAssertNotNil(usage.allowances[0].snapshot)
         XCTAssertNotNil(history.error)
         XCTAssertEqual(history.snapshot?.fetchedAt, previous?.fetchedAt)
         XCTAssertEqual(history.summary?.tokens, 18_420)
@@ -86,15 +86,25 @@ final class DashboardPanelTests: XCTestCase {
     }
 }
 
+extension UsageStore {
+    /// A single synthetic ChatGPT source, never the live client.
+    convenience init(
+        fetch: @escaping @Sendable () async throws -> Allowance,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.init(sources: [AllowanceSource(provider: .chatGPT, fetch: fetch)], now: now)
+    }
+}
+
 /// Shared test-only fixtures; never construct live stores, discovery or networking.
 enum DashboardFixtures {
     static let now = HistoryFixtures.now
-    static let limits = UsageLimits(
+    static let allowance = UsageLimits(
         rateLimit: .init(
             primaryWindow: .init(usedPercent: 28, resetAfterSeconds: 8_280),
             secondaryWindow: .init(usedPercent: 54, resetAfterSeconds: 280_800)
         )
-    )
+    ).allowance(receivedAt: now)
 
     static func history(
         state: HistoryCoverage.State = .ready,
@@ -152,10 +162,10 @@ actor DashboardReadings {
         self.snapshot = snapshot
     }
 
-    func allowance() throws -> UsageLimits {
+    func allowance() throws -> Allowance {
         counts[0] += 1
         if allowanceFails { throw URLError(.notConnectedToInternet) }
-        return DashboardFixtures.limits
+        return DashboardFixtures.allowance
     }
 
     func history() throws -> HistorySnapshot {

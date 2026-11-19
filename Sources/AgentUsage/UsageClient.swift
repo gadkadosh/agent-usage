@@ -11,32 +11,36 @@ struct UsageLimits: Decodable, Sendable {
     struct Window: Decodable, Sendable {
         let usedPercent: Double
         let resetAfterSeconds: Int
-
-        var remainingFraction: Double {
-            min(1, max(0, (100 - usedPercent) / 100))
-        }
-
-        var meterOpacity: Double { 0.65 + 0.35 * remainingFraction }
-
-        var remaining: String {
-            String(format: "%g", remainingFraction * 100) + "%"
-        }
-
-        var resetIn: String {
-            let seconds = max(0, resetAfterSeconds)
-            if seconds < 60 { return "\(seconds)s" }
-            if seconds < 3_600 { return "\(seconds / 60)m" }
-            if seconds < 86_400 { return "\(seconds / 3_600)h\((seconds % 3_600) / 60)m" }
-            return "\(seconds / 86_400)d\((seconds % 86_400) / 3_600)h"
-        }
     }
 
-    var summary: String {
-        "5h: \(rateLimit.primaryWindow.remaining)  7d: \(rateLimit.secondaryWindow.remaining)"
+    /// Reset countdowns are relative, so anchor them to when the response was received.
+    func allowance(receivedAt: Date) -> Allowance {
+        func window(_ window: Window, label: String, title: String, subtitle: String)
+            -> AllowanceWindow
+        {
+            AllowanceWindow(
+                label: label,
+                title: title,
+                subtitle: subtitle,
+                usedPercent: window.usedPercent,
+                resetsAt: receivedAt.addingTimeInterval(TimeInterval(window.resetAfterSeconds))
+            )
+        }
+        return Allowance(windows: [
+            window(rateLimit.primaryWindow, label: "5h", title: "5-hour window", subtitle: ""),
+            window(
+                rateLimit.secondaryWindow,
+                label: "7d",
+                title: "Weekly window",
+                subtitle: "7 days"
+            ),
+        ])
     }
+}
 
-    var details: String {
-        "\(summary) | 5h: \(rateLimit.primaryWindow.resetIn)  7d: \(rateLimit.secondaryWindow.resetIn)"
+extension AllowanceSource {
+    static let chatGPT = AllowanceSource(provider: .chatGPT) {
+        try await UsageClient.fetch().allowance(receivedAt: Date())
     }
 }
 

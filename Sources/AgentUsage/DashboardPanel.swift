@@ -22,13 +22,14 @@ struct DashboardPanel: View {
                     onQuit: { NSApplication.shared.terminate(nil) }
                 )
                 Divider()
-                UsagePanel(
-                    snapshot: usage.snapshot,
-                    error: usage.error,
-                    isRefreshing: usage.isRefreshing,
-                    referenceDate: referenceDate
-                )
-                Divider()
+                ForEach(usage.allowances) { state in
+                    UsagePanel(
+                        state: state,
+                        isRefreshing: usage.isRefreshing,
+                        referenceDate: referenceDate
+                    )
+                    Divider()
+                }
                 HistoryPanel(history: history, referenceDate: referenceDate)
             }
             .padding(20)

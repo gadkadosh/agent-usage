@@ -7,15 +7,15 @@ final class UsageStoreTests: XCTestCase {
     @MainActor
     func testSuccessfulRefreshRecordsStructuredDataAndTimestamp() async {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
-        let store = UsageStore(fetch: { sampleLimits }, now: { date })
-        XCTAssertNil(store.snapshot)
+        let store = UsageStore(fetch: { sampleAllowance }, now: { date })
+        XCTAssertNil(store.allowances[0].snapshot)
         XCTAssertEqual(store.summary, "Agent Usage…")
 
         await store.refresh()
 
-        XCTAssertEqual(store.snapshot?.fetchedAt, date)
+        XCTAssertEqual(store.allowances[0].snapshot?.fetchedAt, date)
         XCTAssertEqual(store.summary, "5h: 76%  7d: 87.5%")
-        XCTAssertNil(store.error)
+        XCTAssertNil(store.allowances[0].error)
         XCTAssertFalse(store.isRefreshing)
     }
 
@@ -24,9 +24,9 @@ final class UsageStoreTests: XCTestCase {
         let store = UsageStore(fetch: { throw FetchError.unavailable })
         await store.refresh()
 
-        XCTAssertNil(store.snapshot)
+        XCTAssertNil(store.allowances[0].snapshot)
         XCTAssertEqual(store.summary, "Usage unavailable")
-        XCTAssertEqual(store.error, "Test server unavailable.")
+        XCTAssertEqual(store.allowances[0].error, "Test server unavailable.")
         XCTAssertFalse(store.isRefreshing)
     }
 
@@ -36,18 +36,18 @@ final class UsageStoreTests: XCTestCase {
         var date = Date(timeIntervalSince1970: 1_700_000_000)
         let store = UsageStore(fetch: { try await fetcher.fetch() }, now: { date })
         await store.refresh()
-        let firstDate = store.snapshot?.fetchedAt
+        let firstDate = store.allowances[0].snapshot?.fetchedAt
 
         date = date.addingTimeInterval(60)
         await store.refresh()
-        XCTAssertEqual(store.snapshot?.fetchedAt, firstDate)
+        XCTAssertEqual(store.allowances[0].snapshot?.fetchedAt, firstDate)
         XCTAssertEqual(store.summary, "5h: 76%  7d: 87.5%")
-        XCTAssertEqual(store.error, "Test server unavailable.")
+        XCTAssertEqual(store.allowances[0].error, "Test server unavailable.")
         XCTAssertFalse(store.isRefreshing)
 
         await store.refresh()
-        XCTAssertEqual(store.snapshot?.fetchedAt, date)
-        XCTAssertNil(store.error)
+        XCTAssertEqual(store.allowances[0].snapshot?.fetchedAt, date)
+        XCTAssertNil(store.allowances[0].error)
     }
 
     @MainActor
@@ -65,16 +65,73 @@ final class UsageStoreTests: XCTestCase {
         await fetcher.finish()
         await refresh.value
         XCTAssertFalse(store.isRefreshing)
-        XCTAssertNotNil(store.snapshot)
+        XCTAssertNotNil(store.allowances[0].snapshot)
+    }
+
+    @MainActor
+    func testProvidersRefreshAndFailIndependently() async {
+        let fetcher = ScriptedFetcher()
+        let store = UsageStore(sources: [
+            AllowanceSource(provider: .chatGPT) { sampleAllowance },
+            AllowanceSource(provider: .chatGPT) { try await fetcher.fetch() },
+        ])
+        await store.refresh()
+        await store.refresh()
+
+        XCTAssertNil(store.allowances[0].error)
+        XCTAssertNotNil(store.allowances[0].snapshot)
+        XCTAssertEqual(store.allowances[1].error, "Test server unavailable.")
+        XCTAssertNotNil(store.allowances[1].snapshot, "A failure keeps that provider's reading")
+    }
+
+    @MainActor
+    func testSummaryShowsTheProviderClosestToItsLimit() async {
+        let tight = Allowance(windows: [
+            window(label: "5h", used: 10),
+            window(label: "7d", used: 95),
+        ])
+        let store = UsageStore(sources: [
+            AllowanceSource(provider: .chatGPT) { sampleAllowance },
+            AllowanceSource(provider: .chatGPT) { tight },
+        ])
+        await store.refresh()
+
+        XCTAssertEqual(store.summary, "5h: 90%  7d: 5%")
+    }
+
+    @MainActor
+    func testSummaryWaitsUntilEveryProviderHasFailed() async {
+        let pending = SuspendedFetcher()
+        let store = UsageStore(sources: [
+            AllowanceSource(provider: .chatGPT) { throw FetchError.unavailable },
+            AllowanceSource(provider: .chatGPT) { try await pending.fetch() },
+        ])
+        let refresh = Task { await store.refresh() }
+        await pending.waitUntilStarted()
+        while store.allowances[0].error == nil { await Task.yield() }
+
+        XCTAssertEqual(store.summary, "Agent Usage…")
+
+        await pending.finish()
+        await refresh.value
+        XCTAssertEqual(store.summary, "5h: 76%  7d: 87.5%")
     }
 }
 
-private let sampleLimits = UsageLimits(
-    rateLimit: .init(
-        primaryWindow: .init(usedPercent: 24, resetAfterSeconds: 3_720),
-        secondaryWindow: .init(usedPercent: 12.5, resetAfterSeconds: 90_000)
+private let sampleAllowance = Allowance(windows: [
+    window(label: "5h", used: 24),
+    window(label: "7d", used: 12.5),
+])
+
+private func window(label: String, used: Double) -> AllowanceWindow {
+    AllowanceWindow(
+        label: label,
+        title: label,
+        subtitle: "",
+        usedPercent: used,
+        resetsAt: Date(timeIntervalSince1970: 1_700_003_600)
     )
-)
+}
 
 private enum FetchError: LocalizedError {
     case unavailable
@@ -84,19 +141,19 @@ private enum FetchError: LocalizedError {
 private actor ScriptedFetcher {
     private var count = 0
 
-    func fetch() throws -> UsageLimits {
+    func fetch() throws -> Allowance {
         count += 1
         if count == 2 { throw FetchError.unavailable }
-        return sampleLimits
+        return sampleAllowance
     }
 }
 
 private actor SuspendedFetcher {
     private(set) var requestCount = 0
-    private var pending: CheckedContinuation<UsageLimits, any Error>?
+    private var pending: CheckedContinuation<Allowance, any Error>?
     private var started: CheckedContinuation<Void, Never>?
 
-    func fetch() async throws -> UsageLimits {
+    func fetch() async throws -> Allowance {
         requestCount += 1
         return try await withCheckedThrowingContinuation { continuation in
             pending = continuation
@@ -111,7 +168,7 @@ private actor SuspendedFetcher {
     }
 
     func finish() {
-        pending?.resume(returning: sampleLimits)
+        pending?.resume(returning: sampleAllowance)
         pending = nil
     }
 }
