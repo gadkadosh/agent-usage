@@ -3,10 +3,12 @@ import Foundation
 /// A subscription whose account-wide allowance the dashboard can show.
 enum AllowanceProvider: String, Sendable {
     case chatGPT
+    case claude
 
     var title: String {
         switch self {
         case .chatGPT: "ChatGPT"
+        case .claude: "Claude"
         }
     }
 }
@@ -16,7 +18,8 @@ enum AllowanceProvider: String, Sendable {
 /// every provider, so one that never returns would stall refreshes for all of them.
 struct AllowanceSource: Sendable {
     let provider: AllowanceProvider
-    let fetch: @Sendable () async throws -> Allowance
+    /// Returns nil when the provider has no login, so the dashboard hides it instead of erroring.
+    let fetch: @Sendable () async throws -> Allowance?
 }
 
 /// Provider-neutral allowance reading, independent of any endpoint's response format.

@@ -136,7 +136,7 @@ enum CodexCredentialError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingLogin:
-            "No ChatGPT login found in Codex's auth.json or pi. Sign in with codex login or /login in pi, then refresh. Codex Keychain logins aren't supported."
+            "No ChatGPT login found in Codex's auth.json."
         case .unreadableFile:
             "Cannot read Codex's auth.json. Check its location and file permissions, then refresh."
         case .invalidFile:

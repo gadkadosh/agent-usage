@@ -4,7 +4,7 @@
 
 ## ChatGPT allowance
 
-No access-token environment variable is required. Before each allowance refresh, Agent Usage reads Codex's ChatGPT login from `~/.codex/auth.json` first. If that file has no ChatGPT login (including an API-key-only login), it reads pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json`. Requests use the selected access token and optional account ID. API keys are never used. The allowance belongs to the selected ChatGPT account/workspace, not just the agent supplying its login; usage from the two sources is not added together.
+No access-token environment variable is required. Before each allowance refresh, Agent Usage reads Codex's ChatGPT login from `~/.codex/auth.json` first. If that file has no ChatGPT login (including an API-key-only login), it reads pi's `openai-codex` OAuth entry from `~/.pi/agent/auth.json`. Requests use the selected access token and optional account ID. API keys are never used. The allowance belongs to the selected ChatGPT account/workspace, not just the agent supplying its login; usage from the two sources is not added together. With neither login, the ChatGPT section stays hidden.
 
 If Codex's access token has expired or the server rejects it with HTTP 401, pi is tried only when both logins contain the same nonempty account ID and pi has a valid, different token. Unknown or different account IDs prevent that fallback. Malformed or unreadable Codex files, network errors, other HTTP failures, and invalid responses do not trigger fallback. When Codex succeeds, pi's file is not read.
 
@@ -14,11 +14,23 @@ The app never modifies either agent's credentials or refreshes tokens itself. If
 
 Custom directories honor `CODEX_HOME` and `PI_CODING_AGENT_DIR`, including `~/` paths. A Finder-launched app uses default locations unless overrides are present in its own environment; it does not inherit terminal-only variables.
 
-Allowance refreshes about once a minute, independently of local history. The ChatGPT endpoint is not a supported public API and may change without notice. Allowance requests refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
+## Claude allowance
+
+Agent Usage reads Claude Code's login from the macOS Keychain generic password `Claude Code-credentials`. From its JSON it uses only `claudeAiOauth.accessToken` and `claudeAiOauth.expiresAt` (Unix milliseconds); refresh tokens, subscription type and scopes are ignored. A missing item, or one without `claudeAiOauth` (such as an API-key login with only MCP credentials), means no Claude login, and the Claude section stays hidden.
+
+macOS asks for Keychain access on first read. Choose **Always Allow**; ad-hoc signed builds have a new code signature, so the prompt returns after each rebuild. The token is kept in memory until it expires or the server rejects it, so the Keychain is read once per token, not on every refresh. Overlapping refreshes share one pending Keychain read, and a refresh waits at most 15 seconds for it, so an unanswered prompt neither stacks more prompts nor stalls ChatGPT. The pending read finishes in the background and the next refresh uses its result. A denied prompt is asked again on the next refresh. Because the token is cached, switching Claude Code accounts can take effect only after the old token expires.
+
+The app never refreshes or modifies Claude Code's login. If the token has expired or is rejected (HTTP 401), use Claude Code so it can refresh its login, or sign in again with `/login`, then refresh. Keychain, credential and decoding errors are replaced by fixed messages, so credential values never reach the UI.
+
+Requests send `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer <token>` and `anthropic-beta: oauth-2025-04-20`. The response contract, verified on 2026-11-20 against a Pro account, uses `five_hour` and `seven_day` (`utilization` as percent used, 0–100, and `resets_at` as an ISO 8601 time with microseconds). Nullable `seven_day_opus` and `seven_day_sonnet` appear as weekly model windows only when present. All other fields are ignored.
+
+## Refresh and requests
+
+Allowance refreshes about once a minute, independently of local history. Each provider is fetched independently: a failure keeps that provider's last reading and never hides another provider, and the menu bar shows whichever provider is closest to its limit. Neither endpoint is a supported public API, and both may change without notice. Allowance requests time out after 15 seconds and refuse redirects, including same-host redirects; a legitimate endpoint move may require an app update.
 
 ## Local history
 
-Choose **Today / 7 days / 30 days** for combined Pi, Codex, and OpenCode token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide ChatGPT limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket temporarily shows that hour's or day's tokens and available cost in both the large totals and the agent rows, keeping row order and visibility unchanged. Leaving the chart restores the full-period totals. The chart remains token-based.
+Choose **Today / 7 days / 30 days** for combined Pi, Codex, and OpenCode token activity and an hourly/daily chart. These totals cover only this Mac, separately from your account-wide subscription limits. Alphabetical agent rows show the same selected period. Hovering a chart bucket temporarily shows that hour's or day's tokens and available cost in both the large totals and the agent rows, keeping row order and visibility unchanged. Leaving the chart restores the full-period totals. The chart remains token-based.
 
 **Cost** above the chart sums available locally persisted USD across agents for the selected period. Each agent's available cost appears on the same line as its token count. Period costs are derived from the same hourly/daily buckets used for hover. The total's tooltip and the amounts' accessibility labels identify the selected period or hovered interval; an interval without usable cost shows no amount, never a fallback to the period cost. These figures may be incomplete or agent-calculated estimates, not actual charges. Only an explicitly recorded zero displays $0.00; empty periods and periods with no usable cost display no amount. Nonzero amounts below one cent display `< $0.01`. Missing, invalid, or conflicting cost metadata never discards valid tokens or adds visible cost warnings. The tooltip explains that the amount covers available recorded costs, not necessarily the complete bill. Existing history warnings also apply to cost (for example, truncated or stale history). Codex contributes no cost because its supported local usage records contain no attributable dollar amounts. There is no network cost lookup, credential access for cost, or maintained pricing table.
 
@@ -87,7 +99,7 @@ Unchanged eligible file contents are reused; changed files are reparsed in full,
 
 ### Tests
 
-Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never real agent credentials or personal histories.
+Run tests with `make test` when full Xcode is installed and selected, or use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer make test`. This runs the ordinary suite, then the opt-in memory regression alone in a fresh test process, reusing the same build. Allocator reuse from the full suite can hide memory regressions. The Apple Command Line Tools installation on its own does not provide XCTest in this environment. Credential, HTTP and history tests use synthetic data, never real agent credentials or personal histories. Claude tests read a fake Keychain through `KeychainReading`, never the system Keychain.
 
 Shared `HistoryFixtures` supplies the fixed clock/calendar, and `HistoryFixtureRoot` supplies temporary files. `PiHistoryFixtures`, `CodexHistoryFixtures`, and `OpenCodeHistoryFixture` generate only their respective formats. OpenCode tests use temporary SQLite databases, including committed/uncommitted WAL data, never personal history.
 

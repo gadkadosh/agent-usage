@@ -165,14 +165,14 @@ final class PiUsageClientTests: XCTestCase {
             pi: fixture.source,
             session: session
         )
-        XCTAssertEqual(first.rateLimit.primaryWindow.usedPercent, 10)
+        XCTAssertEqual(first?.rateLimit.primaryWindow.usedPercent, 10)
         try fixture.write(validAuth(access: "second"))
         let second = try await UsageClient.fetch(
             codex: fixture.codexSource,
             pi: fixture.source,
             session: session
         )
-        XCTAssertEqual(second.rateLimit.primaryWindow.usedPercent, 20)
+        XCTAssertEqual(second?.rateLimit.primaryWindow.usedPercent, 20)
 
         try fixture.write(validAuth(access: "rejected"))
         do {

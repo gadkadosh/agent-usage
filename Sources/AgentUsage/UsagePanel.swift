@@ -39,7 +39,7 @@ struct UsagePanel: View {
                 } else if error == nil {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Loading allowance…")
+                        Text("Loading \(state.provider.title) allowance…")
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 80)
@@ -89,7 +89,9 @@ struct UsagePanel: View {
     private func errorCard(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(
-                snapshot == nil ? "Allowance unavailable" : "Couldn't refresh allowance",
+                snapshot == nil
+                    ? "\(state.provider.title) allowance unavailable"
+                    : "Couldn't refresh \(state.provider.title) allowance",
                 systemImage: "exclamationmark.triangle"
             )
             .font(.subheadline.weight(.semibold))
