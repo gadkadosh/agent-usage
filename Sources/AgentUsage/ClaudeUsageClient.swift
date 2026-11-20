@@ -17,11 +17,11 @@ struct ClaudeUsage: Decodable, Sendable {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         // Reset times carry microseconds, such as 2026-11-20T21:29:59.591228+00:00.
+        // On older macOS, such as 15, the fractional style rejects times without a fraction.
         decoder.dateDecodingStrategy = .custom { decoder in
-            try Date(
-                decoder.singleValueContainer().decode(String.self),
-                strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)
-            )
+            let string = try decoder.singleValueContainer().decode(String.self)
+            let fractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+            return try (try? Date(string, strategy: fractional)) ?? Date(string, strategy: .iso8601)
         }
         return try decoder.decode(ClaudeUsage.self, from: data)
     }
