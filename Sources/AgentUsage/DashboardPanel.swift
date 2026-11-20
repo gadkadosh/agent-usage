@@ -22,12 +22,21 @@ struct DashboardPanel: View {
                     onQuit: { NSApplication.shared.terminate(nil) }
                 )
                 Divider()
-                ForEach(usage.allowances) { state in
+                ForEach(usage.visibleAllowances) { state in
                     UsagePanel(
                         state: state,
                         isRefreshing: usage.isRefreshing,
                         referenceDate: referenceDate
                     )
+                    Divider()
+                }
+                if usage.visibleAllowances.isEmpty {
+                    Text(
+                        "No subscription login found. Sign in with Claude Code, or with Codex or pi for ChatGPT, then refresh."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     Divider()
                 }
                 HistoryPanel(history: history, referenceDate: referenceDate)

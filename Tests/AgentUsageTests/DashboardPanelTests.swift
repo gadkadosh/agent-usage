@@ -105,6 +105,21 @@ enum DashboardFixtures {
             secondaryWindow: .init(usedPercent: 54, resetAfterSeconds: 280_800)
         )
     ).allowance(receivedAt: now)
+    static let claudeAllowance = Allowance(
+        windows: [
+            ("5h", "5-hour window", "", 41.0, 7_560.0),
+            ("7d", "Weekly window", "7 days", 63, 194_400),
+            ("Opus", "Weekly Opus", "7 days", 18, 194_400),
+        ].map { label, title, subtitle, used, reset in
+            AllowanceWindow(
+                label: label,
+                title: title,
+                subtitle: subtitle,
+                usedPercent: used,
+                resetsAt: now.addingTimeInterval(reset)
+            )
+        }
+    )
 
     static func history(
         state: HistoryCoverage.State = .ready,

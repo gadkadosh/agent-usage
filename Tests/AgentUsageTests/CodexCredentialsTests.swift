@@ -233,13 +233,14 @@ final class AllowanceCredentialSelectionTests: XCTestCase {
         await assertFailure(fixture, contains: "Cannot read Codex")
     }
 
-    func testNoLoginsExplainsBothSources() async throws {
+    func testNoLoginsIsSignedOutWithoutRequest() async throws {
         let fixture = try AllowanceAuthFixture()
         defer { fixture.remove() }
-        await assertFailure(fixture, contains: "codex login or /login in pi")
+        let result = try await fetch(fixture)
+        XCTAssertNil(result)
     }
 
-    private func fetch(_ fixture: AllowanceAuthFixture) async throws -> UsageLimits {
+    private func fetch(_ fixture: AllowanceAuthFixture) async throws -> UsageLimits? {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [AllowanceSelectionProtocol.self]
         let session = URLSession(configuration: config)
@@ -259,7 +260,12 @@ final class AllowanceCredentialSelectionTests: XCTestCase {
         line: UInt = #line
     ) async throws {
         let result = try await fetch(fixture)
-        XCTAssertEqual(result.rateLimit.primaryWindow.usedPercent, expected, file: file, line: line)
+        XCTAssertEqual(
+            result?.rateLimit.primaryWindow.usedPercent,
+            expected,
+            file: file,
+            line: line
+        )
     }
 
     private func assertFailure(_ fixture: AllowanceAuthFixture, contains text: String) async {
