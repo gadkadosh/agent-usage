@@ -71,11 +71,16 @@ final class UsageStoreTests: XCTestCase {
     @MainActor
     func testProvidersRefreshAndFailIndependently() async {
         let fetcher = ScriptedFetcher()
-        let store = UsageStore(sources: [
-            AllowanceSource(provider: .chatGPT) { sampleAllowance },
-            AllowanceSource(provider: .chatGPT) { try await fetcher.fetch() },
-        ])
+        var date = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = UsageStore(
+            sources: [
+                AllowanceSource(provider: .chatGPT) { sampleAllowance },
+                AllowanceSource(provider: .chatGPT) { try await fetcher.fetch() },
+            ],
+            now: { date }
+        )
         await store.refresh()
+        date = date.addingTimeInterval(60)
         await store.refresh()
 
         XCTAssertNil(store.allowances[0].error)
@@ -120,10 +125,14 @@ final class UsageStoreTests: XCTestCase {
     @MainActor
     func testSignedOutProviderIsHiddenAndDropsItsReading() async {
         let login = LoginScript()
-        let store = UsageStore(sources: [
-            AllowanceSource(provider: .chatGPT) { nil },
-            AllowanceSource(provider: .claude) { await login.allowance() },
-        ])
+        var date = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = UsageStore(
+            sources: [
+                AllowanceSource(provider: .chatGPT) { nil },
+                AllowanceSource(provider: .claude) { await login.allowance() },
+            ],
+            now: { date }
+        )
         XCTAssertEqual(store.visibleAllowances.map(\.provider), [.chatGPT, .claude])
 
         await store.refresh()
@@ -132,6 +141,7 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.summary, "5h: 76%  7d: 87.5%")
 
         await login.signOut()
+        date = date.addingTimeInterval(5 * 60)
         await store.refresh()
         XCTAssertTrue(store.visibleAllowances.isEmpty)
         XCTAssertNil(store.allowances[1].snapshot)
@@ -147,6 +157,120 @@ final class UsageStoreTests: XCTestCase {
         await store.refresh()
         XCTAssertEqual(store.visibleAllowances.map(\.provider), [.claude])
         XCTAssertEqual(store.summary, "Usage unavailable")
+    }
+}
+
+extension UsageStoreTests {
+    @MainActor
+    func testEachProviderWaitsForItsOwnInterval() async {
+        let chatGPT = ServerScript([.ok])
+        let claude = ServerScript([.ok])
+        var date = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = UsageStore(
+            sources: [
+                AllowanceSource(provider: .chatGPT) { try await chatGPT.fetch() },
+                AllowanceSource(provider: .claude) { try await claude.fetch() },
+            ],
+            now: { date }
+        )
+        await store.refresh()
+        await store.refresh()
+        var counts = (await chatGPT.count, await claude.count)
+        XCTAssertTrue(counts == (1, 1), "An immediate Refresh sends no request")
+
+        date = date.addingTimeInterval(60)
+        await store.refresh()
+        date = date.addingTimeInterval(239)
+        await store.refresh()
+        counts = (await chatGPT.count, await claude.count)
+        XCTAssertTrue(counts == (3, 1), "\(counts)")
+
+        date = date.addingTimeInterval(1)
+        await store.refresh()
+        let claudeCount = await claude.count
+        XCTAssertEqual(claudeCount, 2)
+    }
+
+    @MainActor
+    func testRateLimitingBacksOffUntilASuccess() async {
+        let server = ServerScript([
+            .ok, .rateLimited(nil), .rateLimited(0), .rateLimited(nil), .rateLimited(nil), .ok,
+        ])
+        var date = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = UsageStore(
+            sources: [AllowanceSource(provider: .claude) { try await server.fetch() }],
+            now: { date }
+        )
+        await store.refresh()
+        let reading = store.allowances[0].snapshot
+
+        // Minutes between requests: the interval, then a backoff that ignores Retry-After: 0.
+        for (step, minutes) in [5, 5, 10, 20, 30, 5].enumerated() {
+            let count = await server.count
+            date = date.addingTimeInterval(TimeInterval(minutes * 60 - 1))
+            await store.refresh()
+            let early = await server.count
+            XCTAssertEqual(early, count, "Request \(step + 2) was sent early")
+            date = date.addingTimeInterval(1)
+            await store.refresh()
+            let due = await server.count
+            XCTAssertEqual(due, count + 1, "Request \(step + 2) was not sent")
+
+            if step < 4 {
+                let state = store.allowances[0]
+                XCTAssertEqual(state.snapshot, reading, "A rate limit keeps the last reading")
+                XCTAssertEqual(state.error, "The usage server is limiting requests (HTTP 429).")
+                XCTAssertNotNil(state.rateLimitedUntil)
+                XCTAssertGreaterThan(state.rateLimitedUntil!, date)
+            }
+        }
+        XCTAssertNil(store.allowances[0].rateLimitedUntil)
+        XCTAssertNil(store.allowances[0].error)
+    }
+
+    @MainActor
+    func testRateLimitingWaitsAsLongAsTheServerAsks() async {
+        let server = ServerScript([.rateLimited(3_600), .ok])
+        var date = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = UsageStore(
+            sources: [AllowanceSource(provider: .claude) { try await server.fetch() }],
+            now: { date }
+        )
+        await store.refresh()
+        XCTAssertEqual(store.allowances[0].rateLimitedUntil, date.addingTimeInterval(3_600))
+
+        date = date.addingTimeInterval(3_599)
+        await store.refresh()
+        var count = await server.count
+        XCTAssertEqual(count, 1)
+
+        date = date.addingTimeInterval(1)
+        await store.refresh()
+        count = await server.count
+        XCTAssertEqual(count, 2)
+        XCTAssertNotNil(store.allowances[0].snapshot)
+    }
+}
+
+private actor ServerScript {
+    enum Response {
+        case ok
+        case rateLimited(TimeInterval?)
+    }
+
+    private var responses: [Response]
+    private(set) var count = 0
+
+    /// Plays the responses in order, then repeats the last one.
+    init(_ responses: [Response]) { self.responses = responses }
+
+    func fetch() throws -> Allowance {
+        count += 1
+        let response = responses.count > 1 ? responses.removeFirst() : responses[0]
+        if case .rateLimited(let retryAfter) = response {
+            throw UsageError.rateLimited(retryAfter: retryAfter)
+        }
+        return sampleAllowance
     }
 }
 
