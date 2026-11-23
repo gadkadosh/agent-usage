@@ -116,6 +116,45 @@ final class UsageStoreTests: XCTestCase {
         await refresh.value
         XCTAssertEqual(store.summary, "5h: 76%  7d: 87.5%")
     }
+
+    @MainActor
+    func testSignedOutProviderIsHiddenAndDropsItsReading() async {
+        let login = LoginScript()
+        let store = UsageStore(sources: [
+            AllowanceSource(provider: .chatGPT) { nil },
+            AllowanceSource(provider: .claude) { await login.allowance() },
+        ])
+        XCTAssertEqual(store.visibleAllowances.map(\.provider), [.chatGPT, .claude])
+
+        await store.refresh()
+        XCTAssertEqual(store.visibleAllowances.map(\.provider), [.claude])
+        XCTAssertNil(store.allowances[0].error)
+        XCTAssertEqual(store.summary, "5h: 76%  7d: 87.5%")
+
+        await login.signOut()
+        await store.refresh()
+        XCTAssertTrue(store.visibleAllowances.isEmpty)
+        XCTAssertNil(store.allowances[1].snapshot)
+        XCTAssertEqual(store.summary, "Agent Usage")
+    }
+
+    @MainActor
+    func testSignedOutProviderDoesNotHideAnotherProvidersFailure() async {
+        let store = UsageStore(sources: [
+            AllowanceSource(provider: .chatGPT) { nil },
+            AllowanceSource(provider: .claude) { throw FetchError.unavailable },
+        ])
+        await store.refresh()
+        XCTAssertEqual(store.visibleAllowances.map(\.provider), [.claude])
+        XCTAssertEqual(store.summary, "Usage unavailable")
+    }
+}
+
+private actor LoginScript {
+    private var signedIn = true
+
+    func allowance() -> Allowance? { signedIn ? sampleAllowance : nil }
+    func signOut() { signedIn = false }
 }
 
 private let sampleAllowance = Allowance(windows: [

@@ -40,12 +40,13 @@ struct UsageLimits: Decodable, Sendable {
 
 extension AllowanceSource {
     static let chatGPT = AllowanceSource(provider: .chatGPT) {
-        try await UsageClient.fetch().allowance(receivedAt: Date())
+        try await UsageClient.fetch()?.allowance(receivedAt: Date())
     }
 }
 
 enum UsageClient {
-    static func fetch() async throws -> UsageLimits {
+    /// Returns nil when neither Codex nor pi has a ChatGPT login.
+    static func fetch() async throws -> UsageLimits? {
         try await fetch(codex: CodexCredentialSource(), pi: PiCredentialSource(), session: .shared)
     }
 
@@ -54,7 +55,7 @@ enum UsageClient {
         pi: PiCredentialSource,
         session: URLSession,
         now: Date = Date()
-    ) async throws -> UsageLimits {
+    ) async throws -> UsageLimits? {
         let preferred: ChatGPTCredentials
         do {
             preferred = try codex.load()
@@ -63,7 +64,7 @@ enum UsageClient {
             do {
                 fallback = try pi.load(now: now)
             } catch PiCredentialError.missingLogin {
-                throw CodexCredentialError.missingLogin
+                return nil
             }
             return try await fetch(credentials: fallback, source: .pi, session: session)
         }
@@ -108,6 +109,27 @@ enum UsageClient {
         if let accountID = credentials.accountID {
             request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
         }
+        let data = try await UsageRequest.data(for: request, login: source, session: session)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(UsageLimits.self, from: data)
+    }
+}
+
+enum LoginSource {
+    case codex
+    case pi
+    case claudeCode
+}
+
+/// Request rules shared by every unofficial usage endpoint.
+enum UsageRequest {
+    static func data(
+        for request: URLRequest,
+        login: LoginSource,
+        session: URLSession
+    ) async throws -> Data {
+        var request = request
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
@@ -119,20 +141,12 @@ enum UsageClient {
         guard let status = (response as? HTTPURLResponse)?.statusCode else {
             throw UsageError.invalidResponse
         }
-        if status == 401 { throw UsageError.rejectedLogin(source) }
+        if status == 401 { throw UsageError.rejectedLogin(login) }
         guard (200..<300).contains(status) else {
             throw UsageError.httpStatus(status)
         }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(UsageLimits.self, from: data)
+        return data
     }
-}
-
-private enum LoginSource {
-    case codex
-    case pi
 }
 
 /// Apply the policy per request, including when a caller injects a session.
@@ -149,7 +163,7 @@ private final class RejectUsageRedirects: NSObject, URLSessionTaskDelegate {
     }
 }
 
-private enum UsageError: LocalizedError {
+enum UsageError: LocalizedError {
     case invalidResponse
     case httpStatus(Int)
     case rejectedLogin(LoginSource)
@@ -162,6 +176,8 @@ private enum UsageError: LocalizedError {
             "Codex's ChatGPT login was rejected (HTTP 401). Use Codex or sign in again with codex login, then refresh. Pi fallback requires a valid login for the same account."
         case .rejectedLogin(.pi):
             "Pi's ChatGPT login was rejected (HTTP 401). Use OpenAI in pi or sign in again with /login, then refresh."
+        case .rejectedLogin(.claudeCode):
+            "Claude Code's login was rejected (HTTP 401). Use Claude Code or sign in again with /login, then refresh."
         case .httpStatus(let status):
             "Usage request failed (HTTP \(status))."
         }

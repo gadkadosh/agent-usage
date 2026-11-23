@@ -28,6 +28,9 @@ final class DashboardRenderingTests: XCTestCase {
             ("zero-light", .ready, .today, false),
             ("unsupported-light", .unsupported, .today, false),
             ("loading-light", .ready, .today, false),
+            ("claude-light", .ready, .week, false),
+            ("claude-dark", .ready, .week, true),
+            ("signed-out-light", .ready, .week, false),
         ]
         for (name, state, period, dark) in scenarios {
             let readings = DashboardReadings(
@@ -45,13 +48,21 @@ final class DashboardRenderingTests: XCTestCase {
             if name != "loading-light" { await history.refresh() }
             if name == "stale-light" { await history.refresh() }
             let unavailable = name == "allowance-unavailable-light"
-            let usage = UsageStore(
-                fetch: {
+            let signedOut = name == "signed-out-light"
+            var sources = [
+                AllowanceSource(provider: .chatGPT) {
                     if unavailable { throw SyntheticAllowanceError.unavailable }
-                    return DashboardFixtures.allowance
-                },
-                now: { DashboardFixtures.now }
-            )
+                    return signedOut ? nil : DashboardFixtures.allowance
+                }
+            ]
+            if name.hasPrefix("claude") || signedOut {
+                sources.append(
+                    AllowanceSource(provider: .claude) {
+                        signedOut ? nil : DashboardFixtures.claudeAllowance
+                    }
+                )
+            }
+            let usage = UsageStore(sources: sources, now: { DashboardFixtures.now })
             await usage.refresh()
             let panel = DashboardPanel(
                 usage: usage,
