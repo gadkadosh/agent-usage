@@ -12,6 +12,8 @@ The Codex file contract is verified against [Codex 0.163.0 credential storage](h
 
 The app never modifies either agent's credentials or refreshes tokens itself. If access expires or is rejected, use the relevant agent so it can refresh its token, or sign in again with `codex login` or `/login` in pi, then refresh. No app restart is needed. Both credential storage formats are unofficial integration points and may change.
 
+The usage response's `rate_limit` has a `primary_window` and a nullable `secondary_window`. Each window is labeled by its `limit_window_seconds`: paid plans have a 5-hour and a weekly window, while the free plan (verified on 2026-11-23) has a single 30-day window. Decoding errors are replaced by a fixed message.
+
 Custom directories honor `CODEX_HOME` and `PI_CODING_AGENT_DIR`, including `~/` paths. A Finder-launched app uses default locations unless overrides are present in its own environment; it does not inherit terminal-only variables.
 
 ## Claude allowance

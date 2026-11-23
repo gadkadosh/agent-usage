@@ -3,38 +3,46 @@ import Foundation
 struct UsageLimits: Decodable, Sendable {
     let rateLimit: RateLimit
 
+    /// Paid plans have a 5-hour and a weekly window; the free plan has a single 30-day window.
     struct RateLimit: Decodable, Sendable {
         let primaryWindow: Window
-        let secondaryWindow: Window
+        let secondaryWindow: Window?
     }
 
     struct Window: Decodable, Sendable {
         let usedPercent: Double
+        let limitWindowSeconds: Int
         let resetAfterSeconds: Int
+    }
+
+    static func decode(_ data: Data) throws -> UsageLimits {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(UsageLimits.self, from: data)
     }
 
     /// Reset countdowns are relative, so anchor them to when the response was received.
     func allowance(receivedAt: Date) -> Allowance {
-        func window(_ window: Window, label: String, title: String, subtitle: String)
-            -> AllowanceWindow
-        {
-            AllowanceWindow(
-                label: label,
-                title: title,
-                subtitle: subtitle,
-                usedPercent: window.usedPercent,
-                resetsAt: receivedAt.addingTimeInterval(TimeInterval(window.resetAfterSeconds))
-            )
-        }
-        return Allowance(windows: [
-            window(rateLimit.primaryWindow, label: "5h", title: "5-hour window", subtitle: ""),
-            window(
-                rateLimit.secondaryWindow,
-                label: "7d",
-                title: "Weekly window",
-                subtitle: "7 days"
-            ),
-        ])
+        let windows = [rateLimit.primaryWindow, rateLimit.secondaryWindow].compactMap { $0 }
+        return Allowance(
+            windows: windows.map { window in
+                let hours = window.limitWindowSeconds / 3_600
+                let days = hours / 24
+                let (label, title, subtitle) =
+                    switch (hours, days) {
+                    case (_, 7): ("7d", "Weekly window", "7 days")
+                    case (..<24, _): ("\(hours)h", "\(hours)-hour window", "")
+                    default: ("\(days)d", "\(days)-day window", "")
+                    }
+                return AllowanceWindow(
+                    label: label,
+                    title: title,
+                    subtitle: subtitle,
+                    usedPercent: window.usedPercent,
+                    resetsAt: receivedAt.addingTimeInterval(TimeInterval(window.resetAfterSeconds))
+                )
+            }
+        )
     }
 }
 
@@ -110,9 +118,12 @@ enum UsageClient {
             request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
         }
         let data = try await UsageRequest.data(for: request, login: source, session: session)
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(UsageLimits.self, from: data)
+        do {
+            return try UsageLimits.decode(data)
+        } catch {
+            // Decoder errors are developer text, such as "the data is missing". Never show them.
+            throw UsageError.invalidResponse
+        }
     }
 }
 
