@@ -15,9 +15,24 @@ struct AllowanceState: Identifiable, Equatable {
 final class UsageStore: ObservableObject {
     @Published private(set) var allowances: [AllowanceState]
     @Published private(set) var isRefreshing = false
+    /// Providers the user turned off; they are neither shown nor fetched.
+    @Published private(set) var hiddenProviders: Set<AllowanceProvider>
 
-    /// Providers with a login, or not yet known to be signed out.
-    var visibleAllowances: [AllowanceState] { allowances.filter { !$0.isSignedOut } }
+    /// Shown providers with a login, or not yet known to be signed out.
+    var visibleAllowances: [AllowanceState] {
+        allowances.filter { !$0.isSignedOut && !hiddenProviders.contains($0.provider) }
+    }
+
+    /// Replaces the allowance sections when none is visible.
+    var emptyAllowanceMessage: String? {
+        guard visibleAllowances.isEmpty else { return nil }
+        if hiddenProviders.isEmpty {
+            return
+                "No subscription login found. Sign in with Claude Code, or with Codex or pi for ChatGPT, then refresh."
+        }
+        let hidden = AllowanceProvider.allCases.filter(hiddenProviders.contains).map(\.title)
+        return "Hidden from the options menu: \(hidden.joined(separator: ", "))."
+    }
 
     /// The menu bar shows whichever provider is closest to its limit.
     var summary: String {
@@ -32,16 +47,35 @@ final class UsageStore: ObservableObject {
     }
 
     private let sources: [AllowanceSource]
+    private let defaults: UserDefaults
     private let now: () -> Date
     private var started = false
+    private static let hiddenProvidersKey = "hiddenAllowanceProviders"
 
     init(
         sources: [AllowanceSource] = [.chatGPT, .claude],
+        defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init
     ) {
         self.sources = sources
+        self.defaults = defaults
         self.now = now
         allowances = sources.map { AllowanceState(provider: $0.provider) }
+        hiddenProviders = Set(
+            (defaults.stringArray(forKey: Self.hiddenProvidersKey) ?? [])
+                .compactMap(AllowanceProvider.init(rawValue:))
+        )
+    }
+
+    func setShown(_ provider: AllowanceProvider, _ shown: Bool) async {
+        guard hiddenProviders.contains(provider) == shown else { return }
+        if shown {
+            hiddenProviders.remove(provider)
+        } else {
+            hiddenProviders.insert(provider)
+        }
+        defaults.set(hiddenProviders.map(\.rawValue).sorted(), forKey: Self.hiddenProvidersKey)
+        if shown { await refresh() }
     }
 
     func start() {
@@ -61,7 +95,7 @@ final class UsageStore: ObservableObject {
         defer { isRefreshing = false }
 
         await withTaskGroup(of: Reading.self) { group in
-            for index in sources.indices {
+            for index in sources.indices where !hiddenProviders.contains(sources[index].provider) {
                 let source = sources[index]
                 group.addTask {
                     do {
