@@ -49,10 +49,8 @@ final class DashboardSizingTests: XCTestCase {
 
     func testPanelFitsContentAndResizesAfterRefresh() async throws {
         let readings = SizingReadings()
-        let usage = UsageStore(
-            fetch: { try await readings.allowance() },
-            now: { DashboardFixtures.now }
-        )
+        var now = DashboardFixtures.now
+        let usage = UsageStore(fetch: { try await readings.allowance() }, now: { now })
         let history = HistoryStore(fetch: { DashboardFixtures.history() })
         await usage.refresh()
         await history.refresh()
@@ -75,6 +73,7 @@ final class DashboardSizingTests: XCTestCase {
         XCTAssertLessThanOrEqual(ready.height, cap + 1)
 
         await readings.setError("Synthetic allowance unavailable. Sign in again in pi.")
+        now = now.addingTimeInterval(AllowanceProvider.chatGPT.refreshInterval)
         await usage.refresh()
         let warning = try await fittedSize(host)
         assertWindow(window, fits: warning, top: top)

@@ -153,6 +153,12 @@ enum UsageRequest {
             throw UsageError.invalidResponse
         }
         if status == 401 { throw UsageError.rejectedLogin(login) }
+        if status == 429 {
+            let retryAfter = (response as? HTTPURLResponse)?.value(
+                forHTTPHeaderField: "Retry-After"
+            )
+            throw UsageError.rateLimited(retryAfter: retryAfter.flatMap(TimeInterval.init))
+        }
         guard (200..<300).contains(status) else {
             throw UsageError.httpStatus(status)
         }
@@ -178,6 +184,8 @@ enum UsageError: LocalizedError {
     case invalidResponse
     case httpStatus(Int)
     case rejectedLogin(LoginSource)
+    /// Seconds from the Retry-After header, when it has them.
+    case rateLimited(retryAfter: TimeInterval?)
 
     var errorDescription: String? {
         switch self {
@@ -189,6 +197,8 @@ enum UsageError: LocalizedError {
             "Pi's ChatGPT login was rejected (HTTP 401). Use OpenAI in pi or sign in again with /login, then refresh."
         case .rejectedLogin(.claudeCode):
             "Claude Code's login was rejected (HTTP 401). Use Claude Code or sign in again with /login, then refresh."
+        case .rateLimited:
+            "The usage server is limiting requests (HTTP 429)."
         case .httpStatus(let status):
             "Usage request failed (HTTP \(status))."
         }

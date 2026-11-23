@@ -88,6 +88,23 @@ final class ClaudeUsageClientTests: XCTestCase {
         await assertFailure(login, contains: "HTTP 429")
     }
 
+    func testRateLimitCarriesRetryAfterSeconds() async {
+        let login = ClaudeLogin(keychain: FakeKeychain(item: claudeItem()))
+        for (header, expected) in [("471", 471.0), ("0", 0), (nil, nil), ("soon", nil)]
+            as [(String?, TimeInterval?)]
+        {
+            ClaudeUsageProtocol.respond(status: 429, body: "{}", retryAfter: header)
+            do {
+                _ = try await fetch(login)
+                XCTFail("Expected rate limiting")
+            } catch UsageError.rateLimited(let retryAfter) {
+                XCTAssertEqual(retryAfter, expected, "Retry-After: \(header ?? "missing")")
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
     override func tearDown() {
         ClaudeUsageProtocol.reset()
     }
@@ -118,12 +135,14 @@ final class ClaudeUsageClientTests: XCTestCase {
 /// Intercepts every request. No test can reach the network.
 private final class ClaudeUsageProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var response = (status: 200, body: "{}")
+    nonisolated(unsafe) private static var response:
+        (status: Int, body: String, retryAfter: String?) =
+            (200, "{}", nil)
     nonisolated(unsafe) private static var request: URLRequest?
 
     static var lastRequest: URLRequest? { lock.withLock { request } }
-    static func respond(status: Int, body: String) {
-        lock.withLock { response = (status, body) }
+    static func respond(status: Int, body: String, retryAfter: String? = nil) {
+        lock.withLock { response = (status, body, retryAfter) }
     }
     static func reset() { lock.withLock { request = nil } }
 
@@ -131,7 +150,7 @@ private final class ClaudeUsageProtocol: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let (status, body) = Self.lock.withLock {
+        let (status, body, retryAfter) = Self.lock.withLock {
             Self.request = request
             return Self.response
         }
@@ -139,7 +158,7 @@ private final class ClaudeUsageProtocol: URLProtocol, @unchecked Sendable {
             url: request.url!,
             statusCode: status,
             httpVersion: nil,
-            headerFields: nil
+            headerFields: retryAfter.map { ["Retry-After": $0] }
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(body.utf8))

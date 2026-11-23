@@ -97,6 +97,10 @@ struct UsagePanel: View {
             .font(.subheadline.weight(.semibold))
             Text(message)
                 .font(.caption)
+            if let retryAt = state.rateLimitedUntil {
+                Text("Next check at \(retryAt, format: .dateTime.hour().minute()).")
+                    .font(.caption)
+            }
             if snapshot != nil {
                 Text("Showing the last successful reading. Usage may have changed.")
                     .font(.caption)
