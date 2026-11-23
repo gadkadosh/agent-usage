@@ -216,6 +216,8 @@ final class AllowanceCredentialSelectionTests: XCTestCase {
             _ = try fixture.writeCodex(status: status)
             await assertFailure(fixture, contains: "HTTP \(status)")
         }
+        _ = try fixture.writeCodex(percent: -1)
+        await assertFailure(fixture, contains: "The usage server returned an invalid response.")
         _ = try fixture.writeCodex(status: -1)
         do {
             _ = try await fetch(fixture)
@@ -387,8 +389,11 @@ private final class AllowanceSelectionProtocol: URLProtocol, @unchecked Sendable
             httpVersion: nil,
             headerFields: nil
         )!
+        // A negative percent stands for a response whose shape the app doesn't know.
         let body = Data(
-            "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"reset_after_seconds\":120}}}"
+            (percent < 0
+                ? "{\"rate_limit\":{}}"
+                : "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"limit_window_seconds\":18000,\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"limit_window_seconds\":604800,\"reset_after_seconds\":120}}}")
                 .utf8
         )
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

@@ -266,7 +266,7 @@ private final class PiRedirectProtocol: URLProtocol, @unchecked Sendable {
             headerFields: nil
         )!
         let data = Data(
-            #"{"rate_limit":{"primary_window":{"used_percent":10,"reset_after_seconds":60},"secondary_window":{"used_percent":30,"reset_after_seconds":120}}}"#
+            #"{"rate_limit":{"primary_window":{"used_percent":10,"limit_window_seconds":18000,"reset_after_seconds":60},"secondary_window":{"used_percent":30,"limit_window_seconds":604800,"reset_after_seconds":120}}}"#
                 .utf8
         )
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -296,7 +296,7 @@ private final class PiUsageProtocol: URLProtocol, @unchecked Sendable {
             headerFields: nil
         )!
         let data = Data(
-            "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"reset_after_seconds\":120}}}"
+            "{\"rate_limit\":{\"primary_window\":{\"used_percent\":\(percent),\"limit_window_seconds\":18000,\"reset_after_seconds\":60},\"secondary_window\":{\"used_percent\":30,\"limit_window_seconds\":604800,\"reset_after_seconds\":120}}}"
                 .utf8
         )
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

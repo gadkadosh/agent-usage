@@ -101,8 +101,16 @@ enum DashboardFixtures {
     static let now = HistoryFixtures.now
     static let allowance = UsageLimits(
         rateLimit: .init(
-            primaryWindow: .init(usedPercent: 28, resetAfterSeconds: 8_280),
-            secondaryWindow: .init(usedPercent: 54, resetAfterSeconds: 280_800)
+            primaryWindow: .init(
+                usedPercent: 28,
+                limitWindowSeconds: 18_000,
+                resetAfterSeconds: 8_280
+            ),
+            secondaryWindow: .init(
+                usedPercent: 54,
+                limitWindowSeconds: 604_800,
+                resetAfterSeconds: 280_800
+            )
         )
     ).allowance(receivedAt: now)
     static let claudeAllowance = Allowance(
