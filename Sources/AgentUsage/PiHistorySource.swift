@@ -46,23 +46,6 @@ actor PiHistorySource: HistoryAdapter {
     }
 
     func read(_ request: HistoryRequest) async throws -> HistoryAdapterResult {
-        let result = try await index.read(request)
-        var issues = result.coverage.issues
-        let observations = canonicalHistoryObservations(
-            result.candidates,
-            format: .pi,
-            issues: &issues
-        ).filter { $0.timestamp >= request.since }
-        return HistoryAdapterResult(
-            observations: observations,
-            coverage: HistoryCoverage(
-                state: result.coverage.state == .ready && !issues.isEmpty
-                    ? .partial : result.coverage.state,
-                hasReadings: result.coverage.hasReadings,
-                issues: issues
-            ),
-            fetchedAt: result.fetchedAt,
-            hasMore: result.hasMore
-        )
+        try await index.canonicalRead(request)
     }
 }

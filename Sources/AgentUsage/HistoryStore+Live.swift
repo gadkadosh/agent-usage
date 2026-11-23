@@ -7,6 +7,7 @@ extension HistoryStore {
             PiHistorySource(root: PiHistorySource.defaultRoot()),
             CodexHistorySource(home: CodexHistorySource.defaultHome()),
             OpenCodeHistorySource(database: OpenCodeHistorySource.defaultDatabaseURL()),
+            ClaudeCodeHistorySource(root: ClaudeCodeHistorySource.defaultRoot()),
         ])
     }
 

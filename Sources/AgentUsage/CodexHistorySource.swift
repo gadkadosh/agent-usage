@@ -61,7 +61,6 @@ actor CodexHistorySource: HistoryAdapter {
         issues.formUnion(results.flatMap { $0.coverage.issues })
         let observations = canonicalHistoryObservations(
             results.flatMap(\.candidates),
-            format: .codex,
             issues: &issues
         ).filter { $0.timestamp >= request.since }
         let readable = results.contains { $0.coverage.hasReadings }

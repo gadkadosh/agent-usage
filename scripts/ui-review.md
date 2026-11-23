@@ -33,6 +33,7 @@ history; they are copied once, without credentials:
 | `--pi-history PATH` | Pi sessions directory, not an agent home | `SESSION/pi/sessions` |
 | `--codex-history PATH` | Codex home with `sessions` and/or `archived_sessions` | `SESSION/codex/{sessions,archived_sessions}` |
 | `--opencode-history PATH` | Closed, checkpointed OpenCode v2 SQLite database; no `-wal`/`-shm` sidecars | `SESSION/xdg-data/opencode/opencode.db` |
+| `--claude-history PATH` | Claude Code `projects` directory, not a config directory | `SESSION/claude/projects` |
 
 Symlinks are rejected. The helper does not generate fixtures or freeze the clock.
 Repeating launch with the same arguments reuses the prepared copy and inputs, even

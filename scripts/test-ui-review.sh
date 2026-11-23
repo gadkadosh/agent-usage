@@ -27,8 +27,10 @@ printf '{"type":"session","version":3,"id":"synthetic","timestamp":"2026-01-01T0
 mkdir -p "$root/codex-fixtures/sessions" "$root/codex-fixtures/archived_sessions"
 printf '{"type":"session_meta","payload":{"id":"synthetic-codex"}}\n' > "$root/codex-fixtures/sessions/rollout-synthetic.jsonl"
 printf '{"invented":"must not copy credentials"}\n' > "$root/codex-fixtures/auth.json"
+mkdir -p "$root/claude-fixtures/-synthetic"
+printf '{"type":"user"}\n' > "$root/claude-fixtures/-synthetic/session.jsonl"
 /usr/bin/sqlite3 "$root/opencode-fixtures.db" 'CREATE TABLE synthetic (tokens INTEGER); INSERT INTO synthetic VALUES (123);'
-"$harness" launch "$first" --app "$app" --pi-history "$root/pi-fixtures" --codex-history "$root/codex-fixtures" --opencode-history "$root/opencode-fixtures.db"
+"$harness" launch "$first" --app "$app" --pi-history "$root/pi-fixtures" --codex-history "$root/codex-fixtures" --opencode-history "$root/opencode-fixtures.db" --claude-history "$root/claude-fixtures"
 pid=$(value "$first" pid)
 [[ $(value "$first" pi_fixtures) == "$(cd "$root/pi-fixtures" && pwd -P)" ]] || fail 'Pi input path was not recorded.'
 [[ $(value "$first" codex_fixtures) == "$(cd "$root/codex-fixtures" && pwd -P)" ]] || fail 'Codex input path was not recorded.'
@@ -39,6 +41,8 @@ cmp "$root/opencode-fixtures.db" "$first/xdg-data/opencode/opencode.db" || fail 
 [[ $(/bin/ps -ww -p "$pid" -o comm=) == "$(value "$first" executable)" ]] || fail 'Wrong process launched.'
 /bin/ps eww -p "$pid" -o command= | grep -Fq "XDG_DATA_HOME=$first/xdg-data" || fail 'OpenCode data home was not isolated.'
 /bin/ps eww -p "$pid" -o command= | grep -Fq 'OPENCODE_DB=opencode.db' || fail 'Inherited database override was not replaced.'
+/bin/ps eww -p "$pid" -o command= | grep -Fq "CLAUDE_CONFIG_DIR=$first/claude" || fail 'Claude Code history was not isolated.'
+cmp "$root/claude-fixtures/-synthetic/session.jsonl" "$first/claude/projects/-synthetic/session.jsonl" || fail 'Claude Code snapshot differs.'
 [[ ! -e $first/pi/auth.json && ! -e $first/codex/auth.json ]] || fail 'Credentials were not isolated.'
 cmp "$root/codex-fixtures/sessions/rollout-synthetic.jsonl" "$first/codex/sessions/rollout-synthetic.jsonl" || fail 'Codex snapshot differs.'
 printf 'changed\n' >> "$root/codex-fixtures/sessions/rollout-synthetic.jsonl"
@@ -46,7 +50,7 @@ printf 'changed\n' >> "$root/codex-fixtures/sessions/rollout-synthetic.jsonl"
 cmp "$root/pi-fixtures/synthetic.jsonl" "$first/pi/sessions/synthetic.jsonl" || fail 'Pi snapshot differs.'
 printf 'modified\n' >> "$root/pi-fixtures/synthetic.jsonl"
 [[ $(wc -l < "$first/pi/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Pi snapshot follows source changes.'
-"$harness" launch "$first" --app "$app" --pi-history "$root/pi-fixtures" --codex-history "$root/codex-fixtures" --opencode-history "$root/opencode-fixtures.db"
+"$harness" launch "$first" --app "$app" --pi-history "$root/pi-fixtures" --codex-history "$root/codex-fixtures" --opencode-history "$root/opencode-fixtures.db" --claude-history "$root/claude-fixtures"
 [[ $(value "$first" pid) == "$pid" ]] || fail 'Repeated launch created another process.'
 "$harness" status "$first" > "$root/status.txt"
 grep -q 'State: running' "$root/status.txt" || fail 'Status missed running process.'
@@ -95,7 +99,7 @@ if /bin/kill -0 "$pid" 2>/dev/null; then fail 'Cleanup did not stop the review p
 [[ $(< "$first/evidence/sentinel.txt") == 'preserve me' ]] || fail 'Cleanup deleted evidence.'
 "$harness" status "$first" > "$root/stopped.txt"
 grep -q 'State: stopped' "$root/stopped.txt" || fail 'Status missed stopped process.'
-"$harness" launch "$first" --app "$app" --pi-history "$root/pi-fixtures" --codex-history "$root/codex-fixtures" --opencode-history "$root/opencode-fixtures.db"
+"$harness" launch "$first" --app "$app" --pi-history "$root/pi-fixtures" --codex-history "$root/codex-fixtures" --opencode-history "$root/opencode-fixtures.db" --claude-history "$root/claude-fixtures"
 [[ $(value "$first" pid) != "$pid" ]] || fail 'Stopped session did not relaunch.'
 [[ $(wc -l < "$first/pi/sessions/synthetic.jsonl") -eq 1 ]] || fail 'Relaunch replaced the Pi snapshot.'
 "$harness" status "$second" > "$root/other.txt"

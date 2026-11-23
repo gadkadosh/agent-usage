@@ -1,7 +1,5 @@
 import Foundation
 
-enum HistoryFileFormat: Sendable { case pi, codex }
-
 protocol HistoryLineParser {
     var observations: [UsageObservation] { get }
     var issues: Set<HistoryIssue> { get }
@@ -16,7 +14,6 @@ extension HistoryLineParser {
 
 func canonicalHistoryObservations(
     _ observations: [UsageObservation],
-    format: HistoryFileFormat,
     issues: inout Set<HistoryIssue>
 ) -> [UsageObservation] {
     var canonical: [String: UsageObservation] = [:]
@@ -29,9 +26,7 @@ func canonicalHistoryObservations(
             continue
         }
         // Cost disagreements invalidate only cost, never otherwise valid token readings.
-        guard prior.tokens == observation.tokens,
-            format == .codex || prior.timestamp == observation.timestamp
-        else {
+        guard prior.tokens == observation.tokens else {
             conflicting.insert(id)
             issues.insert(.conflictingOperation)
             continue
@@ -40,7 +35,8 @@ func canonicalHistoryObservations(
             conflictingCosts.insert(id)
         }
         prior.costUSD = conflictingCosts.contains(id) ? nil : prior.costUSD ?? observation.costUSD
-        // Codex may rewrite envelope timestamps when copying a rollout.
+        // Copies may carry later timestamps: Codex rewrites envelopes when copying a rollout,
+        // and Claude Code stamps each content block of one response separately.
         prior.timestamp = min(prior.timestamp, observation.timestamp)
         canonical[id] = prior
     }
