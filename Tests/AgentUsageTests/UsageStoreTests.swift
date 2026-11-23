@@ -59,11 +59,10 @@ final class UsageStoreTests: XCTestCase {
 
         XCTAssertTrue(store.isRefreshing)
         await store.refresh()
-        let count = await fetcher.requestCount
-        XCTAssertEqual(count, 1)
-
-        await fetcher.finish()
+        await fetcher.release()
         await refresh.value
+        let count = await fetcher.requestCount
+        XCTAssertEqual(count, 1, "The follow-up pass only fetches what has come due")
         XCTAssertFalse(store.isRefreshing)
         XCTAssertNotNil(store.allowances[0].snapshot)
     }
@@ -157,6 +156,130 @@ final class UsageStoreTests: XCTestCase {
         await store.refresh()
         XCTAssertEqual(store.visibleAllowances.map(\.provider), [.claude])
         XCTAssertEqual(store.summary, "Usage unavailable")
+    }
+
+    @MainActor
+    func testHiddenProviderIsNotFetchedAndTheChoiceIsRemembered() async throws {
+        let suite = "UsageStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let chatGPT = CountingFetcher()
+        func launch() -> UsageStore {
+            UsageStore(
+                sources: [
+                    AllowanceSource(provider: .chatGPT) { await chatGPT.fetch() },
+                    AllowanceSource(provider: .claude) { sampleAllowance },
+                ],
+                defaults: defaults
+            )
+        }
+
+        let store = launch()
+        await store.setShown(.chatGPT, false)
+        await store.refresh()
+        XCTAssertEqual(store.visibleAllowances.map(\.provider), [.claude])
+        var count = await chatGPT.count
+        XCTAssertEqual(count, 0)
+
+        let relaunched = launch()
+        await relaunched.refresh()
+        XCTAssertEqual(relaunched.visibleAllowances.map(\.provider), [.claude])
+
+        await relaunched.setShown(.chatGPT, true)
+        XCTAssertEqual(relaunched.visibleAllowances.map(\.provider), [.chatGPT, .claude])
+        XCTAssertNotNil(relaunched.allowances[0].snapshot, "Showing a provider fetches it")
+        count = await chatGPT.count
+        XCTAssertEqual(count, 1)
+    }
+
+    @MainActor
+    func testProviderShownDuringARefreshShowsOnlyAFreshReading() async throws {
+        let suite = "UsageStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let claude = SuspendedFetcher()
+        var date = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = UsageStore(
+            sources: [
+                AllowanceSource(provider: .chatGPT) { sampleAllowance },
+                AllowanceSource(provider: .claude) { try await claude.fetch() },
+            ],
+            defaults: defaults,
+            now: { date }
+        )
+        var refresh = Task { await store.refresh() }
+        await claude.waitUntilStarted()
+        await claude.finish()
+        await refresh.value
+        let reading = store.allowances[0].snapshot
+        XCTAssertNotNil(reading)
+
+        await store.setShown(.chatGPT, false)
+        await store.setShown(.chatGPT, true)
+        XCTAssertEqual(
+            store.allowances[0].snapshot,
+            reading,
+            "Within its interval it's still fresh"
+        )
+
+        await store.setShown(.chatGPT, false)
+        date = date.addingTimeInterval(5 * 60)
+        refresh = Task { await store.refresh() }
+        await claude.waitUntilStarted()
+        await store.setShown(.chatGPT, true)
+        XCTAssertEqual(store.visibleAllowances.map(\.provider), [.chatGPT, .claude])
+        XCTAssertNil(store.allowances[0].snapshot, "A reading from before hiding is not shown")
+
+        await claude.release()
+        await refresh.value
+        XCTAssertNotNil(store.allowances[0].snapshot, "It is fetched once that refresh ends")
+    }
+
+    @MainActor
+    func testEmptyMessageTellsHiddenProvidersFromMissingLogins() async throws {
+        let suite = "UsageStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UsageStore(
+            sources: [
+                AllowanceSource(provider: .chatGPT) { nil },
+                AllowanceSource(provider: .claude) { sampleAllowance },
+            ],
+            defaults: defaults
+        )
+        await store.refresh()
+        XCTAssertNil(store.emptyAllowanceMessage)
+
+        await store.setShown(.claude, false)
+        XCTAssertEqual(store.emptyAllowanceMessage, "Hidden from the options menu: Claude.")
+        await store.setShown(.chatGPT, false)
+        XCTAssertEqual(
+            store.emptyAllowanceMessage,
+            "Hidden from the options menu: ChatGPT, Claude."
+        )
+
+        await store.setShown(.claude, true)
+        XCTAssertNil(store.emptyAllowanceMessage)
+        await store.setShown(.chatGPT, true)
+
+        let signedOut = UsageStore(
+            sources: [AllowanceSource(provider: .claude) { nil }],
+            defaults: defaults
+        )
+        await signedOut.refresh()
+        XCTAssertEqual(
+            signedOut.emptyAllowanceMessage?.hasPrefix("No subscription login found."),
+            true
+        )
+    }
+}
+
+private actor CountingFetcher {
+    private(set) var count = 0
+
+    func fetch() -> Allowance {
+        count += 1
+        return sampleAllowance
     }
 }
 
@@ -315,9 +438,11 @@ private actor SuspendedFetcher {
     private(set) var requestCount = 0
     private var pending: CheckedContinuation<Allowance, any Error>?
     private var started: CheckedContinuation<Void, Never>?
+    private var released = false
 
     func fetch() async throws -> Allowance {
         requestCount += 1
+        if released { return sampleAllowance }
         return try await withCheckedThrowingContinuation { continuation in
             pending = continuation
             started?.resume()
@@ -333,5 +458,11 @@ private actor SuspendedFetcher {
     func finish() {
         pending?.resume(returning: sampleAllowance)
         pending = nil
+    }
+
+    /// Finishes the pending fetch and answers every later one at once.
+    func release() {
+        released = true
+        finish()
     }
 }

@@ -17,9 +17,24 @@ struct AllowanceState: Identifiable, Equatable {
 final class UsageStore: ObservableObject {
     @Published private(set) var allowances: [AllowanceState]
     @Published private(set) var isRefreshing = false
+    /// Providers the user turned off; they are neither shown nor fetched.
+    @Published private(set) var hiddenProviders: Set<AllowanceProvider>
 
-    /// Providers with a login, or not yet known to be signed out.
-    var visibleAllowances: [AllowanceState] { allowances.filter { !$0.isSignedOut } }
+    /// Shown providers with a login, or not yet known to be signed out.
+    var visibleAllowances: [AllowanceState] {
+        allowances.filter { !$0.isSignedOut && !hiddenProviders.contains($0.provider) }
+    }
+
+    /// Replaces the allowance sections when none is visible.
+    var emptyAllowanceMessage: String? {
+        guard visibleAllowances.isEmpty else { return nil }
+        let hidden = allowances.map(\.provider).filter(hiddenProviders.contains).map(\.title)
+        if hidden.isEmpty {
+            return
+                "No subscription login found. Sign in with Claude Code, or with Codex or pi for ChatGPT, then refresh."
+        }
+        return "Hidden from the options menu: \(hidden.joined(separator: ", "))."
+    }
 
     /// The menu bar shows whichever provider is closest to its limit.
     var summary: String {
@@ -35,17 +50,44 @@ final class UsageStore: ObservableObject {
 
     private let sources: [AllowanceSource]
     private var schedules: [FetchSchedule]
+    private let defaults: UserDefaults
     private let now: () -> Date
     private var started = false
+    private var refreshAgain = false
+    private static let hiddenProvidersKey = "hiddenAllowanceProviders"
 
     init(
         sources: [AllowanceSource] = [.chatGPT, .claude],
+        defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init
     ) {
         self.sources = sources
+        self.defaults = defaults
         self.now = now
         allowances = sources.map { AllowanceState(provider: $0.provider) }
         schedules = sources.map { FetchSchedule(interval: $0.provider.refreshInterval) }
+        hiddenProviders = Set(
+            (defaults.stringArray(forKey: Self.hiddenProvidersKey) ?? [])
+                .compactMap(AllowanceProvider.init(rawValue:))
+        )
+    }
+
+    func setShown(_ provider: AllowanceProvider, _ shown: Bool) async {
+        guard hiddenProviders.contains(provider) == shown else { return }
+        if shown {
+            hiddenProviders.remove(provider)
+        } else {
+            hiddenProviders.insert(provider)
+        }
+        defaults.set(hiddenProviders.map(\.rawValue).sorted(), forKey: Self.hiddenProvidersKey)
+        guard shown else { return }
+        // A due provider's last reading is older than its interval, so show it loading instead.
+        let start = now()
+        for index in allowances.indices
+        where allowances[index].provider == provider && schedules[index].isDue(at: start) {
+            allowances[index] = AllowanceState(provider: provider)
+        }
+        await refresh()
     }
 
     func start() {
@@ -61,13 +103,25 @@ final class UsageStore: ObservableObject {
 
     /// Fetches only the providers whose schedule is due, so Refresh can't exceed their limits.
     func refresh() async {
-        guard !isRefreshing else { return }
-        let start = now()
-        let due = sources.indices.filter { schedules[$0].isDue(at: start) }
-        guard !due.isEmpty else { return }
+        guard !isRefreshing else {
+            refreshAgain = true
+            return
+        }
         isRefreshing = true
         defer { isRefreshing = false }
 
+        // A request during a pass may need what that pass skipped, such as a provider just shown.
+        repeat {
+            refreshAgain = false
+            await refreshOnce()
+        } while refreshAgain
+    }
+
+    private func refreshOnce() async {
+        let start = now()
+        let due = sources.indices.filter {
+            !hiddenProviders.contains(sources[$0].provider) && schedules[$0].isDue(at: start)
+        }
         await withTaskGroup(of: Reading.self) { group in
             for index in due {
                 let source = sources[index]

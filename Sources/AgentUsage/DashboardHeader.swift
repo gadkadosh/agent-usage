@@ -2,6 +2,8 @@ import SwiftUI
 
 struct DashboardHeader: View {
     let isRefreshing: Bool
+    let providers: [AllowanceProvider]
+    let isShown: (AllowanceProvider) -> Binding<Bool>
     let onRefresh: () -> Void
     let onQuit: () -> Void
 
@@ -34,7 +36,11 @@ struct DashboardHeader: View {
             .disabled(isRefreshing)
             .keyboardShortcut("r", modifiers: .command)
 
-            Divider()
+            Section("Allowances") {
+                ForEach(providers, id: \.self) { provider in
+                    Toggle(provider.title, isOn: isShown(provider))
+                }
+            }
 
             Button("Quit Agent Usage", action: onQuit)
                 .keyboardShortcut("q", modifiers: .command)

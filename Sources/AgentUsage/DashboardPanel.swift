@@ -18,6 +18,13 @@ struct DashboardPanel: View {
             content: VStack(alignment: .leading, spacing: 16) {
                 DashboardHeader(
                     isRefreshing: usage.isRefreshing || history.isRefreshing,
+                    providers: usage.allowances.map(\.provider),
+                    isShown: { provider in
+                        Binding(
+                            get: { !usage.hiddenProviders.contains(provider) },
+                            set: { shown in Task { await usage.setShown(provider, shown) } }
+                        )
+                    },
                     onRefresh: { Task { await refresh() } },
                     onQuit: { NSApplication.shared.terminate(nil) }
                 )
@@ -30,13 +37,11 @@ struct DashboardPanel: View {
                     )
                     Divider()
                 }
-                if usage.visibleAllowances.isEmpty {
-                    Text(
-                        "No subscription login found. Sign in with Claude Code, or with Codex or pi for ChatGPT, then refresh."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let message = usage.emptyAllowanceMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Divider()
                 }
                 HistoryPanel(history: history, referenceDate: referenceDate)
