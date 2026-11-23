@@ -1,7 +1,7 @@
 import Foundation
 
 /// A subscription whose account-wide allowance the dashboard can show.
-enum AllowanceProvider: String, CaseIterable, Sendable {
+enum AllowanceProvider: String, Sendable {
     case chatGPT
     case claude
 

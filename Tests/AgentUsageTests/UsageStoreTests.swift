@@ -184,6 +184,36 @@ final class UsageStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testProviderShownDuringARefreshDropsItsOldReading() async throws {
+        let suite = "UsageStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let claude = SuspendedFetcher()
+        let store = UsageStore(
+            sources: [
+                AllowanceSource(provider: .chatGPT) { sampleAllowance },
+                AllowanceSource(provider: .claude) { try await claude.fetch() },
+            ],
+            defaults: defaults
+        )
+        var refresh = Task { await store.refresh() }
+        await claude.waitUntilStarted()
+        await claude.finish()
+        await refresh.value
+        XCTAssertNotNil(store.allowances[0].snapshot)
+
+        await store.setShown(.chatGPT, false)
+        refresh = Task { await store.refresh() }
+        await claude.waitUntilStarted()
+        await store.setShown(.chatGPT, true)
+        XCTAssertEqual(store.visibleAllowances.map(\.provider), [.chatGPT, .claude])
+        XCTAssertNil(store.allowances[0].snapshot, "A reading from before hiding is not shown")
+
+        await claude.finish()
+        await refresh.value
+    }
+
+    @MainActor
     func testEmptyMessageTellsHiddenProvidersFromMissingLogins() async throws {
         let suite = "UsageStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

@@ -30,7 +30,7 @@ final class UsageStore: ObservableObject {
             return
                 "No subscription login found. Sign in with Claude Code, or with Codex or pi for ChatGPT, then refresh."
         }
-        let hidden = AllowanceProvider.allCases.filter(hiddenProviders.contains).map(\.title)
+        let hidden = allowances.map(\.provider).filter(hiddenProviders.contains).map(\.title)
         return "Hidden from the options menu: \(hidden.joined(separator: ", "))."
     }
 
@@ -75,7 +75,12 @@ final class UsageStore: ObservableObject {
             hiddenProviders.insert(provider)
         }
         defaults.set(hiddenProviders.map(\.rawValue).sorted(), forKey: Self.hiddenProvidersKey)
-        if shown { await refresh() }
+        guard shown else { return }
+        // Its last reading is stale, and a refresh already in flight skipped it, so show it loading.
+        for index in allowances.indices where allowances[index].provider == provider {
+            allowances[index] = AllowanceState(provider: provider)
+        }
+        await refresh()
     }
 
     func start() {
