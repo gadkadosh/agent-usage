@@ -30,6 +30,7 @@ final class DashboardRenderingTests: XCTestCase {
             ("loading-light", .ready, .today, false),
             ("claude-light", .ready, .week, false),
             ("claude-dark", .ready, .week, true),
+            ("claude-rate-limited-light", .ready, .week, false),
             ("signed-out-light", .ready, .week, false),
         ]
         for (name, state, period, dark) in scenarios {
@@ -55,15 +56,25 @@ final class DashboardRenderingTests: XCTestCase {
                     return signedOut ? nil : DashboardFixtures.allowance
                 }
             ]
+            let rateLimited = Flag()
             if name.hasPrefix("claude") || signedOut {
                 sources.append(
                     AllowanceSource(provider: .claude) {
-                        signedOut ? nil : DashboardFixtures.claudeAllowance
+                        if await rateLimited.isSet {
+                            throw UsageError.rateLimited(retryAfter: nil)
+                        }
+                        return signedOut ? nil : DashboardFixtures.claudeAllowance
                     }
                 )
             }
-            let usage = UsageStore(sources: sources, now: { DashboardFixtures.now })
+            var now = DashboardFixtures.now
+            let usage = UsageStore(sources: sources, now: { now })
             await usage.refresh()
+            if name == "claude-rate-limited-light" {
+                await rateLimited.set()
+                now = now.addingTimeInterval(AllowanceProvider.claude.refreshInterval)
+                await usage.refresh()
+            }
             let panel = DashboardPanel(
                 usage: usage,
                 history: history,
@@ -113,6 +124,11 @@ final class DashboardRenderingTests: XCTestCase {
         let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         try data.write(to: directory.appendingPathComponent("\(name).png"))
         XCTAssertGreaterThan(data.count, 1_000)
+    }
+
+    private actor Flag {
+        private(set) var isSet = false
+        func set() { isSet = true }
     }
 
     private enum SyntheticAllowanceError: LocalizedError {

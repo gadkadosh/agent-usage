@@ -11,6 +11,15 @@ enum AllowanceProvider: String, Sendable {
         case .claude: "Claude"
         }
     }
+
+    /// The shortest gap between requests. Claude's endpoint rate limits after a few requests,
+    /// and Claude Code spends the same per-login budget.
+    var refreshInterval: TimeInterval {
+        switch self {
+        case .chatGPT: 60
+        case .claude: 5 * 60
+        }
+    }
 }
 
 /// Fetches one provider's allowance; each provider fails independently.
