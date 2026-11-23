@@ -51,7 +51,7 @@ final class UsageStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testOverlappingRefreshesOnlyFetchOnce() async {
+    func testOverlappingRefreshRunsOnceMoreAfterTheCurrentOne() async {
         let fetcher = SuspendedFetcher()
         let store = UsageStore(fetch: { try await fetcher.fetch() })
         let refresh = Task { await store.refresh() }
@@ -59,11 +59,14 @@ final class UsageStoreTests: XCTestCase {
 
         XCTAssertTrue(store.isRefreshing)
         await store.refresh()
-        let count = await fetcher.requestCount
-        XCTAssertEqual(count, 1)
+        await store.refresh()
+        var count = await fetcher.requestCount
+        XCTAssertEqual(count, 1, "Overlapping requests don't fetch concurrently")
 
-        await fetcher.finish()
+        await fetcher.release()
         await refresh.value
+        count = await fetcher.requestCount
+        XCTAssertEqual(count, 2, "They coalesce into one more pass")
         XCTAssertFalse(store.isRefreshing)
         XCTAssertNotNil(store.allowances[0].snapshot)
     }
@@ -184,7 +187,7 @@ final class UsageStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testProviderShownDuringARefreshDropsItsOldReading() async throws {
+    func testProviderShownDuringARefreshShowsOnlyAFreshReading() async throws {
         let suite = "UsageStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -209,8 +212,9 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.visibleAllowances.map(\.provider), [.chatGPT, .claude])
         XCTAssertNil(store.allowances[0].snapshot, "A reading from before hiding is not shown")
 
-        await claude.finish()
+        await claude.release()
         await refresh.value
+        XCTAssertNotNil(store.allowances[0].snapshot, "It is fetched once that refresh ends")
     }
 
     @MainActor
@@ -302,9 +306,11 @@ private actor SuspendedFetcher {
     private(set) var requestCount = 0
     private var pending: CheckedContinuation<Allowance, any Error>?
     private var started: CheckedContinuation<Void, Never>?
+    private var released = false
 
     func fetch() async throws -> Allowance {
         requestCount += 1
+        if released { return sampleAllowance }
         return try await withCheckedThrowingContinuation { continuation in
             pending = continuation
             started?.resume()
@@ -320,5 +326,11 @@ private actor SuspendedFetcher {
     func finish() {
         pending?.resume(returning: sampleAllowance)
         pending = nil
+    }
+
+    /// Finishes the pending fetch and answers every later one at once.
+    func release() {
+        released = true
+        finish()
     }
 }

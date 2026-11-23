@@ -50,6 +50,7 @@ final class UsageStore: ObservableObject {
     private let defaults: UserDefaults
     private let now: () -> Date
     private var started = false
+    private var refreshAgain = false
     private static let hiddenProvidersKey = "hiddenAllowanceProviders"
 
     init(
@@ -95,10 +96,21 @@ final class UsageStore: ObservableObject {
     }
 
     func refresh() async {
-        guard !isRefreshing else { return }
+        guard !isRefreshing else {
+            refreshAgain = true
+            return
+        }
         isRefreshing = true
         defer { isRefreshing = false }
 
+        // A request during a pass may need what that pass skipped, such as a provider just shown.
+        repeat {
+            refreshAgain = false
+            await refreshOnce()
+        } while refreshAgain
+    }
+
+    private func refreshOnce() async {
         await withTaskGroup(of: Reading.self) { group in
             for index in sources.indices where !hiddenProviders.contains(sources[index].provider) {
                 let source = sources[index]
