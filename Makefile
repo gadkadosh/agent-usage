@@ -1,6 +1,7 @@
 .PHONY: app check-clt-build test format format-check
 
 SWIFT ?= swift
+TEST_FLAGS := -c release -Xswiftc -enable-testing
 SWIFT_FILES := Package.swift Sources Tests
 
 app:
@@ -14,8 +15,8 @@ check-clt-build:
 		xcrun swift build --configuration release --product AgentUsage --scratch-path "$$scratch"
 
 test:
-	$(SWIFT) test
-	AGENT_USAGE_MEMORY_REGRESSION=1 $(SWIFT) test --skip-build --filter PiHistoryMemoryTests
+	$(SWIFT) test $(TEST_FLAGS)
+	AGENT_USAGE_MEMORY_REGRESSION=1 $(SWIFT) test $(TEST_FLAGS) --skip-build --filter PiHistoryMemoryTests
 
 format:
 	$(SWIFT) format format --configuration .swift-format --in-place --recursive $(SWIFT_FILES)
