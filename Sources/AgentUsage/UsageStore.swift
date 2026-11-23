@@ -26,11 +26,11 @@ final class UsageStore: ObservableObject {
     /// Replaces the allowance sections when none is visible.
     var emptyAllowanceMessage: String? {
         guard visibleAllowances.isEmpty else { return nil }
-        if hiddenProviders.isEmpty {
+        let hidden = allowances.map(\.provider).filter(hiddenProviders.contains).map(\.title)
+        if hidden.isEmpty {
             return
                 "No subscription login found. Sign in with Claude Code, or with Codex or pi for ChatGPT, then refresh."
         }
-        let hidden = allowances.map(\.provider).filter(hiddenProviders.contains).map(\.title)
         return "Hidden from the options menu: \(hidden.joined(separator: ", "))."
     }
 
