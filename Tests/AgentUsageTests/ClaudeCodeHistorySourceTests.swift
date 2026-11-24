@@ -38,6 +38,7 @@ final class ClaudeCodeHistorySourceTests: XCTestCase {
                 #"{"type":"user","timestamp":"2026-10-02T10:05:00.000Z","toolUseResult":{"usage":{"input_tokens":9000,"output_tokens":9000,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#,
                 #"{"type":"cost-state","sessionId":"s","totalCostUSD":12.5}"#,
                 #"{"type":"some-future-record","usage":{"input_tokens":9000}}"#,
+                #"{"type":"another-future-record","timestamp":1,"message":"text"}"#,
                 assistant(id: "msg_old", at: "2026-08-01T10:00:00.000Z"),
             ]
         )

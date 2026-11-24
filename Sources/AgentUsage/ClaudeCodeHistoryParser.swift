@@ -2,7 +2,8 @@ import Foundation
 
 /// Pure line adapter for Claude Code session transcripts, observed in Claude Code 2.1.311–2.1.323.
 /// The format is undocumented and adds record types often, so only assistant API responses,
-/// the sole carriers of per-response usage, are read; every other record is ignored.
+/// the only records with per-response usage, are read; every other record is ignored.
+/// Compaction and some background requests leave no assistant record and are not counted.
 /// One response is written once per content block with identical usage, so `message.id`
 /// identifies the operation and the adapter keeps its earliest timestamp. Subagent totals
 /// repeated in the parent's tool results are not additional usage. No cost is recorded per
@@ -67,6 +68,21 @@ struct ClaudeCodeHistoryParser: HistoryLineParser {
         let type: String
         let timestamp: String?
         let message: Message?
+
+        // Other record types may reuse these keys with any shape, so only assistant records decode them.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            type = try container.decode(String.self, forKey: .type)
+            guard type == "assistant" else {
+                timestamp = nil
+                message = nil
+                return
+            }
+            timestamp = try container.decodeIfPresent(String.self, forKey: .timestamp)
+            message = try container.decodeIfPresent(Message.self, forKey: .message)
+        }
+
+        private enum CodingKeys: String, CodingKey { case type, timestamp, message }
     }
 
     private struct Message: Decodable {
