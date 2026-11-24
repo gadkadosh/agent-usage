@@ -1,6 +1,6 @@
 # Agent Usage
 
-Your ChatGPT and Claude subscription limits and local [pi](https://pi.dev), Codex, and [OpenCode](https://opencode.ai) token usage, right in your macOS menu bar.
+Your ChatGPT and Claude subscription limits and local [pi](https://pi.dev), Codex, [OpenCode](https://opencode.ai), and Claude Code token usage, right in your macOS menu bar.
 
 <img src="docs/images/dashboard.png" alt="Agent Usage dashboard showing remaining ChatGPT limits, reset countdowns, and combined 7-day token usage with per-agent totals for Codex, OpenCode, and pi" width="360">
 
@@ -8,7 +8,7 @@ Your ChatGPT and Claude subscription limits and local [pi](https://pi.dev), Code
 
 ## Install / run
 
-Requires macOS 13 or newer and Swift 6 / Apple Command Line Tools (or Xcode) to build. Local token totals require existing Pi, Codex, or OpenCode 2.x histories.
+Requires macOS 13 or newer and Swift 6 / Apple Command Line Tools (or Xcode) to build. Local token totals require existing Pi, Codex, OpenCode 2.x, or Claude Code histories.
 
 ```sh
 make app
@@ -30,10 +30,10 @@ swift run
 
 ## Privacy and limitations
 
-- **History stays local.** The app reads Pi, Codex, and OpenCode histories without uploading or modifying them. Its in-memory index keeps usage metadata, not transcripts.
+- **History stays local.** The app reads Pi, Codex, OpenCode, and Claude Code histories without uploading or modifying them. Its in-memory index keeps usage metadata, not transcripts.
 - **Allowances use your existing logins.** ChatGPT requests prefer Codex's `auth.json`, with pi as fallback. An expired or rejected Codex login can fall back only to pi credentials for the same account. Claude requests use Claude Code's Keychain login. The app never modifies credentials or refreshes tokens; use the relevant agent or sign in again, then refresh.
-- **Limits and tokens measure different things.** ChatGPT and Claude limits are account-wide. The chart combines recorded Pi, Codex, and OpenCode activity on this Mac for today, the last 7 days, or the last 30 days, with a separate total for each agent below it.
-- **Cost isn't a bill.** The total above the history chart and amounts beside each agent's tokens show available locally recorded USD for the selected period, or the hovered hour/day. It may be incomplete or estimated rather than actual charges; Codex cost isn't available from the local history we read. No amount appears unless a cost was recorded. No cost lookup requests or pricing tables are used.
+- **Limits and tokens measure different things.** ChatGPT and Claude limits are account-wide. The chart combines recorded Pi, Codex, OpenCode, and Claude Code activity on this Mac for today, the last 7 days, or the last 30 days, with a separate total for each agent below it.
+- **Cost isn't a bill.** The total above the history chart and amounts beside each agent's tokens show available locally recorded USD for the selected period, or the hovered hour/day. It may be incomplete or estimated rather than actual charges; Codex and Claude Code cost isn't available from the local history we read. No amount appears unless a cost was recorded. No cost lookup requests or pricing tables are used.
 - **History isn't a live counter.** Reopen the panel or choose Refresh to update it. Unused agents stay hidden. Missing or unreadable history isn't shown as zero usage; incomplete or stale readings carry a warning on the affected agent's row.
 - **The allowance integrations are unofficial.** The ChatGPT and Claude endpoints and the agents' credential formats may change without notice.
 - **The app isn't notarized.** Bundles are signed ad hoc for local use, not Developer ID signed. Downloaded or quarantined copies may be blocked by Gatekeeper.

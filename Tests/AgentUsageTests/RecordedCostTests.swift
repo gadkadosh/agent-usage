@@ -81,7 +81,7 @@ final class RecordedCostTests: XCTestCase {
         let missing = UsageObservation(operationID: "copy", timestamp: request.now, tokens: 10)
         for copies in [[known, missing], [missing, known]] {
             var issues: Set<HistoryIssue> = []
-            let observations = canonicalHistoryObservations(copies, format: .pi, issues: &issues)
+            let observations = canonicalHistoryObservations(copies, issues: &issues)
             XCTAssertEqual(observations, [known])
             XCTAssertTrue(issues.isEmpty)
         }

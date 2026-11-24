@@ -7,12 +7,14 @@ struct HistoryAgentID: Hashable, Sendable {
     static let pi = Self(rawValue: "pi")
     static let codex = Self(rawValue: "codex")
     static let openCode = Self(rawValue: "opencode")
+    static let claudeCode = Self(rawValue: "claude-code")
 
     var name: String {
         switch self {
         case .codex: "Codex"
         case .pi: "pi"
         case .openCode: "OpenCode"
+        case .claudeCode: "Claude Code"
         default: rawValue
         }
     }

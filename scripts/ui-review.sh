@@ -6,7 +6,7 @@ umask 077
 usage() {
     cat <<'HELP'
 Usage:
-  ui-review.sh launch SESSION --app APP [--pi-history SYNTHETIC_PI_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME] [--opencode-history SYNTHETIC_OPENCODE_DB]
+  ui-review.sh launch SESSION --app APP [--pi-history SYNTHETIC_PI_SESSIONS] [--codex-history SYNTHETIC_CODEX_HOME] [--opencode-history SYNTHETIC_OPENCODE_DB] [--claude-history SYNTHETIC_CLAUDE_PROJECTS]
   ui-review.sh status SESSION
   ui-review.sh capture SESSION NAME
   ui-review.sh cleanup SESSION
@@ -34,6 +34,7 @@ app=
 pi_fixtures=
 codex_fixtures=
 opencode_fixtures=
+claude_fixtures=
 name=
 if [[ $command == launch ]]; then
     while [[ $# -gt 0 ]]; do
@@ -43,6 +44,7 @@ if [[ $command == launch ]]; then
             --pi-history) pi_fixtures=$2 ;;
             --codex-history) codex_fixtures=$2 ;;
             --opencode-history) opencode_fixtures=$2 ;;
+            --claude-history) claude_fixtures=$2 ;;
             *) fail "Unknown option: $1" ;;
         esac
         shift 2
@@ -64,6 +66,11 @@ if [[ $command == launch ]]; then
         opencode_fixtures="$(cd "$(dirname "$opencode_fixtures")" && pwd -P)/$(basename "$opencode_fixtures")"
         [[ ! -e $opencode_fixtures-wal && ! -e $opencode_fixtures-shm ]] || fail 'Close and checkpoint the synthetic OpenCode database before copying it.'
     fi
+    if [[ -n $claude_fixtures ]]; then
+        [[ -d $claude_fixtures ]] || fail 'Synthetic Claude Code history directory does not exist.'
+        claude_fixtures=$(cd "$claude_fixtures" && pwd -P)
+        [[ -z $(find "$claude_fixtures" -type l -print -quit) ]] || fail 'Synthetic Claude Code history must not contain symlinks.'
+    fi
 elif [[ $command == capture ]]; then
     [[ $# == 1 && $1 =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || fail 'Capture needs a simple name (letters, digits, underscores, hyphens).'
     name=$1
@@ -82,6 +89,7 @@ if [[ ! -e $session && $command == launch ]]; then
     put pi_fixtures "$pi_fixtures"
     put codex_fixtures "$codex_fixtures"
     put opencode_fixtures "$opencode_fixtures"
+    put claude_fixtures "$claude_fixtures"
     # The unique executable name also makes direct System Events interaction easy.
     token=$(/usr/bin/uuidgen | tr -d '-' | cut -c1-12)
     process="UsageReview$token"
@@ -101,7 +109,7 @@ if [[ ! -e $session && $command == launch ]]; then
     /usr/bin/plutil -replace CFBundleIdentifier -string "local.agentusage.review.$token" "$plist"
     /usr/bin/codesign --force --sign - --timestamp=none "$bundle"
     /usr/bin/codesign --verify --strict "$bundle"
-    mkdir -p "$session/pi/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/xdg-data/opencode" "$session/evidence"
+    mkdir -p "$session/pi/sessions" "$session/codex/sessions" "$session/codex/archived_sessions" "$session/xdg-data/opencode" "$session/claude/projects" "$session/evidence"
     if [[ -n $pi_fixtures ]]; then
         /usr/bin/ditto "$pi_fixtures" "$session/pi/sessions"
     fi
@@ -114,6 +122,9 @@ if [[ ! -e $session && $command == launch ]]; then
     fi
     if [[ -n $opencode_fixtures ]]; then
         /usr/bin/ditto "$opencode_fixtures" "$session/xdg-data/opencode/opencode.db"
+    fi
+    if [[ -n $claude_fixtures ]]; then
+        /usr/bin/ditto "$claude_fixtures" "$session/claude/projects"
     fi
     put ready yes
 else
@@ -165,11 +176,13 @@ case "$command" in
         [[ $(get pi_fixtures) == "$pi_fixtures" ]] || fail 'Pi session inputs differ; use a new session directory.'
         [[ $(get codex_fixtures) == "$codex_fixtures" ]] || fail 'Codex session inputs differ; use a new session directory.'
         [[ $(get opencode_fixtures) == "$opencode_fixtures" ]] || fail 'OpenCode session inputs differ; use a new session directory.'
+        [[ $(get claude_fixtures) == "$claude_fixtures" ]] || fail 'Claude Code session inputs differ; use a new session directory.'
         if ! owned_process; then
             # Launch the real bundle executable to retain an exact PID, not open's PID.
             XDG_DATA_HOME="$session/xdg-data" \
                 OPENCODE_DB=opencode.db \
                 CODEX_HOME="$session/codex" \
+                CLAUDE_CONFIG_DIR="$session/claude" \
                 PI_CODING_AGENT_DIR="$session/pi" \
                 PI_CODING_AGENT_SESSION_DIR="$session/pi/sessions" \
                 "$executable" > "$session/app.log" 2>&1 < /dev/null &

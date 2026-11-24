@@ -263,6 +263,25 @@ actor JSONLHistoryIndex {
         return result
     }
 
+    /// A single-root adapter result: candidates resolved, then cut to the chart window.
+    func canonicalRead(_ request: HistoryRequest) throws -> HistoryAdapterResult {
+        let result = try read(request)
+        var issues = result.coverage.issues
+        let observations = canonicalHistoryObservations(result.candidates, issues: &issues)
+            .filter { $0.timestamp >= request.since }
+        return HistoryAdapterResult(
+            observations: observations,
+            coverage: HistoryCoverage(
+                state: result.coverage.state == .ready && !issues.isEmpty
+                    ? .partial : result.coverage.state,
+                hasReadings: result.coverage.hasReadings,
+                issues: issues
+            ),
+            fetchedAt: result.fetchedAt,
+            hasMore: result.hasMore
+        )
+    }
+
     private func snapshot(
         _ observations: [UsageObservation],
         filesRead: Int,
