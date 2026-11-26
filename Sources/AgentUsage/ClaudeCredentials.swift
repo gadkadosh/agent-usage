@@ -39,8 +39,8 @@ struct ClaudeCredentials: Equatable, Sendable {
 }
 
 /// Reads Claude Code's login without refreshing or modifying it.
-/// The token is kept in memory until it expires or is rejected, so macOS asks for Keychain
-/// access once per token rather than on every refresh.
+/// The token is kept in memory until it expires or is rejected, so the Keychain is read once
+/// per token rather than on every refresh.
 actor ClaudeLogin {
     static let service = "Claude Code-credentials"
 
@@ -76,7 +76,7 @@ actor ClaudeLogin {
         let task =
             read
             ?? Task { [keychain] in
-                // Keychain reads block while macOS asks for access; keep them off the shared pool.
+                // Keychain reads block while macOS asks to unlock it; keep them off the shared pool.
                 try await withCheckedThrowingContinuation { continuation in
                     DispatchQueue.global().async {
                         continuation.resume(
@@ -138,9 +138,9 @@ enum ClaudeCredentialError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .keychainPending:
-            "Waiting for Keychain access to Claude Code's login. Choose Always Allow when macOS asks, then refresh."
+            "Waiting for Keychain access to Claude Code's login. Unlock the Keychain if macOS asks, then refresh."
         case .keychainDenied:
-            "Keychain access to Claude Code's login was denied. Refresh and choose Always Allow when macOS asks."
+            "Keychain access to Claude Code's login was denied. Refresh to try again."
         case .unreadableLogin:
             "Cannot read Claude Code's login from the Keychain. Refresh to try again."
         case .invalidLogin:
@@ -163,22 +163,27 @@ enum KeychainError: Error {
     case failed
 }
 
+/// Reads through Apple's `security` tool, as Claude Code does. Claude Code saves each refreshed
+/// token with that tool, which resets the item's partition list to Apple's tools and so
+/// revokes any app's "Always Allow". Reading through the same tool never prompts.
 struct SystemKeychain: KeychainReading {
     func genericPassword(service: String) throws -> Data? {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecMatchLimit: kSecMatchLimitOne,
-            kSecReturnData: true,
-        ]
-        var result: CFTypeRef?
-        switch SecItemCopyMatching(query as CFDictionary, &result) {
-        case errSecSuccess:
-            guard let data = result as? Data else { throw KeychainError.failed }
-            return data
-        case errSecItemNotFound:
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", service, "-w"]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        // `security` exits with the low byte of the Keychain status.
+        switch process.terminationStatus {
+        case 0:
+            return data.last == UInt8(ascii: "\n") ? data.dropLast() : data
+        case errSecItemNotFound & 0xFF:
             return nil
-        case errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed:
+        case errSecUserCanceled & 0xFF, errSecAuthFailed & 0xFF, errSecInteractionNotAllowed & 0xFF:
             throw KeychainError.denied
         default:
             throw KeychainError.failed
