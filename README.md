@@ -18,7 +18,7 @@ Open `.build/Agent Usage.app`, or copy it to `/Applications` and open it there. 
 
 For ChatGPT limits, sign in with your ChatGPT subscription using `codex login` (file-based credentials), or `/login` in pi, then refresh Agent Usage. Codex is preferred; pi is the fallback. Codex logins stored only in Keychain are not supported.
 
-For Claude limits, sign in to Claude Code with your Claude subscription. Agent Usage reads Claude Code's login from the macOS Keychain, so macOS asks for access on first use; choose **Always Allow**. Ad-hoc signed builds ask again after each rebuild.
+For Claude limits, sign in to Claude Code with your Claude subscription.
 
 Each subscription appears only when its login exists.
 
